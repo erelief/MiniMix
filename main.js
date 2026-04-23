@@ -12,6 +12,7 @@ import {
   hitTest,
   setLayoutResult,
   exportImage,
+  generatePreviewDataURL,
   formatFileSize,
 } from './stitch-engine.js';
 
@@ -678,11 +679,21 @@ function updateSavePreview() {
   qualityRow.style.display = format === 'jpg' ? '' : 'none';
   const baseW = Math.round(state.lastLayoutResult.width * state.lastLayoutResult.scaleFactor);
   const baseH = Math.round(state.lastLayoutResult.height * state.lastLayoutResult.scaleFactor);
-  saveSizeInfo.textContent = `${Math.round(baseW * resolution)} x ${Math.round(baseH * resolution)}`;
+  const outW = Math.round(baseW * resolution);
+  const outH = Math.round(baseH * resolution);
+  saveSizeInfo.textContent = `${outW} x ${outH}`;
+
+  // 使用小尺寸预览（最大 320px），避免大图时滑块卡顿
   try {
-    const du = exportImage(state.lastLayoutResult, format, quality, resolution);
-    const size = du.split(',')[1]?.length || 0;
-    saveFileSizeInfo.textContent = formatFileSize(Math.round(size * 0.75));
+    const du = generatePreviewDataURL(format, quality);
+
+    // 按像素比例从预览数据估算最终文件大小
+    const previewPixels = du.split(',')[1]?.length || 0;
+    const totalPixels = outW * outH;
+    const srcPixels = baseW * baseH;
+    const ratio = totalPixels / Math.max(srcPixels, 1);
+    saveFileSizeInfo.textContent = formatFileSize(Math.round(previewPixels * 0.75 * ratio));
+
     const pi = new Image();
     pi.onload = () => {
       savePreviewCanvas.width = 160;

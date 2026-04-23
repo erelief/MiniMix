@@ -1143,6 +1143,22 @@ export function exportImage(layoutResult, format = 'png', quality = 90, resoluti
   else return exportCanvas.toDataURL('image/jpeg', quality / 100);
 }
 
+/** 小尺寸预览（最大 320px），用于滑块拖动时的快速预览 */
+export function generatePreviewDataURL(format = 'png', quality = 90) {
+  const fullCanvas = renderFullResolution(stateLastLayoutResult);
+  const MAX_PREVIEW = 320;
+  const scale = Math.min(MAX_PREVIEW / fullCanvas.width, MAX_PREVIEW / fullCanvas.height, 1);
+  const w = Math.round(fullCanvas.width * scale);
+  const h = Math.round(fullCanvas.height * scale);
+  const previewCanvas = document.createElement('canvas');
+  previewCanvas.width = w;
+  previewCanvas.height = h;
+  const ctx = previewCanvas.getContext('2d');
+  ctx.drawImage(fullCanvas, 0, 0, w, h);
+  if (format === 'png') return previewCanvas.toDataURL('image/png');
+  return previewCanvas.toDataURL('image/jpeg', quality / 100);
+}
+
 export function formatFileSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
