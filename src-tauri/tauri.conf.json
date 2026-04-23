@@ -1,0 +1,82 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "MiniMix",
+  "version": "../package.json",
+  "identifier": "com.minimix",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "拼好图",
+        "width": 1000,
+        "height": 700,
+        "minWidth": 600,
+        "minHeight": 400,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "dmg", "app"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["png"],
+        "name": "PNG Image",
+        "description": "PNG Image File",
+        "mimeType": "image/png",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["jpg", "jpeg"],
+        "name": "JPEG Image",
+        "description": "JPEG Image File",
+        "mimeType": "image/jpeg",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["bmp"],
+        "name": "BMP Image",
+        "description": "Bitmap Image File",
+        "mimeType": "image/bmp",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["gif"],
+        "name": "GIF Image",
+        "description": "GIF Image File",
+        "mimeType": "image/gif",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["webp"],
+        "name": "WebP Image",
+        "description": "WebP Image File",
+        "mimeType": "image/webp",
+        "role": "Viewer"
+      }
+    ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsi"
+      }
+    }
+  }
+}

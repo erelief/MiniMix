@@ -1,0 +1,1648 @@
+/**
+ * main.js - 拼好图主入口
+ * 最简版本：添加图片 + 横排/纵排 + 撤销/重做 + 复制/保存
+ */
+
+import { ImageItem } from './image-item.js';
+import { UndoManager } from './undo-manager.js';
+import {
+  computeLayout,
+  computeGroupedLayout,
+  renderPreview,
+  hitTest,
+  setLayoutResult,
+  exportImage,
+  formatFileSize,
+} from './stitch-engine.js';
+
+// ========== 图片对象池（支持撤销恢复） ==========
+const imagePool = new Map();
+
+const DRAG_THRESHOLD = 4; // CSS 像素，防止误触拖拽
+
+// ========== 应用状态 ==========
+const state = {
+  images: [],
+  groups: [],          // [[id1, id2], [id3]] — 分组结构
+  layoutMode: 'horizontal',
+  undoManager: new UndoManager(30),
+  lastLayoutResult: null,
+  hoveredCloseId: -1,
+  hoveredImageId: -1,
+  isDragging: false,
+  dragImageId: -1,
+  dragStartMX: 0,
+  dragStartMY: 0,
+  dragCurrentMX: 0,
+  dragCurrentMY: 0,
+  dragInsertIndex: -1,
+  dragTargetGroupIndex: -1,
+  dragStarted: false,
+  dropZone: null,      // null | { type: 'new-group', position: 'before'|'after', groupIndex }
+  // 编辑模式
+  editModeImageId: -1,
+  editAction: null,       // null | 'crop' | 'pan' | 'rotate'
+  editActionStart: null,  // { mouseX, mouseY, ...初始值 }
+  hoveredSaveBtn: false,
+  hoveredResetBtn: false,
+  hoveredRotateBtn: false,
+  hoveredEditBtnId: -1,
+  // 行列拖拽
+  isRowDragging: false,
+  dragGroupIndex: -1,
+  dragGroupStartMX: 0, dragGroupStartMY: 0,
+  dragGroupCurrentMX: 0, dragGroupCurrentMY: 0,
+  dragGroupStarted: false,
+  dragGroupDropIndex: -1,
+};
+
+// ========== 分组工具函数 ==========
+
+function syncImagesFromGroups() {
+  state.images = state.groups.flatMap(g =>
+    g.map(id => imagePool.get(id)).filter(Boolean)
+  );
+}
+
+function removeImageFromGroups(imageId) {
+  for (const group of state.groups) {
+    const idx = group.indexOf(imageId);
+    if (idx !== -1) {
+      group.splice(idx, 1);
+      return;
+    }
+  }
+}
+
+function cleanupEmptyGroups() {
+  state.groups = state.groups.filter(g => g.length > 0);
+}
+
+function gcImagePool() {
+  const activeIds = new Set();
+  state.groups.flat().forEach(id => activeIds.add(id));
+  const allSnapshots = [...state.undoManager.undoStack, ...state.undoManager.redoStack];
+  allSnapshots.forEach(snap => {
+    snap.groups.flat().forEach(id => activeIds.add(id));
+  });
+  for (const key of imagePool.keys()) {
+    if (!activeIds.has(key)) imagePool.delete(key);
+  }
+}
+
+// ========== DOM 引用 ==========
+const canvas = document.getElementById('main-canvas');
+const statusBar = document.getElementById('status-bar');
+const dropOverlay = document.getElementById('drop-overlay');
+const scaleToast = document.getElementById('scale-toast');
+const copyToast = document.getElementById('copy-toast');
+const newRowBefore = document.getElementById('new-row-before');
+const newRowAfter = document.getElementById('new-row-after');
+const addImagesInput = document.getElementById('add-images');
+const uploadBtnLabel = addImagesInput.closest('.upload-btn');
+const gripContainer = document.getElementById('grip-container');
+
+// 把手条宽度（屏幕像素，始终预留）
+const GRIP_STRIP = 32;
+const GRIP_ICON_SIZE = 28;
+
+const layoutBtns = document.querySelectorAll('[data-layout]');
+const btnUndo = document.getElementById('btn-undo');
+const btnRedo = document.getElementById('btn-redo');
+const btnCopy = document.getElementById('btn-copy');
+const btnSave = document.getElementById('btn-save');
+const btnInfo = document.getElementById('btn-info');
+const btnClear = document.getElementById('btn-clear');
+
+const saveModal = document.getElementById('save-modal');
+const infoModal = document.getElementById('info-modal');
+const saveFormatSelect = document.getElementById('save-format');
+const saveQualitySlider = document.getElementById('save-quality');
+const saveQualityValue = document.getElementById('save-quality-value');
+const saveResolutionSelect = document.getElementById('save-resolution');
+const saveResolutionValue = document.getElementById('save-resolution-value');
+const saveSizeInfo = document.getElementById('save-size-info');
+const saveFileSizeInfo = document.getElementById('save-file-size');
+const qualityRow = document.getElementById('quality-row');
+const savePreviewCanvas = document.getElementById('save-preview-canvas');
+
+// ========== 工具函数 ==========
+
+// ========== 行列拖拽把手（DOM 元素） ==========
+
+const gripVerticalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>`;
+const gripHorizontalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="1"/><circle cx="19" cy="9" r="1"/><circle cx="5" cy="9" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="19" cy="15" r="1"/><circle cx="5" cy="15" r="1"/></svg>`;
+
+let gripElements = [];
+
+function updateGripHandles() {
+  const lr = state.lastLayoutResult;
+  if (!lr || !lr._groupBounds || state.images.length === 0) {
+    clearGripHandles();
+    return;
+  }
+
+  const gb = lr._groupBounds;
+  const isHorizontal = state.layoutMode === 'horizontal';
+  const showGrips = gb.length > 1;
+  const ds = lr._displayScale || 1;
+  const sf = lr.scaleFactor * ds;
+  const ws = canvas.parentElement;
+
+  // 确保 grip 数量匹配
+  while (gripElements.length < gb.length) {
+    const el = document.createElement('div');
+    el.className = 'grip-handle';
+    gripContainer.appendChild(el);
+    gripElements.push(el);
+  }
+  while (gripElements.length > gb.length) {
+    const el = gripElements.pop();
+    el.remove();
+  }
+
+  // 计算画布在 workspace 中的位置（必须在读取前触发 layout）
+  const canvasRect = canvas.getBoundingClientRect();
+  const wsRect = ws.getBoundingClientRect();
+  const canvasOffX = canvasRect.left - wsRect.left;
+  const canvasOffY = canvasRect.top - wsRect.top;
+
+  // 更新 SVG 和定位
+  for (let i = 0; i < gb.length; i++) {
+    const el = gripElements[i];
+    el.innerHTML = isHorizontal ? gripVerticalSvg : gripHorizontalSvg;
+
+    if (showGrips && !(state.isRowDragging && state.dragGroupIndex === i)) {
+      el.style.display = 'flex';
+      el.classList.remove('dragging');
+    } else {
+      el.style.display = 'none';
+    }
+
+    if (isHorizontal) {
+      // 横排模式：把手紧贴画布左侧，纵向对齐行中心
+      const rowCenterY = gb[i].y * sf + gb[i].height * sf / 2;
+      el.style.left = (canvasOffX - GRIP_STRIP / 2 - GRIP_ICON_SIZE / 2) + 'px';
+      el.style.top = (canvasOffY + rowCenterY - GRIP_ICON_SIZE / 2) + 'px';
+      el.style.width = GRIP_ICON_SIZE + 'px';
+      el.style.height = GRIP_ICON_SIZE + 'px';
+    } else {
+      // 竖排模式：把手紧贴画布上方，横向对齐列中心
+      const colCenterX = gb[i].x * sf + gb[i].width * sf / 2;
+      el.style.left = (canvasOffX + colCenterX - GRIP_ICON_SIZE / 2) + 'px';
+      el.style.top = (canvasOffY - GRIP_STRIP / 2 - GRIP_ICON_SIZE / 2) + 'px';
+      el.style.width = GRIP_ICON_SIZE + 'px';
+      el.style.height = GRIP_ICON_SIZE + 'px';
+    }
+  }
+}
+
+function clearGripHandles() {
+  for (const el of gripElements) el.remove();
+  gripElements = [];
+}
+
+// 把手条始终预留空间：给 workspace 加 padding
+function updateCanvasMargin() {
+  const ws = canvas.parentElement;
+  if (state.images.length === 0 || !state.lastLayoutResult || state.lastLayoutResult.width === 0) {
+    ws.style.paddingLeft = '';
+    ws.style.paddingTop = '';
+    return;
+  }
+  const isHorizontal = state.layoutMode === 'horizontal';
+  ws.style.paddingLeft = isHorizontal ? GRIP_STRIP + 'px' : '';
+  ws.style.paddingTop = isHorizontal ? '' : GRIP_STRIP + 'px';
+}
+
+function loadImageFromDataURL(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = dataUrl;
+  });
+}
+
+async function loadImageFromFile(file) {
+  return await loadImageFromDataURL(await readFileAsDataURL(file));
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = (e) => resolve(e.target.result);
+    r.readAsDataURL(file);
+  });
+}
+
+function updateStatusBar() {
+  const n = state.images.length;
+  if (n === 0) { statusBar.textContent = '拖拽或点击添加图片开始拼图'; return; }
+  const lr = state.lastLayoutResult;
+  if (!lr) return;
+  const w = Math.round(lr.width * lr.scaleFactor);
+  const h = Math.round(lr.height * lr.scaleFactor);
+  let text = `${n} 张图片 · ${w} × ${h}`;
+  if (lr.isScaledDown) text += '（已缩放）';
+  statusBar.textContent = text;
+}
+
+// ========== 拖拽插入位置计算 ==========
+
+function computeInsertIndexInGroup(mouseX, mouseY, groupImageIds, dragImageId, layoutMode) {
+  const lr = state.lastLayoutResult;
+  if (!lr) return -1;
+  const sf = lr.scaleFactor * (lr._displayScale || 1);
+  const nonDragged = groupImageIds.filter(id => id !== dragImageId);
+
+  for (let i = 0; i < nonDragged.length; i++) {
+    const img = imagePool.get(nonDragged[i]);
+    if (!img) continue;
+    const midpoint = layoutMode === 'horizontal'
+      ? (img.x + img.renderWidth / 2) * sf
+      : (img.y + img.renderHeight / 2) * sf;
+    const mouseVal = layoutMode === 'horizontal' ? mouseX : mouseY;
+    if (mouseVal < midpoint) return i;
+  }
+  return nonDragged.length;
+}
+
+function computeDropZone(mouseX, mouseY) {
+  const lr = state.lastLayoutResult;
+  if (!lr || !lr._groupBounds || lr._groupBounds.length === 0) return null;
+  const sf = lr.scaleFactor * (lr._displayScale || 1);
+  const gb = lr._groupBounds;
+  const totalImages = state.images.length;
+  const isHorizontal = state.layoutMode === 'horizontal';
+  const mouseVal = isHorizontal ? mouseY : mouseX;
+  const crossVal = isHorizontal ? mouseX : mouseY;
+
+  // 接近边缘的触发阈值（UI 屏幕像素），转换为布局空间后使用
+  const EDGE_THRESHOLD = 40; // 屏幕像素
+
+  // 计算整体布局边界（屏幕像素）
+  const layoutStart = isHorizontal ? gb[0].y * sf : gb[0].x * sf;
+  const layoutEnd = isHorizontal
+    ? (gb[gb.length - 1].y + gb[gb.length - 1].height) * sf
+    : (gb[gb.length - 1].x + gb[gb.length - 1].width) * sf;
+  const crossStart = isHorizontal ? gb[0].x * sf : gb[0].y * sf;
+  const crossEnd = isHorizontal
+    ? (gb[0].x + gb[0].width) * sf
+    : (gb[0].y + gb[0].height) * sf;
+
+  // 交叉轴必须在布局范围内
+  if (crossVal < crossStart - 20 || crossVal > crossEnd + 20) return null;
+
+  // 接近上/左边缘 → 在第一个组之前创建新组
+  if (mouseVal < layoutStart + EDGE_THRESHOLD) {
+    if (totalImages >= 3) {
+      return { type: 'new-group', position: 'before', groupIndex: 0 };
+    }
+    return null;
+  }
+
+  // 接近下/右边缘 → 在最后一个组之后创建新组
+  if (mouseVal > layoutEnd - EDGE_THRESHOLD) {
+    if (totalImages >= 3) {
+      return { type: 'new-group', position: 'after', groupIndex: gb.length - 1 };
+    }
+    return null;
+  }
+
+  // 遍历每个组的边界，确定鼠标在哪个组内部或组之间
+  for (let i = 0; i < gb.length; i++) {
+    const bound = gb[i];
+    const start = isHorizontal ? bound.y * sf : bound.x * sf;
+    const end = isHorizontal ? (bound.y + bound.height) * sf : (bound.x + bound.width) * sf;
+
+    // 不在这个组的范围内，跳过
+    if (mouseVal < start || mouseVal > end) continue;
+
+    // 在组内部 — 计算组内插入位置
+    const groupIds = state.groups[i];
+    const insertIndex = computeInsertIndexInGroup(mouseX, mouseY, groupIds, state.dragImageId, state.layoutMode);
+    return { type: 'reorder', groupIndex: i, insertIndex };
+  }
+
+  return null;
+}
+
+function updateButtonStates() {
+  const hasImages = state.images.length > 0;
+  const editing = state.editModeImageId !== -1;
+  btnCopy.disabled = !hasImages || editing;
+  btnSave.disabled = !hasImages || editing;
+  btnClear.disabled = !hasImages || editing;
+  btnUndo.disabled = !state.undoManager.canUndo();
+  btnRedo.disabled = !state.undoManager.canRedo();
+}
+
+function showScaleToast(show) {
+  scaleToast.classList.toggle('visible', show);
+  if (show) {
+    clearTimeout(scaleToast._timer);
+    scaleToast._timer = setTimeout(() => scaleToast.classList.remove('visible'), 3000);
+  }
+}
+
+// ========== 渲染 ==========
+
+function recomputeAndRender() {
+  state.lastLayoutResult = computeGroupedLayout(state.groups, imagePool, state.layoutMode);
+  setLayoutResult(state.lastLayoutResult);
+  const result = renderPreview(canvas, state.lastLayoutResult, {
+    hoveredCloseId: state.hoveredCloseId,
+    hoveredImageId: state.hoveredImageId,
+    isDragging: state.isDragging,
+    dragImageId: state.dragImageId,
+    dragCurrentMX: state.dragCurrentMX,
+    dragCurrentMY: state.dragCurrentMY,
+    dragStartMX: state.dragStartMX,
+    dragStartMY: state.dragStartMY,
+    dragInsertIndex: state.dragInsertIndex,
+    dragTargetGroupIndex: state.dragTargetGroupIndex,
+    layoutMode: state.layoutMode,
+    editModeImageId: state.editModeImageId,
+    editAction: state.editAction,
+    hoveredSaveBtn: state.hoveredSaveBtn,
+    hoveredResetBtn: state.hoveredResetBtn,
+    hoveredRotateBtn: state.hoveredRotateBtn,
+    hoveredEditBtnId: state.hoveredEditBtnId,
+    dropZone: state.dropZone,
+    groups: state.groups,
+    imagePool: imagePool,
+    // 行列拖拽
+    isRowDragging: state.isRowDragging,
+    dragGroupIndex: state.dragGroupIndex,
+    dragGroupCurrentMX: state.dragGroupCurrentMX,
+    dragGroupCurrentMY: state.dragGroupCurrentMY,
+    dragGroupStartMX: state.dragGroupStartMX,
+    dragGroupStartMY: state.dragGroupStartMY,
+    dragGroupDropIndex: state.dragGroupDropIndex,
+  });
+  if (result) {
+    state.lastLayoutResult._displayScale = result.displayScale;
+    state.lastLayoutResult._gripOffX = result.gripOffX || 0;
+    state.lastLayoutResult._gripOffY = result.gripOffY || 0;
+  }
+  updateCanvasMargin();
+  // 强制浏览器完成 layout，使 getBoundingClientRect 返回正确值
+  canvas.getBoundingClientRect();
+  updateGripHandles();
+  updateStatusBar();
+  updateButtonStates();
+  if (state.editModeImageId === -1) showScaleToast(state.lastLayoutResult.isScaledDown);
+}
+
+function captureEditStates() {
+  const editStates = {};
+  for (const img of state.images) {
+    if (img.editState) {
+      editStates[img.id] = {
+        cropWidth: img.editState.cropWidth,
+        cropHeight: img.editState.cropHeight,
+        zoom: img.editState.zoom,
+        panX: img.editState.panX,
+        panY: img.editState.panY,
+        rotation: img.editState.rotation,
+      };
+    }
+  }
+  return editStates;
+}
+
+function pushUndo() {
+  state.undoManager.push({
+    groups: state.groups.map(g => [...g]),
+    layoutMode: state.layoutMode,
+    editStates: captureEditStates(),
+    editModeImageId: state.editModeImageId,
+  });
+}
+
+// ========== 添加图片 ==========
+
+async function addImages(imageFilesOrDataUrls) {
+  pushUndo();
+
+  if (state.groups.length === 0) {
+    state.groups.push([]);
+  }
+  const targetGroup = state.groups[state.groups.length - 1];
+
+  for (const item of imageFilesOrDataUrls) {
+    try {
+      let img;
+      if (item instanceof File) img = await loadImageFromFile(item);
+      else img = await loadImageFromDataURL(item);
+
+      const imageItem = new ImageItem(img, item instanceof File ? item.name : 'pasted_image.png');
+      imagePool.set(imageItem.id, imageItem);
+      targetGroup.push(imageItem.id);
+    } catch (e) {
+      console.error('Failed to load image:', e);
+    }
+  }
+
+  syncImagesFromGroups();
+  recomputeAndRender();
+}
+
+// ========== 事件绑定 ==========
+
+addImagesInput.addEventListener('change', async (e) => {
+  if (state.editModeImageId !== -1) return; // 编辑模式下禁用
+  const files = Array.from(e.target.files);
+  if (files.length > 0) await addImages(files);
+  e.target.value = '';
+});
+
+layoutBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const mode = btn.dataset.layout;
+    if (mode === state.layoutMode) return;
+    if (state.editModeImageId !== -1) return;
+    state.layoutMode = mode;
+    // 先算新布局（基于裁切尺寸计算有效尺寸）
+    computeGroupedLayout(state.groups, imagePool, state.layoutMode);
+    // 裁切画布更新为新布局的 render 尺寸（图片填满新位置，保留 zoom/pan/rotation）
+    for (const img of state.images) {
+      if (img.editState) {
+        img.editState.cropWidth = img.renderWidth;
+        img.editState.cropHeight = img.renderHeight;
+      }
+    }
+    layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === mode));
+    recomputeAndRender();
+  });
+});
+
+// ========== 撤销/重做 ==========
+
+btnUndo.addEventListener('click', () => doUndo());
+btnRedo.addEventListener('click', () => doRedo());
+btnClear.addEventListener('click', () => {
+  if (state.images.length === 0) return;
+  if (state.editModeImageId !== -1) return; // 编辑模式下禁用
+  pushUndo();
+  state.groups = [];
+  state.dropZone = null;
+  gcImagePool();
+  syncImagesFromGroups();
+  state.hoveredImageId = -1;
+  state.hoveredCloseId = -1;
+  recomputeAndRender();
+});
+
+function makeCurrentSnapshot() {
+  return {
+    groups: state.groups.map(g => [...g]),
+    layoutMode: state.layoutMode,
+    editStates: captureEditStates(),
+    editModeImageId: state.editModeImageId,
+  };
+}
+
+function doUndo() {
+  const prev = state.undoManager.undo(makeCurrentSnapshot());
+  if (!prev) return;
+  restoreSnapshot(prev);
+}
+
+function doRedo() {
+  const next = state.undoManager.redo(makeCurrentSnapshot());
+  if (!next) return;
+  restoreSnapshot(next);
+}
+
+function restoreSnapshot(snapshot) {
+  state.groups = snapshot.groups.map(g => [...g]);
+  syncImagesFromGroups();
+  gcImagePool();
+  state.layoutMode = snapshot.layoutMode;
+  // 恢复编辑状态
+  if (snapshot.editStates) {
+    for (const img of state.images) {
+      const es = snapshot.editStates[img.id];
+      if (es) {
+        img.editState = { ...es };
+      } else {
+        img.editState = null;
+      }
+    }
+  } else {
+    for (const img of state.images) {
+      img.editState = null;
+    }
+  }
+  // 仅在当前处于编辑模式时才恢复编辑模式状态
+  if (state.editModeImageId !== -1) {
+    state.editModeImageId = snapshot.editModeImageId ?? -1;
+    if (state.editModeImageId !== -1) {
+      const editImg = state.images.find(i => i.id === state.editModeImageId);
+      if (!editImg) state.editModeImageId = -1;
+    }
+  } else {
+    state.editModeImageId = -1;
+  }
+  state.editAction = null;
+  state.editActionStart = null;
+  layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === state.layoutMode));
+  recomputeAndRender();
+}
+
+// ========== 复制/保存 ==========
+
+btnCopy.addEventListener('click', () => {
+  if (state.editModeImageId !== -1) return;
+  copyToClipboard();
+});
+
+function showCopyToast() {
+  copyToast.classList.add('visible');
+  clearTimeout(copyToast._timer);
+  copyToast._timer = setTimeout(() => copyToast.classList.remove('visible'), 2500);
+}
+
+async function copyToClipboard() {
+  if (state.images.length === 0) return;
+  const dataUrl = exportImage(state.lastLayoutResult, 'png', 100, 1);
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    showCopyToast();
+  } catch (e) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('write_image_to_clipboard', { dataUrl });
+      showCopyToast();
+    } catch (e2) {
+      console.error('Copy failed:', e2);
+      statusBar.textContent = '复制失败';
+    }
+  }
+}
+
+btnSave.addEventListener('click', () => {
+  if (state.editModeImageId !== -1) return;
+  openSaveModal();
+});
+document.getElementById('save-modal-close').addEventListener('click', closeSaveModal);
+document.getElementById('save-modal-cancel').addEventListener('click', closeSaveModal);
+saveFormatSelect.addEventListener('change', updateSavePreview);
+saveQualitySlider.addEventListener('input', () => {
+  saveQualityValue.textContent = saveQualitySlider.value;
+  updateSavePreview();
+});
+saveResolutionSelect.addEventListener('input', () => {
+  saveResolutionValue.textContent = saveResolutionSelect.value;
+  updateSavePreview();
+});
+
+function openSaveModal() {
+  if (state.images.length === 0) return;
+  saveModal.classList.add('modal-open');
+  updateSavePreview();
+}
+function closeSaveModal() { saveModal.classList.remove('modal-open'); }
+
+// ========== 双击内联编辑（参考 laymask） ==========
+
+function enableInlineEdit(displayEl, { min, max, apply }) {
+  let input = null;
+  let originalValue = 0;
+
+  function commit() {
+    if (!input) return;
+    let val = parseFloat(input.value);
+    if (isNaN(val)) val = originalValue;
+    val = Math.round(val);
+    val = Math.max(min, Math.min(max, val));
+    displayEl.textContent = val;
+    displayEl.style.display = '';
+    input.remove();
+    input = null;
+    apply(val, originalValue);
+  }
+
+  function cancel() {
+    if (!input) return;
+    displayEl.textContent = originalValue;
+    displayEl.style.display = '';
+    input.remove();
+    input = null;
+  }
+
+  displayEl.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    originalValue = parseInt(displayEl.textContent, 10);
+    input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'inline-edit-input';
+    input.value = displayEl.textContent;
+    displayEl.style.display = 'none';
+    displayEl.parentNode.insertBefore(input, displayEl.nextSibling);
+    input.focus();
+    input.select();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!input) return;
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+
+  document.addEventListener('mousedown', (e) => {
+    if (!input) return;
+    if (e.target === input || (input.parentNode && input.parentNode.contains(e.target))) return;
+    commit();
+  });
+}
+
+// 分辨率数值双击编辑
+enableInlineEdit(saveResolutionValue, {
+  min: 10, max: 300,
+  apply(val) {
+    saveResolutionSelect.value = val;
+    updateSavePreview();
+  },
+});
+
+function updateSavePreview() {
+  if (!state.lastLayoutResult) return;
+  const format = saveFormatSelect.value;
+  const quality = parseInt(saveQualitySlider.value);
+  const resolution = parseFloat(saveResolutionSelect.value) / 100;
+  qualityRow.style.display = format === 'jpg' ? '' : 'none';
+  const baseW = Math.round(state.lastLayoutResult.width * state.lastLayoutResult.scaleFactor);
+  const baseH = Math.round(state.lastLayoutResult.height * state.lastLayoutResult.scaleFactor);
+  saveSizeInfo.textContent = `${Math.round(baseW * resolution)} x ${Math.round(baseH * resolution)}`;
+  try {
+    const du = exportImage(state.lastLayoutResult, format, quality, resolution);
+    const size = du.split(',')[1]?.length || 0;
+    saveFileSizeInfo.textContent = formatFileSize(Math.round(size * 0.75));
+    const pi = new Image();
+    pi.onload = () => {
+      savePreviewCanvas.width = 160;
+      savePreviewCanvas.height = 160;
+      const c = savePreviewCanvas.getContext('2d');
+      const s = Math.min(160 / pi.naturalWidth, 160 / pi.naturalHeight);
+      c.drawImage(pi, (160 - s * pi.naturalWidth) / 2, (160 - s * pi.naturalHeight) / 2, s * pi.naturalWidth, s * pi.naturalHeight);
+    };
+    pi.src = du;
+  } catch {
+    saveFileSizeInfo.textContent = '-';
+  }
+}
+
+const saveConfirmBtn = document.getElementById('save-modal-confirm');
+
+document.getElementById('save-modal-confirm').addEventListener('click', async () => {
+  const fmt = saveFormatSelect.value;
+  const qual = parseInt(saveQualitySlider.value);
+  const res = parseFloat(saveResolutionSelect.value) / 100;
+
+  const firstFile = state.images[0]?.fileName || '';
+  const baseName = firstFile.replace(/\.[^.]+$/, '');
+  const ext = fmt === 'png' ? 'png' : 'jpg';
+  const defaultName = `minimix_${baseName || ''}.${ext}`;
+
+  // 禁用按钮并进入保存状态
+  saveConfirmBtn.classList.add('btn-saving');
+  saveConfirmBtn.disabled = true;
+
+  const yieldToUI = () => new Promise(r => setTimeout(r, 20));
+
+  const updateProgress = async (text, percent) => {
+    saveConfirmBtn.textContent = `${text} (${percent}%)`;
+    await yieldToUI();
+  };
+
+  try {
+    // 1. 获取保存路径
+    let fp = null;
+    if (window.__TAURI_INTERNALS__) {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      fp = await save({ defaultPath: defaultName, filters: [{ name: '图片', extensions: [ext] }] });
+      if (!fp) throw new Error('USER_CANCELLED');
+    }
+
+    await updateProgress('正在合成图片', 10);
+
+    // 2. 渲染导出图片
+    const du = exportImage(state.lastLayoutResult, fmt, qual, res);
+
+    await updateProgress('正在转换数据格式', 45);
+
+    // 3. DataURL → 二进制（优先用 fetch 异步解析，降级用分块解码）
+    let bytes;
+    try {
+      const response = await fetch(du);
+      const arrayBuffer = await response.arrayBuffer();
+      bytes = new Uint8Array(arrayBuffer);
+      await updateProgress('数据转换完成', 80);
+    } catch (fetchErr) {
+      const base64 = du.split(',')[1];
+      const binaryStr = atob(base64);
+      const len = binaryStr.length;
+      bytes = new Uint8Array(len);
+      const chunkSize = 1024 * 512;
+      for (let i = 0; i < len; i += chunkSize) {
+        const end = Math.min(i + chunkSize, len);
+        for (let j = i; j < end; j++) bytes[j] = binaryStr.charCodeAt(j);
+        await updateProgress('正在转换数据格式', 45 + Math.floor((end / len) * 35));
+      }
+    }
+
+    await updateProgress('正在写入文件', 90);
+
+    // 4. 写入文件
+    if (window.__TAURI_INTERNALS__) {
+      const { writeFile } = await import('@tauri-apps/plugin-fs');
+      await writeFile(fp, bytes);
+      statusBar.textContent = `已保存: ${fp}`;
+      setTimeout(updateStatusBar, 2000);
+    } else if ('showSaveFilePicker' in window) {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: defaultName,
+        types: [{ description: '图片', accept: { [fmt === 'png' ? 'image/png' : 'image/jpeg']: [`.${ext}`] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(bytes);
+      await writable.close();
+    } else {
+      const blob = new Blob([bytes], { type: fmt === 'png' ? 'image/png' : 'image/jpeg' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = defaultName;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    await updateProgress('保存成功', 100);
+    setTimeout(closeSaveModal, 300);
+  } catch (e) {
+    if (e.name === 'AbortError' || e.message === 'USER_CANCELLED') {
+      // 用户取消，恢复按钮
+    } else {
+      console.error('Save failed:', e);
+      saveConfirmBtn.textContent = '保存失败';
+      await yieldToUI();
+    }
+  } finally {
+    setTimeout(() => {
+      saveConfirmBtn.classList.remove('btn-saving');
+      saveConfirmBtn.disabled = false;
+      saveConfirmBtn.textContent = '保存';
+    }, 1000);
+  }
+});
+
+// 信息弹窗
+btnInfo.addEventListener('click', () => {
+  infoModal.classList.add('modal-open');
+  document.getElementById('info-version-number').textContent = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.0';
+  const iconEl = document.getElementById('info-app-icon');
+  if (typeof __APP_ICON__ !== 'undefined' && __APP_ICON__) {
+    iconEl.src = __APP_ICON__;
+  }
+});
+document.getElementById('info-modal-close').addEventListener('click', () => infoModal.classList.remove('modal-open'));
+[saveModal, infoModal].forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('modal-open'); }));
+
+// ========== 编辑模式函数 ==========
+
+// 旋转光标（自定义 SVG）
+const ROTATE_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/%3E%3Cpath d='M3 3v5h5'/%3E%3C/svg%3E") 12 12, crosshair`;
+
+function enterEditMode(image) {
+  if (!image.editState) image.initEditState();
+  state.editModeImageId = image.id;
+  state.hoveredImageId = image.id;
+  state.editAction = null;
+  state.editActionStart = null;
+  // 编辑模式下禁用除撤销/重做/信息外的所有工具栏按钮
+  addImagesInput.disabled = true;
+  uploadBtnLabel.classList.add('disabled');
+  btnClear.disabled = true;
+  btnCopy.disabled = true;
+  btnSave.disabled = true;
+  layoutBtns.forEach(b => { b.disabled = true; b.classList.add('disabled'); });
+  recomputeAndRender();
+}
+
+function exitEditMode() {
+  state.editModeImageId = -1;
+  state.editAction = null;
+  state.editActionStart = null;
+  state.hoveredSaveBtn = false;
+  state.hoveredResetBtn = false;
+  state.hoveredRotateBtn = false;
+  // 恢复工具栏按钮状态
+  addImagesInput.disabled = false;
+  uploadBtnLabel.classList.remove('disabled');
+  layoutBtns.forEach(b => { b.disabled = false; b.classList.remove('disabled'); });
+  updateButtonStates();
+  recomputeAndRender();
+}
+
+function resetEdit(img) {
+  pushUndo();
+  // 暂时清除编辑状态以获取干净的布局尺寸（不受当前裁剪值污染）
+  const savedEdit = img.editState;
+  img.editState = null;
+  computeGroupedLayout(state.groups, imagePool, state.layoutMode);
+  const cleanW = img.renderWidth;
+  const cleanH = img.renderHeight;
+  img.editState = {
+    cropWidth: cleanW,
+    cropHeight: cleanH,
+    zoom: 1.0,
+    panX: 0,
+    panY: 0,
+    rotation: 0,
+  };
+  recomputeAndRender();
+}
+
+// ========== Canvas 交互 ==========
+
+// 把手拖拽事件（委托给 grip-container）
+gripContainer.addEventListener('mousedown', (e) => {
+  const gripEl = e.target.closest('.grip-handle');
+  if (!gripEl) return;
+  const idx = gripElements.indexOf(gripEl);
+  if (idx === -1) return;
+
+  e.preventDefault();
+  state.dragGroupIndex = idx;
+  state.dragGroupStartMX = e.clientX;
+  state.dragGroupStartMY = e.clientY;
+  state.dragGroupCurrentMX = e.clientX;
+  state.dragGroupCurrentMY = e.clientY;
+  state.dragGroupStarted = false;
+  state.isRowDragging = false;
+});
+
+function getCanvasMousePos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { mx: e.clientX - rect.left, my: e.clientY - rect.top };
+}
+
+function getLayoutScale() {
+  const lr = state.lastLayoutResult;
+  if (!lr) return 1;
+  return lr.scaleFactor * (lr._displayScale || 1);
+}
+
+function isPanAvailable(img) {
+  if (!img.editState) return false;
+  const es = img.editState;
+  const effScale = getEffectiveScale(es, img.originalWidth, img.originalHeight);
+  const drawW = img.originalWidth * effScale;
+  const drawH = img.originalHeight * effScale;
+  return drawW > es.cropWidth + 0.5 || drawH > es.cropHeight + 0.5;
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  if (state.images.length === 0) return;
+  const { mx, my } = getCanvasMousePos(e);
+
+  // 编辑模式下的交互
+  if (state.editModeImageId !== -1) {
+    handleEditModeMouseDown(mx, my);
+    return;
+  }
+
+  const hit = hitTest(mx, my, state.images, state.hoveredImageId, -1, state.layoutMode);
+
+  // 编辑按钮
+  if (hit.isEditBtn && hit.image) {
+    enterEditMode(hit.image);
+    return;
+  }
+
+  // 关闭按钮
+  if (hit.isCloseBtn && hit.image) {
+    pushUndo();
+    removeImageFromGroups(hit.image.id);
+    cleanupEmptyGroups();
+    gcImagePool();
+    syncImagesFromGroups();
+    state.hoveredImageId = -1;
+    state.hoveredCloseId = -1;
+    recomputeAndRender();
+    return;
+  }
+
+  // 拖拽重排
+  if (hit.image && state.images.length > 1) {
+    state.dragImageId = hit.image.id;
+    state.dragStartMX = mx;
+    state.dragStartMY = my;
+    state.dragCurrentMX = mx;
+    state.dragCurrentMY = my;
+    state.dragStarted = false;
+    state.isDragging = false;
+  }
+});
+
+function handleEditModeMouseDown(mx, my) {
+  const img = state.images.find(i => i.id === state.editModeImageId);
+  if (!img || !img.editState) return;
+
+  const hit = hitTest(mx, my, state.images, state.editModeImageId, state.editModeImageId, state.layoutMode);
+
+  if (hit.isSaveBtn) {
+    exitEditMode();
+    return;
+  }
+
+  if (hit.isResetBtn) {
+    resetEdit(img);
+    return;
+  }
+
+  pushUndo();
+
+  // 在鼠标按下瞬间，计算并锁死当前的排版和显示缩放率
+  const sf = getLayoutScale();
+  const displayW = img.renderWidth;
+  const displayH = img.renderHeight;
+  const startEditScale = Math.max(displayW / img.editState.cropWidth, displayH / img.editState.cropHeight);
+
+  if (hit.isCropEdge) {
+    const axis = hit.cropEdgeAxis || (state.layoutMode === 'horizontal' ? 'width' : 'height');
+    state.editAction = 'crop';
+    state.editActionStart = {
+      mouseX: mx, mouseY: my,
+      cropWidth: img.editState.cropWidth,
+      cropHeight: img.editState.cropHeight,
+      startPanX: img.editState.panX,
+      startPanY: img.editState.panY,
+      zoom: img.editState.zoom,
+      cropEdgeSide: hit.cropEdgeSide,
+      cropEdgeAxis: axis,
+      startSf: sf,
+      startEditScale: startEditScale,
+    };
+    return;
+  }
+
+  if (hit.isRotateBtn) {
+    state.editAction = 'rotate';
+    const centerX = (img.x + img.editState.cropWidth / 2) * sf;
+    const centerY = (img.y + img.editState.cropHeight / 2) * sf;
+    state.editActionStart = {
+      startAngle: Math.atan2(my - centerY, mx - centerX),
+      startRotation: img.editState.rotation,
+      centerX, centerY,
+      startSf: sf,
+      startEditScale: startEditScale
+    };
+    return;
+  }
+
+  if (hit.isImageBody && isPanAvailable(img)) {
+    state.editAction = 'pan';
+    state.editActionStart = {
+      mouseX: mx, mouseY: my,
+      panX: img.editState.panX,
+      panY: img.editState.panY,
+      startSf: sf,
+      startEditScale: startEditScale
+    };
+    return;
+  }
+
+  // 点击编辑图片区域外 → 不做任何操作
+}
+
+// 拖拽过程中的 document 级别监听（防止鼠标移出 canvas）
+function positionNewRowIndicators() {
+  const rect = canvas.getBoundingClientRect();
+  const wsRect = canvas.parentElement.getBoundingClientRect();
+  const isVertical = state.layoutMode === 'vertical';
+  const GAP = 8;   // 贴边间距
+  const SAFE = 56; // 安全距离：外侧有这么多空间才放到外面
+
+  newRowBefore.classList.toggle('vertical', isVertical);
+  newRowAfter.classList.toggle('vertical', isVertical);
+
+  if (isVertical) {
+    const cy = rect.top - wsRect.top + rect.height / 2 - 80;
+    // before（左侧）：看画布左边到 workspace 左边的距离
+    const spaceBefore = rect.left - wsRect.left;
+    const leftPos = spaceBefore >= SAFE
+      ? rect.left - wsRect.left - 40 - GAP  // 外侧
+      : rect.left - wsRect.left + GAP;       // 内侧
+    // after（右侧）：看画布右边到 workspace 右边的距离
+    const spaceAfter = wsRect.right - rect.right;
+    const rightPos = spaceAfter >= SAFE
+      ? rect.right - wsRect.left + GAP       // 外侧
+      : rect.right - wsRect.left - 40 - GAP; // 内侧
+    newRowBefore.style.cssText = `display:none;top:${cy}px;left:${leftPos}px;transform:none;`;
+    newRowAfter.style.cssText = `display:none;top:${cy}px;left:${rightPos}px;transform:none;`;
+  } else {
+    const cx = rect.left - wsRect.left + rect.width / 2 - 80;
+    // before（上方）：看画布顶部到 workspace 顶部的距离
+    const spaceBefore = rect.top - wsRect.top;
+    const topPos = spaceBefore >= SAFE
+      ? rect.top - wsRect.top - 40 - GAP     // 外侧
+      : rect.top - wsRect.top + GAP;          // 内侧
+    // after（下方）：看画布底部到 workspace 底部的距离
+    const spaceAfter = wsRect.bottom - rect.bottom;
+    const bottomPos = spaceAfter >= SAFE
+      ? rect.bottom - wsRect.top + GAP        // 外侧
+      : rect.bottom - wsRect.top - 40 - GAP;  // 内侧
+    newRowBefore.style.cssText = `display:none;left:${cx}px;top:${topPos}px;transform:none;`;
+    newRowAfter.style.cssText = `display:none;left:${cx}px;top:${bottomPos}px;transform:none;`;
+  }
+}
+
+function updateNewRowIndicators(zone) {
+  const totalImages = state.images.length;
+  const show = state.isDragging && totalImages >= 3;
+
+  if (show) {
+    // 只在首次显示时定位（拖拽开始时锁定位置）
+    if (!state._indicatorsPositioned) {
+      positionNewRowIndicators();
+      state._indicatorsPositioned = true;
+    }
+    const activeBefore = zone && zone.type === 'new-group' && zone.position === 'before';
+    const activeAfter = zone && zone.type === 'new-group' && zone.position === 'after';
+    newRowBefore.style.display = 'flex';
+    newRowAfter.style.display = 'flex';
+    newRowBefore.classList.toggle('active', !!activeBefore);
+    newRowAfter.classList.toggle('active', !!activeAfter);
+  } else {
+    newRowBefore.style.display = 'none';
+    newRowAfter.style.display = 'none';
+    newRowBefore.classList.remove('active');
+    newRowAfter.classList.remove('active');
+    state._indicatorsPositioned = false;
+  }
+}
+
+function onDragMouseMove(e) {
+  if (state.dragImageId === -1) return;
+  const { mx, my } = getCanvasMousePos(e);
+
+  state.dragCurrentMX = mx;
+  state.dragCurrentMY = my;
+
+  if (!state.dragStarted) {
+    const dx = mx - state.dragStartMX;
+    const dy = my - state.dragStartMY;
+    if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+    state.dragStarted = true;
+    state.isDragging = true;
+    pushUndo();
+  }
+
+  const zone = computeDropZone(mx, my);
+  state.dropZone = zone;
+
+  if (zone && zone.type === 'reorder') {
+    state.dragTargetGroupIndex = zone.groupIndex;
+    state.dragInsertIndex = zone.insertIndex;
+  } else {
+    state.dragTargetGroupIndex = -1;
+    state.dragInsertIndex = -1;
+  }
+
+  updateNewRowIndicators(zone);
+
+  recomputeAndRender();
+}
+
+function onDragMouseUp() {
+  if (state.dragImageId === -1) return;
+
+  if (state.isDragging) {
+    const dragId = state.dragImageId;
+    const zone = state.dropZone;
+
+    if (zone && zone.type === 'new-group') {
+      // 从当前组移除
+      removeImageFromGroups(dragId);
+      // 在目标位置创建新组
+      const insertAt = zone.position === 'before' ? zone.groupIndex : zone.groupIndex + 1;
+      state.groups.splice(insertAt, 0, [dragId]);
+    } else if (zone && zone.type === 'reorder') {
+      // 从当前组移除
+      removeImageFromGroups(dragId);
+      // 插入到目标组
+      const clampedIdx = Math.max(0, Math.min(zone.insertIndex, state.groups[zone.groupIndex].length));
+      state.groups[zone.groupIndex].splice(clampedIdx, 0, dragId);
+    }
+
+    // 清理空组
+    cleanupEmptyGroups();
+    syncImagesFromGroups();
+  }
+
+  state.isDragging = false;
+  state.dragImageId = -1;
+  state.dragStarted = false;
+  state.dragInsertIndex = -1;
+  state.dragTargetGroupIndex = -1;
+  state.dropZone = null;
+
+  updateNewRowIndicators(null);
+
+  const mx = state.dragCurrentMX;
+  const my = state.dragCurrentMY;
+  const hit = hitTest(mx, my, state.images, -1, -1, state.layoutMode);
+  state.hoveredImageId = hit.image ? hit.image.id : -1;
+  state.hoveredCloseId = -1;
+  canvas.style.cursor = hit.image ? 'grab' : 'default';
+
+  recomputeAndRender();
+}
+
+// ========== 行列拖拽处理 ==========
+
+function computeGroupDropIndex(mouseScreenX, mouseScreenY) {
+  const lr = state.lastLayoutResult;
+  if (!lr || !lr._groupBounds || lr._groupBounds.length === 0) return -1;
+
+  const sf = lr.scaleFactor * (lr._displayScale || 1);
+  const gb = lr._groupBounds;
+  const isHorizontal = state.layoutMode === 'horizontal';
+
+  // 将鼠标位置转换为相对于画布的坐标
+  const canvasRect = canvas.getBoundingClientRect();
+  const mouseVal = isHorizontal
+    ? mouseScreenY - canvasRect.top
+    : mouseScreenX - canvasRect.left;
+
+  for (let i = 0; i < gb.length; i++) {
+    const mid = isHorizontal
+      ? (gb[i].y + gb[i].height / 2) * sf
+      : (gb[i].x + gb[i].width / 2) * sf;
+    if (mouseVal < mid) return i;
+  }
+  return gb.length;
+}
+
+function onRowDragMouseMove(e) {
+  if (state.dragGroupIndex === -1) return;
+
+  state.dragGroupCurrentMX = e.clientX;
+  state.dragGroupCurrentMY = e.clientY;
+
+  if (!state.dragGroupStarted) {
+    const dx = e.clientX - state.dragGroupStartMX;
+    const dy = e.clientY - state.dragGroupStartMY;
+    if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+    state.dragGroupStarted = true;
+    state.isRowDragging = true;
+    pushUndo();
+  }
+
+  state.dragGroupDropIndex = computeGroupDropIndex(e.clientX, e.clientY);
+  recomputeAndRender();
+}
+
+function onRowDragMouseUp() {
+  if (state.dragGroupIndex === -1) return;
+
+  if (state.isRowDragging) {
+    const srcIdx = state.dragGroupIndex;
+    const dropIdx = state.dragGroupDropIndex;
+
+    if (dropIdx !== -1 && dropIdx !== srcIdx) {
+      const [movedGroup] = state.groups.splice(srcIdx, 1);
+      const adjustedDrop = dropIdx > srcIdx ? dropIdx - 1 : dropIdx;
+      state.groups.splice(adjustedDrop, 0, movedGroup);
+    }
+
+    syncImagesFromGroups();
+  }
+
+  state.isRowDragging = false;
+  state.dragGroupIndex = -1;
+  state.dragGroupStarted = false;
+  state.dragGroupDropIndex = -1;
+
+  recomputeAndRender();
+}
+
+// 编辑模式拖拽处理
+function onEditModeMouseMove(e) {
+  const img = state.images.find(i => i.id === state.editModeImageId);
+  if (!img || !img.editState) return;
+  const { mx, my } = getCanvasMousePos(e);
+  const es = img.editState;
+
+  if (state.editAction === 'crop') {
+    const start = state.editActionStart;
+    const axis = start.cropEdgeAxis;
+    const lockedScale = start.startSf * start.startEditScale;
+
+    if (axis === 'width') {
+      const dx = (mx - start.mouseX) / lockedScale;
+      const side = start.cropEdgeSide;
+      const delta = side === 'right' ? dx : -dx;
+
+      // 最小裁剪尺寸 50px，不设上限（clampPan 会防止漏底色）
+      const newCropW = Math.max(50, start.cropWidth + delta);
+      es.cropWidth = newCropW;
+
+      const appliedDelta = newCropW - start.cropWidth;
+
+      if (side === 'right') {
+        es.panX = start.startPanX - appliedDelta / 2;
+      } else {
+        es.panX = start.startPanX + appliedDelta / 2;
+      }
+
+      // 竖排模式：副轴联动 — 锁死占位高度 + zoom 抵消
+      if (state.layoutMode === 'vertical') {
+        const ratio = newCropW / start.cropWidth;
+        es.cropHeight = start.cropHeight * ratio;
+        es.zoom = start.zoom / ratio;
+      }
+
+    } else { // axis === 'height'
+      const dy = (my - start.mouseY) / lockedScale;
+      const side = start.cropEdgeSide;
+      const delta = side === 'bottom' ? dy : -dy;
+
+      const newCropH = Math.max(50, start.cropHeight + delta);
+      es.cropHeight = newCropH;
+
+      const appliedDelta = newCropH - start.cropHeight;
+
+      if (side === 'bottom') {
+        es.panY = start.startPanY - appliedDelta / 2;
+      } else {
+        es.panY = start.startPanY + appliedDelta / 2;
+      }
+
+      // 横排模式：副轴联动 — 锁死占位宽度 + zoom 抵消
+      if (state.layoutMode === 'horizontal') {
+        const ratio = newCropH / start.cropHeight;
+        es.cropWidth = start.cropWidth * ratio;
+        es.zoom = start.zoom / ratio;
+      }
+    }
+
+    es.zoom = Math.max(1.0, es.zoom);
+    clampPan(img);
+    recomputeAndRender();
+    return;
+  }
+
+  if (state.editAction === 'pan') {
+    const start = state.editActionStart;
+    const lockedScale = start.startSf * start.startEditScale;
+    es.panX = start.panX + (mx - start.mouseX) / lockedScale;
+    es.panY = start.panY + (my - start.mouseY) / lockedScale;
+    clampPan(img);
+    recomputeAndRender();
+    return;
+  }
+
+  if (state.editAction === 'rotate') {
+    const start = state.editActionStart;
+    const currentAngle = Math.atan2(my - start.centerY, mx - start.centerX);
+    es.rotation = start.startRotation + (currentAngle - start.startAngle);
+    if (Math.abs(es.rotation) < 0.017) es.rotation = 0;
+    clampPan(img);
+    recomputeAndRender();
+    return;
+  }
+}
+
+/**
+ * 计算能够完全覆盖旋转后裁剪框的真实缩放倍率
+ */
+function getEffectiveScale(es, origW, origH) {
+  const cropW = es.cropWidth;
+  const cropH = es.cropHeight;
+  const absCos = Math.abs(Math.cos(es.rotation));
+  const absSin = Math.abs(Math.sin(es.rotation));
+
+  // 核心修正：计算固定裁切框在图片局部坐标系下的投影长度
+  const minScaleX = (cropW * absCos + cropH * absSin) / origW;
+  const minScaleY = (cropW * absSin + cropH * absCos) / origH;
+
+  // 必须满足两个方向都不漏底色
+  const baseScale = Math.max(minScaleX, minScaleY);
+
+  // es.zoom 是用户的主动放大，维持其始终 >= 1.0 即可保证不漏底色
+  return baseScale * Math.max(1.0, es.zoom);
+}
+
+/**
+ * 平移限制：通过局部坐标系投影，计算并限制最大可平移距离
+ */
+function clampPan(img) {
+  const es = img.editState;
+  if (!es) return;
+
+  const effScale = getEffectiveScale(es, img.originalWidth, img.originalHeight);
+
+  // 1. 获取图片当前的物理显示宽高 (局部坐标系)
+  const drawW = img.originalWidth * effScale;
+  const drawH = img.originalHeight * effScale;
+
+  const absCos = Math.abs(Math.cos(es.rotation));
+  const absSin = Math.abs(Math.sin(es.rotation));
+
+  // 2. 计算裁切框(全局)在图片局部坐标系下的"投影边界占用"
+  const occupiedW = es.cropWidth * absCos + es.cropHeight * absSin;
+  const occupiedH = es.cropWidth * absSin + es.cropHeight * absCos;
+
+  // 3. 计算局部坐标系下的最大可移动余量 (Slack)
+  const maxLocalU = Math.max(0, (drawW - occupiedW) / 2);
+  const maxLocalV = Math.max(0, (drawH - occupiedH) / 2);
+
+  // 4. 将当前的全局目标平移量 (es.panX/Y) 转换为局部坐标系的平移量
+  const cos = Math.cos(es.rotation);
+  const sin = Math.sin(es.rotation);
+  const localU = es.panX * cos + es.panY * sin;
+  const localV = -es.panX * sin + es.panY * cos;
+
+  // 5. 在局部坐标系下进行钳位限制 (Clamp)
+  const clampedU = Math.max(-maxLocalU, Math.min(maxLocalU, localU));
+  const clampedV = Math.max(-maxLocalV, Math.min(maxLocalV, localV));
+
+  // 6. 将限制后的局部坐标系偏移逆向转回全局坐标，应用到最终状态
+  es.panX = clampedU * cos - clampedV * sin;
+  es.panY = clampedU * sin + clampedV * cos;
+}
+
+function onEditModeMouseUp() {
+  if (state.editAction) {
+    state.editAction = null;
+    state.editActionStart = null;
+    recomputeAndRender();
+  }
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (state.editModeImageId !== -1 && state.editAction) {
+    onEditModeMouseMove(e);
+    return;
+  }
+  if (state.dragGroupIndex !== -1) {
+    onRowDragMouseMove(e);
+    return;
+  }
+  if (state.dragImageId !== -1) {
+    onDragMouseMove(e);
+    return;
+  }
+});
+document.addEventListener('mouseup', () => {
+  if (state.editModeImageId !== -1 && state.editAction) {
+    onEditModeMouseUp();
+    return;
+  }
+  if (state.dragGroupIndex !== -1) {
+    onRowDragMouseUp();
+    return;
+  }
+  if (state.dragImageId !== -1) {
+    onDragMouseUp();
+    return;
+  }
+});
+
+// Canvas 悬停检测
+canvas.addEventListener('mousemove', (e) => {
+  if (state.dragImageId !== -1) return;
+  if (state.dragGroupIndex !== -1) return;
+  if (state.images.length === 0) return;
+  const { mx, my } = getCanvasMousePos(e);
+
+  // 编辑模式悬停
+  if (state.editModeImageId !== -1) {
+    if (state.editAction) return; // 拖拽中由 document mousemove 处理
+    const img = state.images.find(i => i.id === state.editModeImageId);
+    const hit = hitTest(mx, my, state.images, state.editModeImageId, state.editModeImageId, state.layoutMode);
+    const prevSave = state.hoveredSaveBtn;
+    const prevReset = state.hoveredResetBtn;
+    const prevRotate = state.hoveredRotateBtn;
+
+    state.hoveredSaveBtn = hit.isSaveBtn || false;
+    state.hoveredResetBtn = hit.isResetBtn || false;
+    state.hoveredRotateBtn = hit.isRotateBtn || false;
+
+    if (state.hoveredSaveBtn !== prevSave || state.hoveredResetBtn !== prevReset || state.hoveredRotateBtn !== prevRotate) {
+      recomputeAndRender();
+    }
+
+    // 光标 & tooltip
+    if (hit.isSaveBtn) { canvas.style.cursor = 'pointer'; canvas.title = '保存退出'; }
+    else if (hit.isResetBtn) { canvas.style.cursor = 'pointer'; canvas.title = '复位'; }
+    else if (hit.isRotateBtn) { canvas.style.cursor = ROTATE_CURSOR; canvas.title = '按住旋转'; }
+    else if (hit.isCropEdge) { canvas.style.cursor = hit.cropEdgeAxis === 'width' ? 'ew-resize' : 'ns-resize'; canvas.title = ''; }
+    else if (hit.isImageBody && img && isPanAvailable(img)) { canvas.style.cursor = 'grab'; canvas.title = '平移'; }
+    else { canvas.style.cursor = 'default'; canvas.title = ''; }
+    return;
+  }
+
+  // 普通模式悬停
+  const hit = hitTest(mx, my, state.images, state.hoveredImageId, -1, state.layoutMode);
+
+  const prevHovered = state.hoveredImageId;
+  const prevClose = state.hoveredCloseId;
+  const prevEditBtn = state.hoveredEditBtnId;
+
+  state.hoveredImageId = hit.image ? hit.image.id : -1;
+  state.hoveredCloseId = (hit.isCloseBtn && hit.image) ? hit.image.id : -1;
+  state.hoveredEditBtnId = (hit.isEditBtn && hit.image) ? hit.image.id : -1;
+
+  if (state.hoveredImageId !== prevHovered || state.hoveredCloseId !== prevClose || state.hoveredEditBtnId !== prevEditBtn) {
+    recomputeAndRender();
+  }
+
+  if (hit.isEditBtn) { canvas.style.cursor = 'pointer'; canvas.title = '编辑'; }
+  else if (hit.isCloseBtn) { canvas.style.cursor = 'pointer'; canvas.title = '删除'; }
+  else if (hit.image) { canvas.style.cursor = 'grab'; canvas.title = ''; }
+  else { canvas.style.cursor = 'default'; canvas.title = ''; }
+});
+
+// 滚轮缩放（编辑模式）
+canvas.addEventListener('wheel', (e) => {
+  if (state.editModeImageId === -1) return;
+  const img = state.images.find(i => i.id === state.editModeImageId);
+  if (!img || !img.editState) return;
+  e.preventDefault();
+
+  pushUndo();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  img.editState.zoom = Math.max(1.0, img.editState.zoom * delta);
+  clampPan(img);
+  recomputeAndRender();
+}, { passive: false });
+
+canvas.addEventListener('mouseleave', () => {
+  canvas.title = '';
+  if (state.dragImageId !== -1) return;
+  if (state.dragGroupIndex !== -1) return;
+  if (state.editModeImageId !== -1) return;
+  if (state.hoveredImageId !== -1) {
+    state.hoveredImageId = -1;
+    state.hoveredCloseId = -1;
+    state.hoveredEditBtnId = -1;
+    recomputeAndRender();
+  }
+  canvas.style.cursor = 'default';
+});
+
+// 窗口失焦安全网：强制终止拖拽/编辑操作
+window.addEventListener('blur', () => {
+  if (state.editModeImageId !== -1 && state.editAction) onEditModeMouseUp();
+  if (state.dragGroupIndex !== -1) onRowDragMouseUp();
+  if (state.dragImageId !== -1) onDragMouseUp();
+});
+
+// ========== 键盘快捷键 ==========
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.editModeImageId !== -1) {
+    e.preventDefault();
+    exitEditMode();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); doUndo(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); doRedo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (state.editModeImageId !== -1) return;
+    e.preventDefault(); copyToClipboard();
+    return;
+  }
+});
+
+// ========== 粘贴 ==========
+
+document.addEventListener('paste', async (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  const blobs = [];
+  for (const item of items) {
+    if (item.type.startsWith('image/') && item.getAsFile()) blobs.push(item.getAsFile());
+  }
+  if (blobs.length > 0) { e.preventDefault(); await addImages(blobs); }
+});
+
+// ========== 文件拖拽 ==========
+
+function showDropOverlay() {
+  dropOverlay.classList.add('visible');
+  dropOverlay.querySelector('.drop-zone').classList.add('hover');
+}
+
+function hideDropOverlay() {
+  dropOverlay.classList.remove('visible');
+  dropOverlay.querySelector('.drop-zone').classList.remove('hover');
+}
+
+function isImageFile(path) {
+  const ext = path.split('.').pop().toLowerCase();
+  return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'ico', 'svg'].includes(ext);
+}
+
+// Tauri 原生拖拽（从系统资源管理器等外部拖入）
+async function initTauriDragDrop() {
+  try {
+    const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+    const { invoke } = await import('@tauri-apps/api/core');
+    const webview = getCurrentWebview();
+
+    await webview.onDragDropEvent(async (event) => {
+      const payload = event.payload;
+      if (payload.type === 'enter') {
+        if (!payload.paths.some(isImageFile)) return;
+        showDropOverlay();
+      } else if (payload.type === 'over') {
+        // 保持 overlay 显示
+      } else if (payload.type === 'drop') {
+        hideDropOverlay();
+        const paths = payload.paths.filter(isImageFile);
+        if (paths.length > 0) {
+          const urls = [];
+          for (const fp of paths) {
+            try { urls.push(await invoke('read_file_as_data_url', { path: fp })); }
+            catch (err) { console.error(`Failed to read: ${fp}`, err); }
+          }
+          if (urls.length > 0) await addImages(urls);
+        }
+      } else if (payload.type === 'leave') {
+        hideDropOverlay();
+      }
+    });
+  } catch (e) { console.error('Tauri drag-drop init failed:', e); }
+}
+
+// 浏览器模式回退：标准 HTML5 拖拽
+let hasDraggedFiles = false;
+document.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  hasDraggedFiles = Array.from(e.dataTransfer?.files || []).some(f => f.type.startsWith('image/'));
+  if (hasDraggedFiles) showDropOverlay();
+});
+document.addEventListener('dragleave', (e) => {
+  if (e.relatedTarget && document.body.contains(e.relatedTarget)) return;
+  hideDropOverlay();
+  hasDraggedFiles = false;
+});
+document.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  hideDropOverlay();
+  const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
+  if (files.length > 0) await addImages(files);
+  hasDraggedFiles = false;
+});
+
+// ========== Tauri 启动 ==========
+
+async function loadFilesFromPaths(invoke, paths) {
+  if (!paths || paths.length === 0) return;
+  const urls = [];
+  for (const fp of paths) {
+    try { urls.push(await invoke('read_file_as_data_url', { path: fp })); }
+    catch (err) { console.error(`Failed to read: ${fp}`, err); }
+  }
+  if (urls.length > 0) await addImages(urls);
+}
+
+async function initApp() {
+  const isTauri = !!window.__TAURI_INTERNALS__;
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const { listen } = await import('@tauri-apps/api/event');
+
+      // Load files passed on first launch
+      const openedFiles = await invoke('get_opened_files');
+      await loadFilesFromPaths(invoke, openedFiles);
+
+      // Handle files from subsequent instances (multi-file right-click)
+      await listen('single-instance-files', async () => {
+        const paths = await invoke('get_pending_files');
+        await loadFilesFromPaths(invoke, paths);
+      });
+
+      // Check for files that arrived during startup (before listener was ready)
+      const pendingPaths = await invoke('get_pending_files');
+      await loadFilesFromPaths(invoke, pendingPaths);
+
+      initTauriDragDrop();
+    } catch (e) { /* not tauri */ }
+  }
+  recomputeAndRender();
+}
+
+initApp();
