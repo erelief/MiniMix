@@ -31,4 +31,3 @@ desktop.ini
 
 # Rust / Tauri build
 src-tauri/target/
-src-tauri/windows/
