@@ -386,11 +386,40 @@ export function renderPreview(canvas, layoutResult, options = {}) {
           const layoutFn = layoutMode === 'horizontal' ? layoutRowHorizontal : layoutRowVertical;
           layoutFn(tempOrder);
 
+          // Apply inter-group size matching (same as computeGroupedLayout)
           const gb = (layoutResult._groupBounds || [])[dropZone.groupIndex];
           if (gb) {
             if (layoutMode === 'horizontal') {
+              const computedW = tempOrder.reduce((s, i) => s + i.renderWidth, 0);
+              if (computedW > 0 && computedW < gb.width) {
+                const scale = gb.width / computedW;
+                for (const img of tempOrder) {
+                  img.renderWidth = Math.round(img.renderWidth * scale);
+                  img.renderHeight = Math.round(img.renderHeight * scale);
+                }
+                let xOffset = 0;
+                for (const img of tempOrder) {
+                  img.x = xOffset;
+                  img.y = 0;
+                  xOffset += img.renderWidth;
+                }
+              }
               for (const img of tempOrder) { img.y += gb.y; }
             } else {
+              const computedH = tempOrder.reduce((s, i) => s + i.renderHeight, 0);
+              if (computedH > 0 && computedH < gb.height) {
+                const scale = gb.height / computedH;
+                for (const img of tempOrder) {
+                  img.renderWidth = Math.round(img.renderWidth * scale);
+                  img.renderHeight = Math.round(img.renderHeight * scale);
+                }
+                let yOffset = 0;
+                for (const img of tempOrder) {
+                  img.x = 0;
+                  img.y = yOffset;
+                  yOffset += img.renderHeight;
+                }
+              }
               for (const img of tempOrder) { img.x += gb.x; }
             }
           }
