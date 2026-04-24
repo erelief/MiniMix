@@ -145,7 +145,7 @@ function updateGripHandles() {
 
   const gb = lr._groupBounds;
   const isHorizontal = state.layoutMode === 'horizontal';
-  const showGrips = gb.length > 1;
+  const showGrips = gb.length > 1 && state.editModeImageId === -1;
   const ds = lr._displayScale || 1;
   const sf = lr.scaleFactor * ds;
   const ws = canvas.parentElement;
@@ -983,11 +983,16 @@ function handleEditModeMouseDown(mx, my) {
   const displayW = img.renderWidth;
   const displayH = img.renderHeight;
   const startEditScale = Math.max(displayW / img.editState.cropWidth, displayH / img.editState.cropHeight);
-  // 源图片到显示区域的总缩放率 = editScale × baseFit × zoom（裁剪时需保持恒定）
-  const startTotalDisplayScale = startEditScale * getEffectiveScale(img.editState, img.originalWidth, img.originalHeight);
 
   if (hit.isCropEdge) {
     const axis = hit.cropEdgeAxis || (state.layoutMode === 'horizontal' ? 'width' : 'height');
+    // 记录裁剪开始时的 baseFit，用于补偿源图片缩放（不含布局缩放）
+    const absCos = Math.abs(Math.cos(img.editState.rotation));
+    const absSin = Math.abs(Math.sin(img.editState.rotation));
+    const startBaseFit = Math.max(
+      (img.editState.cropWidth * absCos + img.editState.cropHeight * absSin) / img.originalWidth,
+      (img.editState.cropWidth * absSin + img.editState.cropHeight * absCos) / img.originalHeight
+    );
     state.editAction = 'crop';
     state.editActionStart = {
       mouseX: mx, mouseY: my,
@@ -1000,7 +1005,7 @@ function handleEditModeMouseDown(mx, my) {
       cropEdgeAxis: axis,
       startSf: sf,
       startEditScale: startEditScale,
-      startTotalDisplayScale: startTotalDisplayScale,
+      startBaseFit: startBaseFit,
     };
     return;
   }
@@ -1266,25 +1271,18 @@ function onEditModeMouseMove(e) {
       const newCropW = Math.max(50, start.cropWidth + delta);
       es.cropWidth = newCropW;
 
-      // 布局重算后重新计算所有缩放率
-      recomputeAndRender();
-      const ndw = img.renderWidth, ndh = img.renderHeight;
-      const nes = Math.max(ndw / es.cropWidth, ndh / es.cropHeight);
-
-      // 用 zoom 补偿 editScale + baseFit 的总变化，保持源图片显示大小不变
+      // 只补偿 baseFit 变化（源图片缩放），让布局系统自然调整
       const absCos = Math.abs(Math.cos(es.rotation));
       const absSin = Math.abs(Math.sin(es.rotation));
-      const nbf = Math.max(
+      const newBaseFit = Math.max(
         (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
         (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
       );
-      if (nes * nbf > 0.001) {
-        es.zoom = start.startTotalDisplayScale / (nes * nbf);
+      if (newBaseFit > 0.001) {
+        es.zoom = (start.startBaseFit * start.zoom) / newBaseFit;
       }
 
       const appliedDelta = newCropW - start.cropWidth;
-
-      // 锚定到对侧边缘
       if (side === 'right') { es.panX = start.startPanX; }
       else { es.panX = start.startPanX + appliedDelta; }
 
@@ -1296,28 +1294,21 @@ function onEditModeMouseMove(e) {
       const newCropH = Math.max(50, start.cropHeight + delta);
       es.cropHeight = newCropH;
 
-      recomputeAndRender();
-      const ndw = img.renderWidth, ndh = img.renderHeight;
-      const nes = Math.max(ndw / es.cropWidth, ndh / es.cropHeight);
-
       const absCos = Math.abs(Math.cos(es.rotation));
       const absSin = Math.abs(Math.sin(es.rotation));
-      const nbf = Math.max(
+      const newBaseFit = Math.max(
         (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
         (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
       );
-      if (nes * nbf > 0.001) {
-        es.zoom = start.startTotalDisplayScale / (nes * nbf);
+      if (newBaseFit > 0.001) {
+        es.zoom = (start.startBaseFit * start.zoom) / newBaseFit;
       }
 
       const appliedDelta = newCropH - start.cropHeight;
-
-      // 锚定到对侧边缘：拖底边时顶部内容不动，拖顶边时底部内容不动
       if (side === 'bottom') { es.panY = start.startPanY; }
       else { es.panY = start.startPanY + appliedDelta; }
     }
 
-    // 裁剪操作中允许 zoom < 1.0（正在调整中），只做下限保护防止除零崩溃
     es.zoom = Math.max(0.01, es.zoom);
     clampPan(img);
     recomputeAndRender();

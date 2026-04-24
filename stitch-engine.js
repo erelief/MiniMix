@@ -311,6 +311,12 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   // 仅在正在拖拽操作时显示溢出（裁剪/平移/旋转过程中）
   const isActiveEditing = editAction !== null;
 
+  // 编辑图片引用（用于绘制循环）
+  let editingImg = null;
+  if (editModeImageId !== -1) {
+    editingImg = images.find(i => i.id === editModeImageId);
+  }
+
   // 重置按钮坐标
   for (const img of images) {
     img.closeBtnX = 0;
@@ -657,7 +663,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   if (scaleFactor < 1) ctx.scale(scaleFactor, scaleFactor);
 
   // 先绘制所有非编辑图片（让编辑图片的溢出能显示在最上层）
-  const editingImg = editModeImageId !== -1 ? images.find(i => i.id === editModeImageId) : null;
   for (const img of images) {
     if (img === editingImg) continue;
     if (img.editState) {
@@ -675,8 +680,23 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   // 恢复到画布像素空间
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-  // 编辑模式：非编辑图片变暗
-  if (editModeImageId !== -1) {
+  // 编辑模式溢出暗化：显示区域外统一变暗（原始像素坐标，不受变换影响）
+  if (editingImg && editingImg.editState && isActiveEditing) {
+    const ox = editingImg.x * scaleFactor + gOx;
+    const oy = editingImg.y * scaleFactor + gOy;
+    const ow = editingImg.renderWidth * scaleFactor;
+    const oh = editingImg.renderHeight * scaleFactor;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(ox - 9999, oy - 9999, ow + 19998, oh + 19998);
+    ctx.rect(ox, oy, ow, oh);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fill('evenodd');
+    ctx.restore();
+  }
+
+  // 编辑模式：非编辑图片变暗（拖拽中由溢出暗化统一处理，不再重复叠加）
+  if (editModeImageId !== -1 && !isActiveEditing) {
     for (const img of images) {
       if (img.id === editModeImageId) continue;
       const bx = img.x * scaleFactor + gOx;
@@ -748,8 +768,9 @@ const EDIT_BTN_SIZE = 28;
 const EDIT_BTN_PADDING = 4;
 
 function drawEditButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
-  const screenX = img.x * scaleFactor * displayScale + gOx * displayScale + EDIT_BTN_PADDING;
-  const screenY = img.y * scaleFactor * displayScale + gOy * displayScale + EDIT_BTN_PADDING;
+  const sf = scaleFactor * displayScale;
+  const screenX = img.x * sf + gOx * displayScale + EDIT_BTN_PADDING;
+  const screenY = img.y * sf + gOy * displayScale + EDIT_BTN_PADDING;
   const canvasSize = EDIT_BTN_SIZE / displayScale;
   const canvasX = screenX / displayScale;
   const canvasY = screenY / displayScale;
@@ -917,15 +938,6 @@ function drawEditedImage(ctx, img, scaleFactor, { showOverflow = false } = {}) {
       img.originalWidth, img.originalHeight
     );
     ctx.restore();
-
-    // 显示区域外暗化
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(img.x - 9999, img.y - 9999, displayW + 19998, displayH + 19998);
-    ctx.rect(img.x, img.y, displayW, displayH);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.fill('evenodd');
-    ctx.restore();
   } else {
     // 预览模式：裁剪到显示区域内
     ctx.beginPath();
@@ -951,8 +963,9 @@ const CLOSE_BTN_SIZE = 28;
 const CLOSE_BTN_PADDING = 4;
 
 function drawCloseButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
-  const screenX = (img.x + img.renderWidth) * scaleFactor * displayScale + gOx * displayScale - CLOSE_BTN_SIZE - CLOSE_BTN_PADDING;
-  const screenY = img.y * scaleFactor * displayScale + gOy * displayScale + CLOSE_BTN_PADDING;
+  const sf = scaleFactor * displayScale;
+  const screenX = (img.x + img.renderWidth) * sf + gOx * displayScale - CLOSE_BTN_SIZE - CLOSE_BTN_PADDING;
+  const screenY = img.y * sf + gOy * displayScale + CLOSE_BTN_PADDING;
   const canvasSize = CLOSE_BTN_SIZE / displayScale;
   const canvasX = screenX / displayScale;
   const canvasY = screenY / displayScale;
