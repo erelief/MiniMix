@@ -308,8 +308,8 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   canvas.style.boxShadow = '';
 
   const images = layoutResult._images || [];
-  // 编辑模式下始终显示溢出（缩放/平移/旋转都应可见）
-  const isActiveEditing = editModeImageId !== -1;
+  // 仅在正在拖拽操作时显示溢出（裁剪/平移/旋转过程中）
+  const isActiveEditing = editAction !== null;
 
   // 重置按钮坐标
   for (const img of images) {

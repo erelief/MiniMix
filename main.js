@@ -1272,13 +1272,6 @@ function onEditModeMouseMove(e) {
         es.panX = start.startPanX + appliedDelta / 2;
       }
 
-      // 竖排模式：副轴联动 — 锁死占位高度 + zoom 抵消
-      if (state.layoutMode === 'vertical') {
-        const ratio = newCropW / start.cropWidth;
-        es.cropHeight = start.cropHeight * ratio;
-        es.zoom = start.zoom / ratio;
-      }
-
     } else { // axis === 'height'
       const dy = (my - start.mouseY) / lockedScale;
       const side = start.cropEdgeSide;
@@ -1295,12 +1288,6 @@ function onEditModeMouseMove(e) {
         es.panY = start.startPanY + appliedDelta / 2;
       }
 
-      // 横排模式：副轴联动 — 锁死占位宽度 + zoom 抵消
-      if (state.layoutMode === 'horizontal') {
-        const ratio = newCropH / start.cropHeight;
-        es.cropWidth = start.cropWidth * ratio;
-        es.zoom = start.zoom / ratio;
-      }
     }
 
     es.zoom = Math.max(1.0, es.zoom);
