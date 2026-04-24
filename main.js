@@ -983,6 +983,8 @@ function handleEditModeMouseDown(mx, my) {
   const displayW = img.renderWidth;
   const displayH = img.renderHeight;
   const startEditScale = Math.max(displayW / img.editState.cropWidth, displayH / img.editState.cropHeight);
+  // 源图片到显示区域的总缩放率 = editScale × baseFit × zoom（裁剪时需保持恒定）
+  const startTotalDisplayScale = startEditScale * getEffectiveScale(img.editState, img.originalWidth, img.originalHeight);
 
   if (hit.isCropEdge) {
     const axis = hit.cropEdgeAxis || (state.layoutMode === 'horizontal' ? 'width' : 'height');
@@ -998,6 +1000,7 @@ function handleEditModeMouseDown(mx, my) {
       cropEdgeAxis: axis,
       startSf: sf,
       startEditScale: startEditScale,
+      startTotalDisplayScale: startTotalDisplayScale,
     };
     return;
   }
@@ -1260,17 +1263,30 @@ function onEditModeMouseMove(e) {
       const side = start.cropEdgeSide;
       const delta = side === 'right' ? dx : -dx;
 
-      // 最小裁剪尺寸 50px，不设上限（clampPan 会防止漏底色）
       const newCropW = Math.max(50, start.cropWidth + delta);
       es.cropWidth = newCropW;
 
+      // 布局重算后重新计算所有缩放率
+      recomputeAndRender();
+      const ndw = img.renderWidth, ndh = img.renderHeight;
+      const nes = Math.max(ndw / es.cropWidth, ndh / es.cropHeight);
+
+      // 用 zoom 补偿 editScale + baseFit 的总变化，保持源图片显示大小不变
+      const absCos = Math.abs(Math.cos(es.rotation));
+      const absSin = Math.abs(Math.sin(es.rotation));
+      const nbf = Math.max(
+        (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
+        (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
+      );
+      if (nes * nbf > 0.001) {
+        es.zoom = start.startTotalDisplayScale / (nes * nbf);
+      }
+
       const appliedDelta = newCropW - start.cropWidth;
 
-      if (side === 'right') {
-        es.panX = start.startPanX - appliedDelta / 2;
-      } else {
-        es.panX = start.startPanX + appliedDelta / 2;
-      }
+      // 锚定到对侧边缘
+      if (side === 'right') { es.panX = start.startPanX; }
+      else { es.panX = start.startPanX + appliedDelta; }
 
     } else { // axis === 'height'
       const dy = (my - start.mouseY) / lockedScale;
@@ -1280,17 +1296,29 @@ function onEditModeMouseMove(e) {
       const newCropH = Math.max(50, start.cropHeight + delta);
       es.cropHeight = newCropH;
 
-      const appliedDelta = newCropH - start.cropHeight;
+      recomputeAndRender();
+      const ndw = img.renderWidth, ndh = img.renderHeight;
+      const nes = Math.max(ndw / es.cropWidth, ndh / es.cropHeight);
 
-      if (side === 'bottom') {
-        es.panY = start.startPanY - appliedDelta / 2;
-      } else {
-        es.panY = start.startPanY + appliedDelta / 2;
+      const absCos = Math.abs(Math.cos(es.rotation));
+      const absSin = Math.abs(Math.sin(es.rotation));
+      const nbf = Math.max(
+        (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
+        (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
+      );
+      if (nes * nbf > 0.001) {
+        es.zoom = start.startTotalDisplayScale / (nes * nbf);
       }
 
+      const appliedDelta = newCropH - start.cropHeight;
+
+      // 锚定到对侧边缘：拖底边时顶部内容不动，拖顶边时底部内容不动
+      if (side === 'bottom') { es.panY = start.startPanY; }
+      else { es.panY = start.startPanY + appliedDelta; }
     }
 
-    es.zoom = Math.max(1.0, es.zoom);
+    // 裁剪操作中允许 zoom < 1.0（正在调整中），只做下限保护防止除零崩溃
+    es.zoom = Math.max(0.01, es.zoom);
     clampPan(img);
     recomputeAndRender();
     return;
