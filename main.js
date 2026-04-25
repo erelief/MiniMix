@@ -823,6 +823,78 @@ btnInfo.addEventListener('click', () => {
 document.getElementById('info-modal-close').addEventListener('click', () => infoModal.classList.remove('modal-open'));
 [saveModal, infoModal].forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('modal-open'); }));
 
+// 检测是否在 Tauri 环境中运行
+const isTauri = typeof window.__TAURI_INTERNALS__ !== 'undefined'
+  || typeof window.__TAURI__ !== 'undefined';
+
+// 通过 shell.open() 打开外部链接（Tauri 环境）
+function setupExternalLinks(container) {
+  container.querySelectorAll('a[href^="http"]').forEach(a => {
+    if (isTauri) {
+      a.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          const { open } = await import('@tauri-apps/plugin-shell');
+          await open(a.href);
+        } catch (err) {
+          console.error('Failed to open URL:', err);
+          window.open(a.href, '_blank');
+        }
+      });
+    } else {
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+    }
+  });
+}
+
+// 信息弹窗打开时设置外部链接
+btnInfo.addEventListener('click', () => {
+  infoModal.classList.add('modal-open');
+  document.getElementById('info-version-number').textContent = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.0';
+  const iconEl = document.getElementById('info-app-icon');
+  if (typeof __APP_ICON__ !== 'undefined' && __APP_ICON__) {
+    iconEl.src = __APP_ICON__;
+  }
+  setupExternalLinks(infoModal);
+});
+document.getElementById('info-modal-close').addEventListener('click', () => infoModal.classList.remove('modal-open'));
+[saveModal, infoModal].forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('modal-open'); }));
+
+// 动态渲染第三方依赖
+(function renderDeps() {
+  if (typeof __ABOUT_DEPS__ === 'undefined' || !__ABOUT_DEPS__.length) return;
+  const container = document.getElementById('info-deps');
+  const divider = document.getElementById('deps-divider');
+  if (!container || !divider) return;
+
+  divider.style.display = 'block';
+  const depsContainer = document.createElement('div');
+  depsContainer.className = 'info-deps-list';
+
+  __ABOUT_DEPS__.forEach(dep => {
+    const item = document.createElement('div');
+    item.className = 'info-section';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'info-label';
+    nameEl.textContent = dep.name;
+
+    const linkText = dep.version ? `v${dep.version}` : dep.name;
+    const linkEl = document.createElement('a');
+    linkEl.className = 'info-value info-value-link';
+    linkEl.href = dep.url;
+    linkEl.rel = 'noopener noreferrer';
+    linkEl.textContent = linkText;
+
+    item.appendChild(nameEl);
+    item.appendChild(linkEl);
+    depsContainer.appendChild(item);
+  });
+
+  container.appendChild(depsContainer);
+  setupExternalLinks(depsContainer);
+})();
+
 // ========== 编辑模式函数 ==========
 
 // 旋转光标（自定义 SVG）
