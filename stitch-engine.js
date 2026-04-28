@@ -926,64 +926,40 @@ function drawEditedImage(ctx, img, scaleFactor, { showOverflow = false } = {}) {
   const origW = img.originalWidth;
   const origH = img.originalHeight;
 
-  // 编辑画布 = cropW x cropH（用户操作的虚拟画布）
-  // 显示区域 = renderWidth x renderHeight（布局分配的空间）
-  // 当宽度匹配后 render > crop 时，按比例放大到填满显示区域
   const displayW = img.renderWidth;
   const displayH = img.renderHeight;
   const editScale = Math.max(displayW / cropW, displayH / cropH);
 
-  // 计算能够完全覆盖旋转后裁剪框的真实缩放倍率
+  // Minimum scale to cover the crop area with rotation
   const absCos = Math.abs(Math.cos(es.rotation));
   const absSin = Math.abs(Math.sin(es.rotation));
-
-  // 核心修正：计算固定裁切框在图片局部坐标系下的投影长度
-  const minScaleX = (cropW * absCos + cropH * absSin) / origW;
-  const minScaleY = (cropW * absSin + cropH * absCos) / origH;
-
-  // 必须满足两个方向都不漏底色
-  const baseFit = Math.max(minScaleX, minScaleY);
-
-  // es.zoom 是用户的主动放大，维持其始终 >= 1.0 即可保证不漏底色
+  const baseFit = Math.max(
+    (cropW * absCos + cropH * absSin) / origW,
+    (cropW * absSin + cropH * absCos) / origH
+  );
   const effectiveScale = baseFit * Math.max(1.0, es.zoom);
 
-  // 显示区域中心（布局空间）
   const centerX = img.x + displayW / 2;
   const centerY = img.y + displayH / 2;
 
   ctx.save();
 
-  if (showOverflow) {
-    // 编辑模式：绘制图片（允许溢出到显示区域外）
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.scale(editScale, editScale);
-    ctx.translate(es.panX, es.panY);
-    ctx.scale(effectiveScale, effectiveScale);
-    ctx.rotate(es.rotation);
-    ctx.drawImage(
-      img.image,
-      -img.originalWidth / 2, -img.originalHeight / 2,
-      img.originalWidth, img.originalHeight
-    );
-    ctx.restore();
-  } else {
-    // 预览模式：裁剪到显示区域内
+  if (!showOverflow) {
     ctx.beginPath();
     ctx.rect(img.x, img.y, displayW, displayH);
     ctx.clip();
-
-    ctx.translate(centerX, centerY);
-    ctx.scale(editScale, editScale);
-    ctx.translate(es.panX, es.panY);
-    ctx.scale(effectiveScale, effectiveScale);
-    ctx.rotate(es.rotation);
-    ctx.drawImage(
-      img.image,
-      -img.originalWidth / 2, -img.originalHeight / 2,
-      img.originalWidth, img.originalHeight
-    );
   }
+
+  ctx.translate(centerX, centerY);
+  ctx.scale(editScale, editScale);
+  ctx.translate(es.panX, es.panY);
+  ctx.scale(effectiveScale, effectiveScale);
+  ctx.rotate(es.rotation);
+  ctx.drawImage(
+    img.image,
+    -origW / 2, -origH / 2,
+    origW, origH
+  );
 
   ctx.restore();
 }

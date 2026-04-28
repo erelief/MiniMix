@@ -465,9 +465,7 @@ layoutBtns.forEach(btn => {
     if (mode === state.layoutMode) return;
     if (state.editModeImageId !== -1) return;
     state.layoutMode = mode;
-    // 先算新布局（基于裁切尺寸计算有效尺寸）
     computeGroupedLayout(state.groups, imagePool, state.layoutMode);
-    // 裁切画布更新为新布局的 render 尺寸（图片填满新位置，保留 zoom/pan/rotation）
     for (const img of state.images) {
       if (img.editState) {
         img.editState.cropWidth = img.renderWidth;
@@ -920,7 +918,6 @@ function exitEditMode() {
 
 function resetEdit(img) {
   pushUndo();
-  // 暂时清除编辑状态以获取干净的布局尺寸（不受当前裁剪值污染）
   const savedEdit = img.editState;
   img.editState = null;
   computeGroupedLayout(state.groups, imagePool, state.layoutMode);
@@ -1037,7 +1034,6 @@ function handleEditModeMouseDown(mx, my) {
 
   pushUndo();
 
-  // 在鼠标按下瞬间，计算并锁死当前的排版和显示缩放率
   const sf = getLayoutScale();
   const displayW = img.renderWidth;
   const displayH = img.renderHeight;
@@ -1045,40 +1041,30 @@ function handleEditModeMouseDown(mx, my) {
 
   if (hit.isCropEdge) {
     const axis = hit.cropEdgeAxis || (state.layoutMode === 'horizontal' ? 'width' : 'height');
-    // 记录裁剪开始时的 baseFit，用于补偿源图片缩放（不含布局缩放）
-    const absCos = Math.abs(Math.cos(img.editState.rotation));
-    const absSin = Math.abs(Math.sin(img.editState.rotation));
-    const startBaseFit = Math.max(
-      (img.editState.cropWidth * absCos + img.editState.cropHeight * absSin) / img.originalWidth,
-      (img.editState.cropWidth * absSin + img.editState.cropHeight * absCos) / img.originalHeight
-    );
     state.editAction = 'crop';
     state.editActionStart = {
       mouseX: mx, mouseY: my,
       cropWidth: img.editState.cropWidth,
       cropHeight: img.editState.cropHeight,
-      startPanX: img.editState.panX,
-      startPanY: img.editState.panY,
-      zoom: img.editState.zoom,
+      panX: img.editState.panX,
+      panY: img.editState.panY,
       cropEdgeSide: hit.cropEdgeSide,
       cropEdgeAxis: axis,
       startSf: sf,
       startEditScale: startEditScale,
-      startBaseFit: startBaseFit,
     };
     return;
   }
 
   if (hit.isRotateBtn) {
     state.editAction = 'rotate';
-    const centerX = (img.x + img.editState.cropWidth / 2) * sf;
-    const centerY = (img.y + img.editState.cropHeight / 2) * sf;
+    const centerX = (img.x + img.renderWidth / 2) * sf;
+    const centerY = (img.y + img.renderHeight / 2) * sf;
     state.editActionStart = {
       startAngle: Math.atan2(my - centerY, mx - centerX),
       startRotation: img.editState.rotation,
       centerX, centerY,
       startSf: sf,
-      startEditScale: startEditScale
     };
     return;
   }
@@ -1090,7 +1076,7 @@ function handleEditModeMouseDown(mx, my) {
       panX: img.editState.panX,
       panY: img.editState.panY,
       startSf: sf,
-      startEditScale: startEditScale
+      startEditScale: startEditScale,
     };
     return;
   }
@@ -1327,48 +1313,37 @@ function onEditModeMouseMove(e) {
       const side = start.cropEdgeSide;
       const delta = side === 'right' ? dx : -dx;
 
-      const newCropW = Math.max(50, start.cropWidth + delta);
-      es.cropWidth = newCropW;
-
-      // 只补偿 baseFit 变化（源图片缩放），让布局系统自然调整
+      const effScale = getEffectiveScale(es, img.originalWidth, img.originalHeight);
       const absCos = Math.abs(Math.cos(es.rotation));
       const absSin = Math.abs(Math.sin(es.rotation));
-      const newBaseFit = Math.max(
-        (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
-        (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
-      );
-      if (newBaseFit > 0.001) {
-        es.zoom = (start.startBaseFit * start.zoom) / newBaseFit;
-      }
+      const extentW = img.originalWidth * effScale * absCos + img.originalHeight * effScale * absSin;
+      es.cropWidth = Math.min(extentW, Math.max(50, start.cropWidth + delta));
 
-      const appliedDelta = newCropW - start.cropWidth;
-      if (side === 'right') { es.panX = start.startPanX; }
-      else { es.panX = start.startPanX + appliedDelta; }
+      // Single-edge crop: anchor opposite edge so only the dragged side changes
+      if (!e.altKey) {
+        const appliedDelta = es.cropWidth - start.cropWidth;
+        if (side === 'right') { es.panX = start.panX - appliedDelta / 2; }
+        else { es.panX = start.panX + appliedDelta / 2; }
+      }
 
     } else { // axis === 'height'
       const dy = (my - start.mouseY) / lockedScale;
       const side = start.cropEdgeSide;
       const delta = side === 'bottom' ? dy : -dy;
 
-      const newCropH = Math.max(50, start.cropHeight + delta);
-      es.cropHeight = newCropH;
-
+      const effScale = getEffectiveScale(es, img.originalWidth, img.originalHeight);
       const absCos = Math.abs(Math.cos(es.rotation));
       const absSin = Math.abs(Math.sin(es.rotation));
-      const newBaseFit = Math.max(
-        (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
-        (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
-      );
-      if (newBaseFit > 0.001) {
-        es.zoom = (start.startBaseFit * start.zoom) / newBaseFit;
-      }
+      const extentH = img.originalWidth * effScale * absSin + img.originalHeight * effScale * absCos;
+      es.cropHeight = Math.min(extentH, Math.max(50, start.cropHeight + delta));
 
-      const appliedDelta = newCropH - start.cropHeight;
-      if (side === 'bottom') { es.panY = start.startPanY; }
-      else { es.panY = start.startPanY + appliedDelta; }
+      if (!e.altKey) {
+        const appliedDelta = es.cropHeight - start.cropHeight;
+        if (side === 'bottom') { es.panY = start.panY - appliedDelta / 2; }
+        else { es.panY = start.panY + appliedDelta / 2; }
+      }
     }
 
-    es.zoom = Math.max(0.01, es.zoom);
     clampPan(img);
     recomputeAndRender();
     return;
@@ -1395,24 +1370,16 @@ function onEditModeMouseMove(e) {
   }
 }
 
-/**
- * 计算能够完全覆盖旋转后裁剪框的真实缩放倍率
- */
 function getEffectiveScale(es, origW, origH) {
   const cropW = es.cropWidth;
   const cropH = es.cropHeight;
   const absCos = Math.abs(Math.cos(es.rotation));
   const absSin = Math.abs(Math.sin(es.rotation));
-
-  // 核心修正：计算固定裁切框在图片局部坐标系下的投影长度
-  const minScaleX = (cropW * absCos + cropH * absSin) / origW;
-  const minScaleY = (cropW * absSin + cropH * absCos) / origH;
-
-  // 必须满足两个方向都不漏底色
-  const baseScale = Math.max(minScaleX, minScaleY);
-
-  // es.zoom 是用户的主动放大，维持其始终 >= 1.0 即可保证不漏底色
-  return baseScale * Math.max(1.0, es.zoom);
+  const baseFit = Math.max(
+    (cropW * absCos + cropH * absSin) / origW,
+    (cropW * absSin + cropH * absCos) / origH
+  );
+  return baseFit * Math.max(1.0, es.zoom);
 }
 
 /**
@@ -1424,32 +1391,26 @@ function clampPan(img) {
 
   const effScale = getEffectiveScale(es, img.originalWidth, img.originalHeight);
 
-  // 1. 获取图片当前的物理显示宽高 (局部坐标系)
   const drawW = img.originalWidth * effScale;
   const drawH = img.originalHeight * effScale;
 
   const absCos = Math.abs(Math.cos(es.rotation));
   const absSin = Math.abs(Math.sin(es.rotation));
 
-  // 2. 计算裁切框(全局)在图片局部坐标系下的"投影边界占用"
   const occupiedW = es.cropWidth * absCos + es.cropHeight * absSin;
   const occupiedH = es.cropWidth * absSin + es.cropHeight * absCos;
 
-  // 3. 计算局部坐标系下的最大可移动余量 (Slack)
   const maxLocalU = Math.max(0, (drawW - occupiedW) / 2);
   const maxLocalV = Math.max(0, (drawH - occupiedH) / 2);
 
-  // 4. 将当前的全局目标平移量 (es.panX/Y) 转换为局部坐标系的平移量
   const cos = Math.cos(es.rotation);
   const sin = Math.sin(es.rotation);
   const localU = es.panX * cos + es.panY * sin;
   const localV = -es.panX * sin + es.panY * cos;
 
-  // 5. 在局部坐标系下进行钳位限制 (Clamp)
   const clampedU = Math.max(-maxLocalU, Math.min(maxLocalU, localU));
   const clampedV = Math.max(-maxLocalV, Math.min(maxLocalV, localV));
 
-  // 6. 将限制后的局部坐标系偏移逆向转回全局坐标，应用到最终状态
   es.panX = clampedU * cos - clampedV * sin;
   es.panY = clampedU * sin + clampedV * cos;
 }
