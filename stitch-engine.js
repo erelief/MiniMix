@@ -5,6 +5,17 @@
 
 const MAX_PIXELS = 5120 * 5120;
 
+export const ASPECT_RATIOS = [
+  { label: '源图比例', ratio: null },
+  // 左列：横版（宽→窄），右列：对应的竖版
+  { label: '21:9',   ratio: 21 / 9 },   { label: '9:21',   ratio: 9 / 21 },
+  { label: '2:1',    ratio: 2 },         { label: '1:2',    ratio: 0.5 },
+  { label: '16:9',   ratio: 16 / 9 },    { label: '9:16',   ratio: 9 / 16 },
+  { label: '3:2',    ratio: 3 / 2 },     { label: '2:3',    ratio: 2 / 3 },
+  { label: '4:3',    ratio: 4 / 3 },     { label: '3:4',    ratio: 3 / 4 },
+  { label: '1:1',    ratio: 1 },
+];
+
 // ========== 布局计算 ==========
 
 function layoutRowHorizontal(images) {
@@ -263,6 +274,9 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     hoveredSaveBtn = false,
     hoveredResetBtn = false,
     hoveredRotateBtn = false,
+    hoveredRatioBtn = false,
+    showRatioMenu = false,
+    hoveredRatioIndex = -1,
     hoveredEditBtnId = -1,
     dropZone = null,
     groups = [],
@@ -334,6 +348,10 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     img.rotateBtnX = 0;
     img.rotateBtnY = 0;
     img.rotateBtnSize = 0;
+    img.ratioBtnX = 0;
+    img.ratioBtnY = 0;
+    img.ratioBtnSize = 0;
+    img.ratioMenuW = 0;
   }
 
   const ctx = canvas.getContext('2d');
@@ -776,7 +794,11 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     const eImg = images.find(i => i.id === editModeImageId);
     if (eImg) {
       drawEditModeButtons(ctx, eImg, hoveredSaveBtn, hoveredResetBtn, scaleFactor, displayScale, gOx, gOy);
+      drawRatioButton(ctx, eImg, hoveredRatioBtn, scaleFactor, displayScale, gOx, gOy);
       drawRotateButton(ctx, eImg, hoveredRotateBtn, scaleFactor, displayScale, gOx, gOy);
+      if (showRatioMenu) {
+        drawRatioMenu(ctx, eImg, hoveredRatioIndex, displayScale);
+      }
     }
   } else {
     // 普通模式：编辑按钮和关闭按钮
@@ -865,6 +887,163 @@ function drawEditModeButtons(ctx, img, saveHovered, resetHovered, scaleFactor, d
   drawSvgIcon(ctx, saveCanvasX, canvasY, canvasSize, displayScale,
     'm16 17 5-5-5-5', 'M21 12H9', 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'
   );
+  ctx.restore();
+}
+
+// ========== 比例按钮（复位按钮右侧） ==========
+
+function drawRatioButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+  const sf = scaleFactor * displayScale;
+  const screenY = img.y * sf + gOy * displayScale + EDIT_BTN_PADDING;
+  const canvasSize = EDIT_BTN_SIZE / displayScale;
+  const canvasY = screenY / displayScale;
+
+  const ratioScreenX = img.resetBtnX + EDIT_BTN_SIZE + EDIT_BTN_PADDING;
+  img.ratioBtnX = ratioScreenX;
+  img.ratioBtnY = screenY;
+  img.ratioBtnSize = EDIT_BTN_SIZE;
+
+  const ratioCanvasX = ratioScreenX / displayScale;
+
+  ctx.save();
+  ctx.fillStyle = hovered ? 'rgba(66, 133, 244, 0.9)' : 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.roundRect(ratioCanvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
+  ctx.fill();
+  drawSvgIcon(ctx, ratioCanvasX, canvasY, canvasSize, displayScale,
+    'M2 4h20v16H2z',
+    'M12 9v11',
+    'M2 9h13a2 2 0 0 1 2 2v9'
+  );
+  ctx.restore();
+}
+
+// ========== 比例下拉菜单 ==========
+
+const RATIO_MENU_W = 200;
+const RATIO_MENU_HEADER_H = 36;
+const RATIO_MENU_GRID_H = 40;
+const RATIO_MENU_GRID_COLS = 2;
+const RATIO_MENU_PADDING = 4;
+
+// 布局常量（供 hitTest 使用）
+const RATIO_GRID_START_INDEX = 1; // index 0 = header, 1+ = grid items
+const RATIO_GRID_ITEM_W = RATIO_MENU_W / RATIO_MENU_GRID_COLS;
+
+function getRatioMenuTotalHeight() {
+  const gridRows = Math.ceil((ASPECT_RATIOS.length - RATIO_GRID_START_INDEX) / RATIO_MENU_GRID_COLS);
+  return RATIO_MENU_HEADER_H + gridRows * RATIO_MENU_GRID_H;
+}
+
+function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
+  const menuX = img.ratioBtnX;
+  let menuY = img.ratioBtnY + img.ratioBtnSize + RATIO_MENU_PADDING;
+  const menuW = RATIO_MENU_W / displayScale;
+  const headerH = RATIO_MENU_HEADER_H / displayScale;
+  const gridItemH = RATIO_MENU_GRID_H / displayScale;
+  const gridItemW = RATIO_GRID_ITEM_W / displayScale;
+  const totalH = getRatioMenuTotalHeight() / displayScale;
+  const gridRows = Math.ceil((ASPECT_RATIOS.length - RATIO_GRID_START_INDEX) / RATIO_MENU_GRID_COLS);
+
+  // 超出画布底部时向上翻转
+  const canvasH = ctx.canvas.height;
+  if (menuY / displayScale + totalH > canvasH) {
+    menuY = img.ratioBtnY - RATIO_MENU_PADDING - getRatioMenuTotalHeight();
+  }
+
+  const canvasX = menuX / displayScale;
+  const canvasY = menuY / displayScale;
+
+  img.ratioMenuX = menuX;
+  img.ratioMenuY = menuY;
+  img.ratioMenuW = RATIO_MENU_W;
+  img.ratioMenuH = getRatioMenuTotalHeight();
+
+  ctx.save();
+
+  // 背景 + 阴影
+  ctx.shadowColor = 'rgba(0,0,0,0.3)';
+  ctx.shadowBlur = 8 / displayScale;
+  ctx.fillStyle = 'rgba(30, 30, 30, 0.95)';
+  ctx.beginPath();
+  ctx.roundRect(canvasX, canvasY, menuW, totalH, 4 / displayScale);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // --- Header: "源图比例" ---
+  const isHeaderHovered = hoveredIndex === 0;
+  if (isHeaderHovered) {
+    ctx.fillStyle = 'rgba(66, 133, 244, 0.3)';
+    ctx.beginPath();
+    const r = 4 / displayScale;
+    ctx.roundRect(canvasX, canvasY, menuW, headerH, [r, r, 0, 0]);
+    ctx.fill();
+  }
+
+  // Scaling icon
+  const iconSize = 18 / displayScale;
+  const iconX = canvasX + 8 / displayScale;
+  const iconY = canvasY + (headerH - iconSize) / 2;
+  drawSvgIcon(ctx, iconX, iconY, iconSize, displayScale,
+    'M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
+    'M14 15H9v-5',
+    'M16 3h5v5',
+    'M21 3 9 15'
+  );
+
+  // Header label
+  ctx.fillStyle = isHeaderHovered ? '#fff' : 'rgba(255,255,255,0.85)';
+  ctx.font = `${13 / displayScale}px system-ui, sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillText(ASPECT_RATIOS[0].label, canvasX + 32 / displayScale, canvasY + headerH / 2);
+
+  // --- Grid: 比例选项（两列） ---
+  const gridY = canvasY + headerH;
+  const previewMaxH = gridItemH * 0.45;
+  const previewMaxW = gridItemW * 0.35;
+  const cornerR = 2 / displayScale;
+
+  for (let i = RATIO_GRID_START_INDEX; i < ASPECT_RATIOS.length; i++) {
+    const gi = i - RATIO_GRID_START_INDEX;
+    const col = gi % RATIO_MENU_GRID_COLS;
+    const row = Math.floor(gi / RATIO_MENU_GRID_COLS);
+    const ix = canvasX + col * gridItemW;
+    const iy = gridY + row * gridItemH;
+    const isHovered = i === hoveredIndex;
+
+    if (isHovered) {
+      ctx.fillStyle = 'rgba(66, 133, 244, 0.3)';
+      ctx.fillRect(ix, iy, gridItemW, gridItemH);
+    }
+
+    // 比例预览矩形（带圆角）
+    const r = ASPECT_RATIOS[i].ratio;
+    let pw, ph;
+    if (previewMaxW / previewMaxH > r) {
+      ph = previewMaxH;
+      pw = previewMaxH * r;
+    } else {
+      pw = previewMaxW;
+      ph = previewMaxW / r;
+    }
+    const px = ix + (gridItemW - pw) / 2;
+    const py = iy + gridItemH * 0.12;
+
+    ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.5 / displayScale;
+    ctx.beginPath();
+    ctx.roundRect(px, py, pw, ph, cornerR);
+    ctx.stroke();
+
+    // 文字标签
+    ctx.fillStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.85)';
+    ctx.font = `${11 / displayScale}px system-ui, sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'center';
+    ctx.fillText(ASPECT_RATIOS[i].label, ix + gridItemW / 2, py + ph + 2 / displayScale);
+  }
+
   ctx.restore();
 }
 
@@ -1033,6 +1212,25 @@ export function hitTest(mouseX, mouseY, images, hoveredImageId = -1, editModeIma
 
     // 编辑模式下的图片
     if (img.id === editModeImageId) {
+      // 比例下拉菜单项（最高优先级）
+      if (img.ratioMenuW > 0 &&
+          mouseX >= img.ratioMenuX && mouseX < img.ratioMenuX + img.ratioMenuW &&
+          mouseY >= img.ratioMenuY && mouseY < img.ratioMenuY + img.ratioMenuH) {
+        const relX = mouseX - img.ratioMenuX;
+        const relY = mouseY - img.ratioMenuY;
+        let index = -1;
+        if (relY < RATIO_MENU_HEADER_H) {
+          index = 0; // header row
+        } else {
+          const gridRelY = relY - RATIO_MENU_HEADER_H;
+          const col = Math.floor(relX / RATIO_GRID_ITEM_W);
+          const row = Math.floor(gridRelY / RATIO_MENU_GRID_H);
+          index = RATIO_GRID_START_INDEX + row * RATIO_MENU_GRID_COLS + col;
+        }
+        if (index >= 0 && index < ASPECT_RATIOS.length) {
+          return { image: img, isRatioMenuItem: true, ratioMenuIndex: index };
+        }
+      }
       // 保存按钮
       if (img.saveBtnSize > 0 &&
           mouseX >= img.saveBtnX && mouseX < img.saveBtnX + img.saveBtnSize &&
@@ -1044,6 +1242,12 @@ export function hitTest(mouseX, mouseY, images, hoveredImageId = -1, editModeIma
           mouseX >= img.resetBtnX && mouseX < img.resetBtnX + img.resetBtnSize &&
           mouseY >= img.resetBtnY && mouseY < img.resetBtnY + img.resetBtnSize) {
         return { image: img, isResetBtn: true };
+      }
+      // 比例按钮
+      if (img.ratioBtnSize > 0 &&
+          mouseX >= img.ratioBtnX && mouseX < img.ratioBtnX + img.ratioBtnSize &&
+          mouseY >= img.ratioBtnY && mouseY < img.ratioBtnY + img.ratioBtnSize) {
+        return { image: img, isRatioBtn: true };
       }
       // 旋转按钮 — 仅右下角，按钮形式
       if (img.rotateBtnSize > 0 &&

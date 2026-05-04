@@ -14,6 +14,7 @@ import {
   exportImage,
   generatePreviewDataURL,
   formatFileSize,
+  ASPECT_RATIOS,
 } from './stitch-engine.js';
 
 // ========== 图片对象池（支持撤销恢复） ==========
@@ -47,6 +48,9 @@ const state = {
   hoveredSaveBtn: false,
   hoveredResetBtn: false,
   hoveredRotateBtn: false,
+  hoveredRatioBtn: false,
+  showRatioMenu: false,
+  hoveredRatioIndex: -1,
   hoveredEditBtnId: -1,
   // 行列拖拽
   isRowDragging: false,
@@ -369,6 +373,9 @@ function recomputeAndRender() {
     hoveredSaveBtn: state.hoveredSaveBtn,
     hoveredResetBtn: state.hoveredResetBtn,
     hoveredRotateBtn: state.hoveredRotateBtn,
+    hoveredRatioBtn: state.hoveredRatioBtn,
+    showRatioMenu: state.showRatioMenu,
+    hoveredRatioIndex: state.hoveredRatioIndex,
     hoveredEditBtnId: state.hoveredEditBtnId,
     dropZone: state.dropZone,
     groups: state.groups,
@@ -908,6 +915,9 @@ function exitEditMode() {
   state.hoveredSaveBtn = false;
   state.hoveredResetBtn = false;
   state.hoveredRotateBtn = false;
+  state.hoveredRatioBtn = false;
+  state.showRatioMenu = false;
+  state.hoveredRatioIndex = -1;
   // 恢复工具栏按钮状态
   addImagesInput.disabled = false;
   uploadBtnLabel.classList.remove('disabled');
@@ -931,6 +941,41 @@ function resetEdit(img) {
     panY: 0,
     rotation: 0,
   };
+  recomputeAndRender();
+}
+
+function applyAspectRatio(img, entry) {
+  const es = img.editState;
+  if (!es) return;
+
+  const ratio = entry.ratio !== null ? entry.ratio : img.originalWidth / img.originalHeight;
+  const origW = img.originalWidth;
+  const origH = img.originalHeight;
+
+  const effScale = getEffectiveScale(es, origW, origH);
+  const absCos = Math.abs(Math.cos(es.rotation));
+  const absSin = Math.abs(Math.sin(es.rotation));
+  const extentW = origW * effScale * absCos + origH * effScale * absSin;
+  const extentH = origW * effScale * absSin + origH * effScale * absCos;
+
+  let newCropW, newCropH;
+  if (extentW / extentH > ratio) {
+    newCropH = extentH;
+    newCropW = extentH * ratio;
+  } else {
+    newCropW = extentW;
+    newCropH = extentW / ratio;
+  }
+
+  newCropW = Math.max(50, newCropW);
+  newCropH = Math.max(50, newCropH);
+
+  pushUndo();
+  es.cropWidth = newCropW;
+  es.cropHeight = newCropH;
+  es.panX = 0;
+  es.panY = 0;
+  clampPan(img);
   recomputeAndRender();
 }
 
@@ -1022,6 +1067,13 @@ function handleEditModeMouseDown(mx, my) {
 
   const hit = hitTest(mx, my, state.images, state.editModeImageId, state.editModeImageId, state.layoutMode);
 
+  // 点击菜单外区域关闭比例菜单
+  if (state.showRatioMenu && !hit.isRatioMenuItem && !hit.isRatioBtn) {
+    state.showRatioMenu = false;
+    state.hoveredRatioIndex = -1;
+    recomputeAndRender();
+  }
+
   if (hit.isSaveBtn) {
     exitEditMode();
     return;
@@ -1029,6 +1081,21 @@ function handleEditModeMouseDown(mx, my) {
 
   if (hit.isResetBtn) {
     resetEdit(img);
+    return;
+  }
+
+  if (hit.isRatioMenuItem) {
+    const entry = ASPECT_RATIOS[hit.ratioMenuIndex];
+    state.showRatioMenu = false;
+    state.hoveredRatioIndex = -1;
+    applyAspectRatio(img, entry);
+    return;
+  }
+
+  if (hit.isRatioBtn) {
+    state.showRatioMenu = !state.showRatioMenu;
+    if (!state.showRatioMenu) state.hoveredRatioIndex = -1;
+    recomputeAndRender();
     return;
   }
 
@@ -1471,14 +1538,20 @@ canvas.addEventListener('mousemove', (e) => {
     state.hoveredSaveBtn = hit.isSaveBtn || false;
     state.hoveredResetBtn = hit.isResetBtn || false;
     state.hoveredRotateBtn = hit.isRotateBtn || false;
+    const prevRatio = state.hoveredRatioBtn;
+    const prevRatioIndex = state.hoveredRatioIndex;
+    state.hoveredRatioBtn = hit.isRatioBtn || false;
+    state.hoveredRatioIndex = hit.isRatioMenuItem ? hit.ratioMenuIndex : -1;
 
-    if (state.hoveredSaveBtn !== prevSave || state.hoveredResetBtn !== prevReset || state.hoveredRotateBtn !== prevRotate) {
+    if (state.hoveredSaveBtn !== prevSave || state.hoveredResetBtn !== prevReset || state.hoveredRotateBtn !== prevRotate || state.hoveredRatioBtn !== prevRatio || state.hoveredRatioIndex !== prevRatioIndex) {
       recomputeAndRender();
     }
 
     // 光标 & tooltip
     if (hit.isSaveBtn) { canvas.style.cursor = 'pointer'; canvas.title = '保存退出'; }
     else if (hit.isResetBtn) { canvas.style.cursor = 'pointer'; canvas.title = '复位'; }
+    else if (hit.isRatioBtn) { canvas.style.cursor = 'pointer'; canvas.title = '预设比例'; }
+    else if (hit.isRatioMenuItem) { canvas.style.cursor = 'pointer'; canvas.title = ''; }
     else if (hit.isRotateBtn) { canvas.style.cursor = ROTATE_CURSOR; canvas.title = '按住旋转'; }
     else if (hit.isCropEdge) { canvas.style.cursor = hit.cropEdgeAxis === 'width' ? 'ew-resize' : 'ns-resize'; canvas.title = ''; }
     else if (hit.isImageBody && img && isPanAvailable(img)) { canvas.style.cursor = 'grab'; canvas.title = '平移'; }
@@ -1514,6 +1587,11 @@ canvas.addEventListener('wheel', (e) => {
   if (!img || !img.editState) return;
   e.preventDefault();
 
+  if (state.showRatioMenu) {
+    state.showRatioMenu = false;
+    state.hoveredRatioIndex = -1;
+  }
+
   pushUndo();
   const delta = e.deltaY > 0 ? 0.9 : 1.1;
   img.editState.zoom = Math.max(1.0, img.editState.zoom * delta);
@@ -1547,7 +1625,13 @@ window.addEventListener('blur', () => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.editModeImageId !== -1) {
     e.preventDefault();
-    exitEditMode();
+    if (state.showRatioMenu) {
+      state.showRatioMenu = false;
+      state.hoveredRatioIndex = -1;
+      recomputeAndRender();
+    } else {
+      exitEditMode();
+    }
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); doUndo(); return; }
