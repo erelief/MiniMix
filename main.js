@@ -52,6 +52,9 @@ const state = {
   showRatioMenu: false,
   hoveredRatioIndex: -1,
   hoveredEditBtnId: -1,
+  // 全局比例
+  globalRatioIndex: -1,
+  autoCropNewImages: false,
   // 行列拖拽
   isRowDragging: false,
   dragGroupIndex: -1,
@@ -118,6 +121,8 @@ const btnCopy = document.getElementById('btn-copy');
 const btnSave = document.getElementById('btn-save');
 const btnInfo = document.getElementById('btn-info');
 const btnClear = document.getElementById('btn-clear');
+const btnRatio = document.getElementById('btn-ratio');
+const ratioDropdown = document.getElementById('ratio-dropdown');
 
 const saveModal = document.getElementById('save-modal');
 const infoModal = document.getElementById('info-modal');
@@ -341,6 +346,7 @@ function updateButtonStates() {
   btnClear.disabled = !hasImages || editing;
   btnUndo.disabled = !state.undoManager.canUndo();
   btnRedo.disabled = !state.undoManager.canRedo();
+  btnRatio.disabled = !hasImages || editing;
 }
 
 function showScaleToast(show) {
@@ -446,6 +452,10 @@ async function addImages(imageFilesOrDataUrls) {
       else img = await loadImageFromDataURL(item);
 
       const imageItem = new ImageItem(img, item instanceof File ? item.name : 'pasted_image.png');
+      // 自动裁剪：新图片按全局比例裁剪
+      if (state.autoCropNewImages && state.globalRatioIndex >= 0) {
+        applyRatioToImage(imageItem, ASPECT_RATIOS[state.globalRatioIndex]);
+      }
       imagePool.set(imageItem.id, imageItem);
       targetGroup.push(imageItem.id);
     } catch (e) {
@@ -482,6 +492,149 @@ layoutBtns.forEach(btn => {
     layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === mode));
     recomputeAndRender();
   });
+});
+
+// ========== 全局快捷比例 ==========
+
+function buildRatioDropdown() {
+  // Header: 恢复原图比例
+  const header = document.createElement('div');
+  header.className = 'ratio-header';
+  header.dataset.index = '0';
+  header.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M14 15H9v-5"/><path d="M16 3h5v5"/><path d="M21 3 9 15"/></svg>
+    <span>恢复原图比例</span>
+  `;
+  ratioDropdown.appendChild(header);
+
+  // 网格
+  const grid = document.createElement('div');
+  grid.className = 'ratio-grid';
+  for (let i = 1; i < ASPECT_RATIOS.length; i++) {
+    const r = ASPECT_RATIOS[i].ratio;
+    const maxH = 24, maxW = 36;
+    let pw, ph;
+    if (maxW / maxH > r) { ph = maxH; pw = maxH * r; }
+    else { pw = maxW; ph = maxW / r; }
+    const item = document.createElement('div');
+    item.className = 'ratio-grid-item';
+    item.dataset.index = String(i);
+    item.innerHTML = `<div class="ratio-preview" style="width:${pw}px;height:${ph}px"></div><span>${ASPECT_RATIOS[i].label}</span>`;
+    grid.appendChild(item);
+  }
+  ratioDropdown.appendChild(grid);
+
+  // 底部：新图片自动裁切开关
+  const footer = document.createElement('div');
+  footer.className = 'ratio-footer';
+  footer.innerHTML = `
+    <span>新图片自动调整</span>
+    <label class="ratio-toggle" title="添加的新图片自动调整为当前选定比例"><input type="checkbox" id="ratio-auto-crop" /><span class="ratio-toggle-slider"></span></label>
+  `;
+  ratioDropdown.appendChild(footer);
+}
+
+function applyGlobalRatio(index) {
+  const entry = ASPECT_RATIOS[index];
+  if (state.images.length === 0) return;
+  pushUndo();
+  for (const img of state.images) {
+    applyRatioToImage(img, entry);
+  }
+  recomputeAndRender();
+}
+
+function applyRatioToImage(img, entry) {
+  const ratio = entry.ratio !== null ? entry.ratio : img.originalWidth / img.originalHeight;
+  const origW = img.originalWidth;
+  const origH = img.originalHeight;
+
+  // 计算裁剪尺寸（用原始尺寸，不考虑旋转/缩放，因为是全局操作）
+  let cropW, cropH;
+  if (origW / origH > ratio) {
+    cropH = origH;
+    cropW = origH * ratio;
+  } else {
+    cropW = origW;
+    cropH = origW / ratio;
+  }
+  cropW = Math.max(50, cropW);
+  cropH = Math.max(50, cropH);
+
+  img.editState = {
+    cropWidth: cropW,
+    cropHeight: cropH,
+    zoom: 1.0,
+    panX: 0,
+    panY: 0,
+    rotation: 0,
+  };
+}
+
+function resetGlobalRatio() {
+  if (state.images.length === 0) return;
+  pushUndo();
+  for (const img of state.images) {
+    img.editState = null;
+  }
+  computeGroupedLayout(state.groups, imagePool, state.layoutMode);
+  // 用布局后的 renderWidth/Height 重新初始化 editState
+  for (const img of state.images) {
+    const rw = img.renderWidth;
+    const rh = img.renderHeight;
+    img.editState = {
+      cropWidth: rw,
+      cropHeight: rh,
+      zoom: 1.0,
+      panX: 0,
+      panY: 0,
+      rotation: 0,
+    };
+  }
+  recomputeAndRender();
+}
+
+buildRatioDropdown();
+
+const ratioAutoCropCheckbox = document.getElementById('ratio-auto-crop');
+
+btnRatio.addEventListener('click', () => {
+  if (state.editModeImageId !== -1) return;
+  ratioDropdown.classList.toggle('open');
+});
+
+// 点击菜单外关闭
+document.addEventListener('mousedown', (e) => {
+  if (!ratioDropdown.classList.contains('open')) return;
+  const wrapper = btnRatio.closest('.ratio-toolbar-wrapper');
+  if (!wrapper.contains(e.target)) {
+    ratioDropdown.classList.remove('open');
+  }
+});
+
+// 菜单项点击
+ratioDropdown.addEventListener('click', (e) => {
+  const item = e.target.closest('[data-index]');
+  if (!item) return;
+  const index = parseInt(item.dataset.index);
+  if (index === 0) {
+    // 恢复原图比例：重置所有图片的裁剪
+    state.globalRatioIndex = 0;
+    resetGlobalRatio();
+  } else {
+    state.globalRatioIndex = index;
+    applyGlobalRatio(index);
+  }
+  // 更新活跃状态
+  ratioDropdown.querySelectorAll('[data-index]').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.index) === state.globalRatioIndex);
+  });
+  ratioDropdown.classList.remove('open');
+});
+
+// 自动裁剪开关
+ratioAutoCropCheckbox.addEventListener('change', () => {
+  state.autoCropNewImages = ratioAutoCropCheckbox.checked;
 });
 
 // ========== 撤销/重做 ==========
@@ -898,6 +1051,7 @@ function enterEditMode(image) {
   state.hoveredImageId = image.id;
   state.editAction = null;
   state.editActionStart = null;
+  ratioDropdown.classList.remove('open');
   // 编辑模式下禁用除撤销/重做/信息外的所有工具栏按钮
   addImagesInput.disabled = true;
   uploadBtnLabel.classList.add('disabled');

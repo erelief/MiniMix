@@ -6,7 +6,7 @@
 const MAX_PIXELS = 5120 * 5120;
 
 export const ASPECT_RATIOS = [
-  { label: '源图比例', ratio: null },
+  { label: '恢复原图比例', ratio: null },
   // 左列：横版（宽→窄），右列：对应的竖版
   { label: '21:9',   ratio: 21 / 9 },   { label: '9:21',   ratio: 9 / 21 },
   { label: '2:1',    ratio: 2 },         { label: '1:2',    ratio: 0.5 },
