@@ -794,6 +794,17 @@ canvasRatioDropdown.addEventListener('click', (e) => {
   canvasRatioDropdown.classList.remove('open');
   updateButtonStates();
   recomputeAndRender();
+
+  // 更新状态栏
+  if (state.canvasRatioLocked) {
+    statusBar.textContent = `画布比例已锁定: ${ASPECT_RATIOS[state.canvasRatioIndex].label}`;
+  } else {
+    if (state.images.length > 0) {
+      statusBar.textContent = '拖拽图片调整位置，点击编辑';
+    } else {
+      statusBar.textContent = '拖拽或点击添加图片开始拼图';
+    }
+  }
 });
 
 // ========== 撤销/重做 ==========
