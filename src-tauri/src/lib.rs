@@ -1,5 +1,4 @@
 use std::sync::{Arc, Mutex};
-use base64::Engine;
 use tauri::{Emitter, Manager};
 
 #[derive(Default)]
@@ -22,29 +21,6 @@ fn get_pending_files(app: tauri::AppHandle) -> Vec<String> {
     let files = pending.clone();
     pending.clear();
     files
-}
-
-#[tauri::command]
-fn read_file_as_data_url(path: String) -> Result<String, String> {
-    let data = std::fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;
-
-    let lower = path.to_lowercase();
-    let mime = if lower.ends_with(".png") {
-        "image/png"
-    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
-        "image/jpeg"
-    } else if lower.ends_with(".bmp") {
-        "image/bmp"
-    } else if lower.ends_with(".gif") {
-        "image/gif"
-    } else if lower.ends_with(".webp") {
-        "image/webp"
-    } else {
-        "application/octet-stream"
-    };
-
-    let encoded = base64::engine::general_purpose::STANDARD.encode(&data);
-    Ok(format!("data:{};base64,{}", mime, encoded))
 }
 
 fn is_image_path(path: &str) -> bool {
@@ -104,7 +80,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_opened_files,
             get_pending_files,
-            read_file_as_data_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

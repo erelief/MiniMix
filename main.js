@@ -242,15 +242,19 @@ function loadImageFromDataURL(dataUrl) {
   });
 }
 
-async function loadImageFromFile(file) {
-  return await loadImageFromDataURL(await readFileAsDataURL(file));
-}
-
-function readFileAsDataURL(file) {
-  return new Promise((resolve) => {
-    const r = new FileReader();
-    r.onload = (e) => resolve(e.target.result);
-    r.readAsDataURL(file);
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load image'));
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -2224,10 +2228,11 @@ async function initTauriDragDrop() {
         hideDropOverlay();
         const paths = payload.paths.filter(isImageFile);
         if (paths.length > 0) {
+          const { convertFileSrc } = await import('@tauri-apps/api/core');
           const urls = [];
           for (const fp of paths) {
-            try { urls.push(await invoke('read_file_as_data_url', { path: fp })); }
-            catch (err) { console.error(`Failed to read: ${fp}`, err); }
+            try { urls.push(convertFileSrc(fp)); }
+            catch (err) { console.error(`Failed to process: ${fp}`, err); }
           }
           if (urls.length > 0) await addImages(urls);
         }
@@ -2262,12 +2267,13 @@ document.addEventListener('drop', async (e) => {
 
 // ========== Tauri 启动 ==========
 
-async function loadFilesFromPaths(invoke, paths) {
+async function loadFilesFromPaths(paths) {
   if (!paths || paths.length === 0) return;
+  const { convertFileSrc } = await import('@tauri-apps/api/core');
   const urls = [];
   for (const fp of paths) {
-    try { urls.push(await invoke('read_file_as_data_url', { path: fp })); }
-    catch (err) { console.error(`Failed to read: ${fp}`, err); }
+    try { urls.push(convertFileSrc(fp)); }
+    catch (err) { console.error(`Failed to process: ${fp}`, err); }
   }
   if (urls.length > 0) await addImages(urls);
 }
@@ -2281,17 +2287,17 @@ async function initApp() {
 
       // Load files passed on first launch
       const openedFiles = await invoke('get_opened_files');
-      await loadFilesFromPaths(invoke, openedFiles);
+      await loadFilesFromPaths(openedFiles);
 
       // Handle files from subsequent instances (multi-file right-click)
       await listen('single-instance-files', async () => {
         const paths = await invoke('get_pending_files');
-        await loadFilesFromPaths(invoke, paths);
+        await loadFilesFromPaths(paths);
       });
 
       // Check for files that arrived during startup (before listener was ready)
       const pendingPaths = await invoke('get_pending_files');
-      await loadFilesFromPaths(invoke, pendingPaths);
+      await loadFilesFromPaths(pendingPaths);
 
       initTauriDragDrop();
     } catch (e) { /* not tauri */ }
