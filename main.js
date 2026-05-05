@@ -372,9 +372,59 @@ function showScaleToast(show) {
   }
 }
 
+// ========== 画布比例强制 ==========
+
+function enforceCanvasRatio() {
+  if (!state.canvasRatioLocked || state._canvasRatioDragging) return;
+  if (state.images.length === 0) return;
+
+  const entry = ASPECT_RATIOS[state.canvasRatioIndex];
+  if (!entry || entry.ratio === null) return;
+  const R_t = entry.ratio;
+
+  // 计算所有图片的自然裁切比例之和
+  let R_natural = 0;
+  for (const img of state.images) {
+    const effW = img.editState ? img.editState.cropWidth : img.originalWidth;
+    const effH = img.editState ? img.editState.cropHeight : img.originalHeight;
+    R_natural += effW / effH;
+  }
+  if (R_natural === 0) return;
+
+  const S = R_t / R_natural;
+
+  // 按比例调整每张图片的裁切宽度
+  for (const img of state.images) {
+    const effH = img.editState ? img.editState.cropHeight : img.originalHeight;
+    const r_i = (img.editState ? img.editState.cropWidth : img.originalWidth) / effH;
+    const newRatio = r_i * S;
+    let newCropW = effH * newRatio;
+    let newCropH = effH;
+
+    // 确保图片能填满裁切区域
+    const origRatio = img.originalWidth / img.originalHeight;
+    if (origRatio > newRatio) {
+      newCropW = newCropH * newRatio;
+    } else {
+      newCropH = newCropW / newRatio;
+      newCropW = newCropH * newRatio;
+    }
+    newCropW = Math.max(50, Math.round(newCropW));
+    newCropH = Math.max(50, Math.round(newCropH));
+
+    if (!img.editState) {
+      img.editState = { cropWidth: newCropW, cropHeight: newCropH, zoom: 1, panX: 0, panY: 0, rotation: 0 };
+    } else {
+      img.editState.cropWidth = newCropW;
+      img.editState.cropHeight = newCropH;
+    }
+  }
+}
+
 // ========== 渲染 ==========
 
 function recomputeAndRender() {
+  enforceCanvasRatio();
   state.lastLayoutResult = computeGroupedLayout(state.groups, imagePool, state.layoutMode);
   setLayoutResult(state.lastLayoutResult);
   const result = renderPreview(canvas, state.lastLayoutResult, {
