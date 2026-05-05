@@ -723,7 +723,20 @@ body {
   cursor: text;
 }
 
-#save-size-info,
+#save-size-info {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+#save-size-w,
+#save-size-h {
+  display: inline-block;
+  width: 48px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  cursor: text;
+}
+
 #save-file-size {
   font-size: 13px;
   color: var(--text-primary);

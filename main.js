@@ -138,6 +138,8 @@ const saveQualityValue = document.getElementById('save-quality-value');
 const saveResolutionSelect = document.getElementById('save-resolution');
 const saveResolutionValue = document.getElementById('save-resolution-value');
 const saveSizeInfo = document.getElementById('save-size-info');
+const saveSizeW = document.getElementById('save-size-w');
+const saveSizeH = document.getElementById('save-size-h');
 const saveFileSizeInfo = document.getElementById('save-file-size');
 const qualityRow = document.getElementById('quality-row');
 const savePreviewCanvas = document.getElementById('save-preview-canvas');
@@ -1116,6 +1118,33 @@ enableInlineEdit(saveResolutionValue, {
   },
 });
 
+// 尺寸双击编辑（宽高联动）
+function enableDimensionEdit(el, isWidth) {
+  enableInlineEdit(el, {
+    min: 1, max: 20000,
+    apply(val) {
+      const baseW = saveSizeInfo._baseW || 1;
+      const baseH = saveSizeInfo._baseH || 1;
+      const exactRes = isWidth ? val / baseW : val / baseH;
+      const clampedRes = Math.max(0.1, Math.min(2, exactRes));
+      const pct = Math.round(clampedRes * 100);
+      saveResolutionSelect.value = pct;
+      saveResolutionValue.textContent = pct;
+      updateSavePreview();
+      // 编辑的值保持不变，只修正另一个
+      if (isWidth) {
+        saveSizeW.textContent = val;
+        saveSizeH.textContent = Math.round(baseH * clampedRes);
+      } else {
+        saveSizeH.textContent = val;
+        saveSizeW.textContent = Math.round(baseW * clampedRes);
+      }
+    },
+  });
+}
+enableDimensionEdit(saveSizeW, true);
+enableDimensionEdit(saveSizeH, false);
+
 function updateSavePreview() {
   if (!state.lastLayoutResult) return;
   const format = saveFormatSelect.value;
@@ -1124,9 +1153,12 @@ function updateSavePreview() {
   qualityRow.style.display = format === 'jpg' ? '' : 'none';
   const baseW = Math.round(state.lastLayoutResult.width * state.lastLayoutResult.scaleFactor);
   const baseH = Math.round(state.lastLayoutResult.height * state.lastLayoutResult.scaleFactor);
+  saveSizeInfo._baseW = baseW;
+  saveSizeInfo._baseH = baseH;
   const outW = Math.round(baseW * resolution);
   const outH = Math.round(baseH * resolution);
-  saveSizeInfo.textContent = `${outW} x ${outH}`;
+  saveSizeW.textContent = outW;
+  saveSizeH.textContent = outH;
 
   // 使用小尺寸预览（最大 320px），避免大图时滑块卡顿
   try {
