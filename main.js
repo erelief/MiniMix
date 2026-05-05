@@ -347,12 +347,21 @@ function computeDropZone(mouseX, mouseY) {
 function updateButtonStates() {
   const hasImages = state.images.length > 0;
   const editing = state.editModeImageId !== -1;
+  const locked = state.canvasRatioLocked;
   btnCopy.disabled = !hasImages || editing;
   btnSave.disabled = !hasImages || editing;
   btnClear.disabled = !hasImages || editing;
   btnUndo.disabled = !state.undoManager.canUndo();
   btnRedo.disabled = !state.undoManager.canRedo();
-  btnRatio.disabled = !hasImages || editing;
+  btnRatio.disabled = !hasImages || editing || locked;
+  // 锁定时禁用横排/竖排按钮
+  layoutBtns.forEach(b => { b.disabled = editing || locked; });
+  if (locked) {
+    layoutBtns.forEach(b => b.classList.add('disabled'));
+  } else if (!editing) {
+    layoutBtns.forEach(b => b.classList.remove('disabled'));
+  }
+  btnCanvasRatio.disabled = !hasImages || editing;
 }
 
 function showScaleToast(show) {
@@ -741,6 +750,7 @@ btnClear.addEventListener('click', () => {
   syncImagesFromGroups();
   state.hoveredImageId = -1;
   state.hoveredCloseId = -1;
+  deactivateCanvasRatioLock();
   recomputeAndRender();
 });
 
@@ -1149,6 +1159,7 @@ function enterEditMode(image) {
   btnCopy.disabled = true;
   btnSave.disabled = true;
   layoutBtns.forEach(b => { b.disabled = true; b.classList.add('disabled'); });
+  btnCanvasRatio.disabled = true;
   recomputeAndRender();
 }
 
