@@ -505,6 +505,8 @@ function pushUndo() {
     layoutMode: state.layoutMode,
     editStates: captureEditStates(),
     editModeImageId: state.editModeImageId,
+    canvasRatioLocked: state.canvasRatioLocked,
+    canvasRatioIndex: state.canvasRatioIndex,
   });
 }
 
@@ -818,6 +820,8 @@ function makeCurrentSnapshot() {
     layoutMode: state.layoutMode,
     editStates: captureEditStates(),
     editModeImageId: state.editModeImageId,
+    canvasRatioLocked: state.canvasRatioLocked,
+    canvasRatioIndex: state.canvasRatioIndex,
   };
 }
 
@@ -838,6 +842,18 @@ function restoreSnapshot(snapshot) {
   syncImagesFromGroups();
   gcImagePool();
   state.layoutMode = snapshot.layoutMode;
+  // 恢复画布比例锁定状态
+  state.canvasRatioLocked = snapshot.canvasRatioLocked || false;
+  state.canvasRatioIndex = snapshot.canvasRatioIndex ?? -1;
+  state._canvasRatioDragging = false;
+  if (state.canvasRatioLocked) {
+    btnCanvasRatio.classList.add('locked');
+  } else {
+    btnCanvasRatio.classList.remove('locked');
+  }
+  canvasRatioDropdown.querySelectorAll('[data-canvas-index]').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.canvasIndex) === state.canvasRatioIndex);
+  });
   // 恢复编辑状态
   if (snapshot.editStates) {
     for (const img of state.images) {
@@ -867,6 +883,7 @@ function restoreSnapshot(snapshot) {
   state.editActionStart = null;
   layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === state.layoutMode));
   recomputeAndRender();
+  updateButtonStates();
 }
 
 // ========== 复制/保存 ==========
