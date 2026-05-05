@@ -138,8 +138,6 @@ const saveQualityValue = document.getElementById('save-quality-value');
 const saveResolutionSelect = document.getElementById('save-resolution');
 const saveResolutionValue = document.getElementById('save-resolution-value');
 const saveSizeInfo = document.getElementById('save-size-info');
-const saveSizeW = document.getElementById('save-size-w');
-const saveSizeH = document.getElementById('save-size-h');
 const saveFileSizeInfo = document.getElementById('save-file-size');
 const qualityRow = document.getElementById('quality-row');
 const savePreviewCanvas = document.getElementById('save-preview-canvas');
@@ -1118,33 +1116,6 @@ enableInlineEdit(saveResolutionValue, {
   },
 });
 
-// 尺寸双击编辑（宽高联动）
-function enableDimensionEdit(el, isWidth) {
-  enableInlineEdit(el, {
-    min: 1, max: 20000,
-    apply(val) {
-      const baseW = saveSizeInfo._baseW || 1;
-      const baseH = saveSizeInfo._baseH || 1;
-      const exactRes = isWidth ? val / baseW : val / baseH;
-      const clampedRes = Math.max(0.1, Math.min(2, exactRes));
-      const pct = Math.round(clampedRes * 100);
-      saveResolutionSelect.value = pct;
-      saveResolutionValue.textContent = pct;
-      updateSavePreview();
-      // 编辑的值保持不变，只修正另一个
-      if (isWidth) {
-        saveSizeW.textContent = val;
-        saveSizeH.textContent = Math.round(baseH * clampedRes);
-      } else {
-        saveSizeH.textContent = val;
-        saveSizeW.textContent = Math.round(baseW * clampedRes);
-      }
-    },
-  });
-}
-enableDimensionEdit(saveSizeW, true);
-enableDimensionEdit(saveSizeH, false);
-
 function updateSavePreview() {
   if (!state.lastLayoutResult) return;
   const format = saveFormatSelect.value;
@@ -1153,12 +1124,9 @@ function updateSavePreview() {
   qualityRow.style.display = format === 'jpg' ? '' : 'none';
   const baseW = Math.round(state.lastLayoutResult.width * state.lastLayoutResult.scaleFactor);
   const baseH = Math.round(state.lastLayoutResult.height * state.lastLayoutResult.scaleFactor);
-  saveSizeInfo._baseW = baseW;
-  saveSizeInfo._baseH = baseH;
   const outW = Math.round(baseW * resolution);
   const outH = Math.round(baseH * resolution);
-  saveSizeW.textContent = outW;
-  saveSizeH.textContent = outH;
+  saveSizeInfo.textContent = `${outW} x ${outH}`;
 
   // 使用小尺寸预览（最大 320px），避免大图时滑块卡顿
   try {
@@ -1582,6 +1550,12 @@ function handleEditModeMouseDown(mx, my) {
 
   if (hit.isCropEdge) {
     const axis = hit.cropEdgeAxis || (state.layoutMode === 'horizontal' ? 'width' : 'height');
+    const absCos = Math.abs(Math.cos(img.editState.rotation));
+    const absSin = Math.abs(Math.sin(img.editState.rotation));
+    const startBaseFit = Math.max(
+      (img.editState.cropWidth * absCos + img.editState.cropHeight * absSin) / img.originalWidth,
+      (img.editState.cropWidth * absSin + img.editState.cropHeight * absCos) / img.originalHeight
+    );
     state.editAction = 'crop';
     state.editActionStart = {
       mouseX: mx, mouseY: my,
@@ -1589,10 +1563,13 @@ function handleEditModeMouseDown(mx, my) {
       cropHeight: img.editState.cropHeight,
       panX: img.editState.panX,
       panY: img.editState.panY,
+      zoom: img.editState.zoom,
       cropEdgeSide: hit.cropEdgeSide,
       cropEdgeAxis: axis,
       startSf: sf,
       startEditScale: startEditScale,
+      startBaseFit,
+      startEffScale: startBaseFit * Math.max(1.0, img.editState.zoom),
     };
     if (state.canvasRatioLocked) {
       state._canvasRatioDragging = true;
@@ -1866,19 +1843,20 @@ function onEditModeMouseMove(e) {
     const start = state.editActionStart;
     const axis = start.cropEdgeAxis;
     const lockedScale = start.startSf * start.startEditScale;
+    const absCos = Math.abs(Math.cos(es.rotation));
+    const absSin = Math.abs(Math.sin(es.rotation));
+    // Use fixed initial effective scale for extent — prevents crop from growing beyond image bounds
+    const initEff = start.startEffScale;
+    const extentW = img.originalWidth * initEff * absCos + img.originalHeight * initEff * absSin;
+    const extentH = img.originalWidth * initEff * absSin + img.originalHeight * initEff * absCos;
 
     if (axis === 'width') {
       const dx = (mx - start.mouseX) / lockedScale;
       const side = start.cropEdgeSide;
       const delta = side === 'right' ? dx : -dx;
 
-      const effScale = getEffectiveScale(es, img.originalWidth, img.originalHeight);
-      const absCos = Math.abs(Math.cos(es.rotation));
-      const absSin = Math.abs(Math.sin(es.rotation));
-      const extentW = img.originalWidth * effScale * absCos + img.originalHeight * effScale * absSin;
       es.cropWidth = Math.min(extentW, Math.max(50, start.cropWidth + delta));
 
-      // Single-edge crop: anchor opposite edge so only the dragged side changes
       if (!e.altKey) {
         const appliedDelta = es.cropWidth - start.cropWidth;
         if (side === 'right') { es.panX = start.panX - appliedDelta / 2; }
@@ -1890,10 +1868,6 @@ function onEditModeMouseMove(e) {
       const side = start.cropEdgeSide;
       const delta = side === 'bottom' ? dy : -dy;
 
-      const effScale = getEffectiveScale(es, img.originalWidth, img.originalHeight);
-      const absCos = Math.abs(Math.cos(es.rotation));
-      const absSin = Math.abs(Math.sin(es.rotation));
-      const extentH = img.originalWidth * effScale * absSin + img.originalHeight * effScale * absCos;
       es.cropHeight = Math.min(extentH, Math.max(50, start.cropHeight + delta));
 
       if (!e.altKey) {
@@ -1901,6 +1875,15 @@ function onEditModeMouseMove(e) {
         if (side === 'bottom') { es.panY = start.panY - appliedDelta / 2; }
         else { es.panY = start.panY + appliedDelta / 2; }
       }
+    }
+
+    // Compensate zoom to keep visual scale constant during crop
+    const newBaseFit = Math.max(
+      (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
+      (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
+    );
+    if (newBaseFit > 0.001) {
+      es.zoom = Math.max(1.0, (start.startBaseFit * start.zoom) / newBaseFit);
     }
 
     // 锁定画布比例时的反向补偿（只调整 cropWidth，不改 cropHeight 以保持行高稳定）

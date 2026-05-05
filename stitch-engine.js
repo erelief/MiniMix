@@ -799,7 +799,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       if (showRatioMenu) {
         drawRatioMenu(ctx, eImg, hoveredRatioIndex, displayScale);
       }
-      drawSizeLabel(ctx, eImg, scaleFactor, displayScale, gOx, gOy);
     }
   } else {
     // 普通模式：编辑按钮和关闭按钮
@@ -807,7 +806,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       if (img.id === hoveredImageId) {
         drawEditButton(ctx, img, hoveredEditBtnId === img.id, scaleFactor, displayScale, gOx, gOy);
         drawCloseButton(ctx, img, hoveredCloseId === img.id, scaleFactor, displayScale, gOx, gOy);
-        drawSizeLabel(ctx, img, scaleFactor, displayScale, gOx, gOy);
       }
     }
   }
@@ -1075,45 +1073,6 @@ function drawRotateButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0,
     'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8',
     'M3 3v5h5'
   );
-  ctx.restore();
-}
-
-// ========== 图片尺寸标签（左下角） ==========
-
-function drawSizeLabel(ctx, img, scaleFactor, displayScale, gOx = 0, gOy = 0) {
-  const origW = img.originalWidth;
-  const origH = img.originalHeight;
-  let dispW = origW, dispH = origH;
-  if (img.editState) {
-    dispW = Math.round(img.renderWidth);
-    dispH = Math.round(img.renderHeight);
-  }
-  const showOriginal = (dispW !== origW || dispH !== origH);
-
-  const mainText = `${dispW} × ${dispH}`;
-  const text = showOriginal ? `${mainText} (${origW} × ${origH})` : mainText;
-
-  const FONT_SIZE = 10;
-  const PAD_X = 4, PAD_Y = 2;
-
-  const sf = scaleFactor * displayScale;
-  const fontSize = FONT_SIZE / displayScale;
-  ctx.save();
-  ctx.font = `${fontSize}px system-ui, sans-serif`;
-  const textW = ctx.measureText(text).width;
-  const labelH = (FONT_SIZE + PAD_Y * 2) / displayScale;
-  const labelW = textW + (PAD_X * 2) / displayScale;
-
-  const canvasX = (img.x * sf + gOx * displayScale) / displayScale;
-  const canvasY = ((img.y + img.renderHeight) * sf + gOy * displayScale) / displayScale - labelH;
-
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.fillRect(canvasX, canvasY, labelW, labelH);
-
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-  ctx.textBaseline = 'middle';
-  ctx.textAlign = 'left';
-  ctx.fillText(text, canvasX + (PAD_X / displayScale), canvasY + labelH / 2);
   ctx.restore();
 }
 
