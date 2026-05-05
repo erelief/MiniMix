@@ -265,6 +265,17 @@ body {
   color: #fff;
 }
 
+.tool-btn.locked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.tool-btn.locked:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
 .export-btn {
   width: 32px;
   height: 32px;

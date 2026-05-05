@@ -55,6 +55,10 @@ const state = {
   // 全局比例
   globalRatioIndex: -1,
   autoCropNewImages: false,
+  // 锁定全局画布比例
+  canvasRatioLocked: false,
+  canvasRatioIndex: -1,
+  _canvasRatioDragging: false,
   // 行列拖拽
   isRowDragging: false,
   dragGroupIndex: -1,
@@ -123,6 +127,8 @@ const btnInfo = document.getElementById('btn-info');
 const btnClear = document.getElementById('btn-clear');
 const btnRatio = document.getElementById('btn-ratio');
 const ratioDropdown = document.getElementById('ratio-dropdown');
+const btnCanvasRatio = document.getElementById('btn-canvas-ratio');
+const canvasRatioDropdown = document.getElementById('canvas-ratio-dropdown');
 
 const saveModal = document.getElementById('save-modal');
 const infoModal = document.getElementById('info-modal');
