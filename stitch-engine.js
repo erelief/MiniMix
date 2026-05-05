@@ -1085,8 +1085,8 @@ function drawSizeLabel(ctx, img, scaleFactor, displayScale, gOx = 0, gOy = 0) {
   const origH = img.originalHeight;
   let dispW = origW, dispH = origH;
   if (img.editState) {
-    dispW = Math.round(img.editState.cropWidth);
-    dispH = Math.round(img.editState.cropHeight);
+    dispW = Math.round(img.renderWidth);
+    dispH = Math.round(img.renderHeight);
   }
   const showOriginal = (dispW !== origW || dispH !== origH);
 

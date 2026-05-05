@@ -374,49 +374,154 @@ function enforceCanvasRatio() {
   if (!entry || entry.ratio === null) return;
   const R_t = entry.ratio;
 
-  // 计算所有图片的自然裁切比例之和
-  let R_natural = 0;
-  for (const img of state.images) {
-    const effW = img.editState ? img.editState.cropWidth : img.originalWidth;
-    const effH = img.editState ? img.editState.cropHeight : img.originalHeight;
-    R_natural += effW / effH;
+  // 检测实际画布比例（基于布局结果，已包含组间匹配缩放），如果已匹配目标则跳过
+  const lr = state.lastLayoutResult;
+  if (lr && lr.width > 0 && lr.height > 0) {
+    const actualRatio = lr.width / lr.height;
+    if (Math.abs(actualRatio - R_t) < 0.005) return;
   }
-  if (R_natural === 0) return;
 
-  const S = R_t / R_natural;
+  const isHorizontal = state.layoutMode === 'horizontal';
+  const groups = state.groups;
 
-  // 按比例调整每张图片的裁切宽度
-  for (const img of state.images) {
-    const effH = img.editState ? img.editState.cropHeight : img.originalHeight;
-    const r_i = (img.editState ? img.editState.cropWidth : img.originalWidth) / effH;
-    const newRatio = r_i * S;
-    let newCropW = effH * newRatio;
-    let newCropH = effH;
-
-    // 确保图片能填满裁切区域（不超出原始尺寸）
-    const origRatio = img.originalWidth / img.originalHeight;
-    if (origRatio < newRatio) {
-      // 图片太窄：裁切框不能超出图片宽度
-      newCropH = Math.round(newCropW / newRatio);
-      if (newCropH > img.originalHeight) {
-        newCropH = img.originalHeight;
-        newCropW = Math.round(newCropH * newRatio);
-      }
-    } else {
-      // 图片太矮：裁切框不能超出图片高度
-      if (newCropH > img.originalHeight) {
-        newCropH = img.originalHeight;
-        newCropW = Math.round(newCropH * newRatio);
+  // 收集每组数据：refCross（固定轴参考值）、natSum（自然比例之和）
+  // 横排：固定轴=高度，natSum = Σ(cropW/cropH)
+  // 竖排：固定轴=宽度，natSum = Σ(cropH/cropW)
+  const groupData = [];
+  const srcGroups = groups.length > 0 ? groups : [state.images.map(i => i.id)];
+  for (const group of srcGroups) {
+    const imgs = Array.isArray(group[0])
+      ? group // shouldn't happen, safety
+      : group.map(id => imagePool.get(id)).filter(Boolean);
+    if (imgs.length === 0) { groupData.push(null); continue; }
+    let refCross = 0, natSum = 0;
+    for (const img of imgs) {
+      const effW = img.editState ? img.editState.cropWidth : img.originalWidth;
+      const effH = img.editState ? img.editState.cropHeight : img.originalHeight;
+      if (isHorizontal) {
+        refCross = Math.max(refCross, effH);
+        natSum += effW / effH;
+      } else {
+        refCross = Math.max(refCross, effW);
+        natSum += effH / effW;
       }
     }
-    newCropW = Math.max(50, newCropW);
-    newCropH = Math.max(50, newCropH);
+    groupData.push({ imgs, refCross, natSum });
+  }
+
+  if (isHorizontal) {
+    // 横排：等比缩放 cropWidth，S = R_t / R_nat
+    // 多组时按 refH 加权确保组等宽
+    if (groupData.length <= 1) {
+      const g = groupData[0];
+      if (!g || g.natSum === 0) return;
+      applyScaleToImages(g.imgs, R_t / g.natSum);
+    } else {
+      const totalRef = groupData.reduce((s, g) => g ? s + g.refCross : s, 0);
+      if (totalRef === 0) return;
+      for (const g of groupData) {
+        if (!g || g.natSum === 0) continue;
+        applyScaleToImages(g.imgs, R_t * totalRef / (g.refCross * g.natSum));
+      }
+    }
+  } else {
+    // 竖排：统一 cropW = R_t × Σ(cropH_i)，确保同列等宽
+    // 多组时取最大 totalCropH 确保列等高
+    if (groupData.length <= 1) {
+      const g = groupData[0];
+      if (!g || g.natSum === 0) return;
+      // totalCropH = refCross × natSum（因 natSum = Σ(cropH/cropW)，且 cropW ≈ refCross）
+      // 直接从图片取更准确
+      let totalCropH = 0;
+      for (const img of g.imgs) {
+        totalCropH += img.editState ? img.editState.cropHeight : img.originalHeight;
+      }
+      if (totalCropH === 0) return;
+      applyUniformWidth(g.imgs, Math.max(50, Math.round(R_t * totalCropH)));
+    } else {
+      // 多列：uniformW = R_t / Σ(1/totalCropH_g)
+      // 布局等高缩放后每列宽度 = uniformW × maxH / totalCropH_g
+      // 总宽 = uniformW × maxH × Σ(1/totalCropH_g) = R_t × maxH，比例 = R_t
+      const groupCropHs = [];
+      for (const g of groupData) {
+        if (!g) { groupCropHs.push(0); continue; }
+        let h = 0;
+        for (const img of g.imgs) h += img.editState ? img.editState.cropHeight : img.originalHeight;
+        groupCropHs.push(h);
+      }
+      const sumInv = groupCropHs.reduce((s, h) => h > 0 ? s + 1 / h : s, 0);
+      if (sumInv === 0) return;
+      const uniformW = Math.max(50, Math.round(R_t / sumInv));
+      for (const g of groupData) {
+        if (!g) continue;
+        applyUniformWidth(g.imgs, uniformW);
+      }
+    }
+  }
+
+  // 消除 Math.round 累积误差：调整一个图片 cropW 使画布尺寸完美匹配目标比例
+  const newLr = computeGroupedLayout(state.groups, imagePool, state.layoutMode);
+  const isH = state.layoutMode === 'horizontal';
+  const targetMain = isH ? Math.round(newLr.height * R_t) : Math.round(newLr.width / R_t);
+  const currentMain = isH ? newLr.width : newLr.height;
+  const delta = targetMain - currentMain;
+  if (delta !== 0 && Math.abs(delta) <= 2) {
+    // 找到最宽/最高的组的最后一张图片
+    const srcGroups2 = state.groups.length > 0 ? state.groups : [state.images.map(i => i.id)];
+    let bestGroup = null, bestMain = 0;
+    for (const group of srcGroups2) {
+      const ids = Array.isArray(group[0]) ? group.flat() : group;
+      let mainSum = 0;
+      for (const id of ids) {
+        const img = imagePool.get(id);
+        if (img) mainSum += img.renderWidth || 0;
+      }
+      if (mainSum > bestMain) { bestMain = mainSum; bestGroup = ids; }
+    }
+    if (bestGroup && bestGroup.length > 0) {
+      const lastImg = imagePool.get(bestGroup[bestGroup.length - 1]);
+      if (lastImg && lastImg.editState) {
+        const refCross = isH
+          ? Math.max(...bestGroup.map(id => { const i = imagePool.get(id); return i ? (i.editState ? i.editState.cropHeight : i.originalHeight) : 0; }))
+          : Math.max(...bestGroup.map(id => { const i = imagePool.get(id); return i ? (i.editState ? i.editState.cropWidth : i.originalWidth) : 0; }));
+        const effH = lastImg.editState.cropHeight;
+        const effW = lastImg.editState.cropWidth;
+        const scale = refCross / effH;
+        const oldRW = Math.round(effW * scale);
+        if (oldRW > 0) {
+          const newCropW = Math.max(50, Math.round(effW * (oldRW + delta) / oldRW));
+          lastImg.editState.cropWidth = newCropW;
+          clampPan(lastImg);
+          state.lastLayoutResult = computeGroupedLayout(state.groups, imagePool, state.layoutMode);
+          return;
+        }
+      }
+    }
+  }
+}
+
+function applyScaleToImages(images, S) {
+  for (const img of images) {
+    const effH = img.editState ? img.editState.cropHeight : img.originalHeight;
+    const r_i = (img.editState ? img.editState.cropWidth : img.originalWidth) / effH;
+    const newCropW = Math.max(50, Math.round(effH * r_i * S));
 
     if (!img.editState) {
-      img.editState = { cropWidth: newCropW, cropHeight: newCropH, zoom: 1, panX: 0, panY: 0, rotation: 0 };
+      img.editState = { cropWidth: newCropW, cropHeight: effH, zoom: 1, panX: 0, panY: 0, rotation: 0 };
     } else {
       img.editState.cropWidth = newCropW;
-      img.editState.cropHeight = newCropH;
+      clampPan(img);
+    }
+  }
+}
+
+function applyUniformWidth(images, uniformW) {
+  for (const img of images) {
+    if (!img.editState) {
+      img.editState = { cropWidth: uniformW, cropHeight: img.originalHeight, zoom: 1, panX: 0, panY: 0, rotation: 0 };
+    } else {
+      img.editState.cropWidth = uniformW;
+      clampPan(img);
     }
   }
 }
