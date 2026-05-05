@@ -1433,6 +1433,24 @@ function handleEditModeMouseDown(mx, my) {
       startSf: sf,
       startEditScale: startEditScale,
     };
+    if (state.canvasRatioLocked) {
+      state._canvasRatioDragging = true;
+      // Capture pre-drag widths for reverse compensation
+      const entry = ASPECT_RATIOS[state.canvasRatioIndex];
+      if (entry && entry.ratio !== null) {
+        const R_t = entry.ratio;
+        const refH = Math.max(...state.images.map(i =>
+          i.editState ? i.editState.cropHeight : i.originalHeight));
+        const W_total = refH * R_t;
+        state.editActionStart._canvasRatioTotalWidth = W_total;
+        state.editActionStart._canvasRatioRestWidth = W_total - img.editState.cropWidth;
+        for (const other of state.images) {
+          if (other.id !== img.id) {
+            other._canvasRatioOldWidth = other.editState ? other.editState.cropWidth : other.originalWidth;
+          }
+        }
+      }
+    }
     return;
   }
 
@@ -1724,6 +1742,27 @@ function onEditModeMouseMove(e) {
       }
     }
 
+    // 锁定画布比例时的反向补偿（只调整 cropWidth，不改 cropHeight 以保持行高稳定）
+    if (state.canvasRatioLocked && state.images.length > 1) {
+      const W_k = img.editState.cropWidth;
+      const W_rest_old = start._canvasRatioRestWidth;
+      const W_rest_new = (start._canvasRatioTotalWidth) - W_k;
+
+      if (W_rest_old > 0) {
+        const S_comp = W_rest_new / W_rest_old;
+        for (const other of state.images) {
+          if (other.id === img.id) continue;
+          const oldW = other._canvasRatioOldWidth;
+          if (oldW != null) {
+            const newW = Math.max(50, Math.round(oldW * S_comp));
+            other.editState.cropWidth = newW;
+            // cropHeight 不变 → refH 不变 → 行高稳定
+            clampPan(other);
+          }
+        }
+      }
+    }
+
     clampPan(img);
     recomputeAndRender();
     return;
@@ -1796,6 +1835,11 @@ function clampPan(img) {
 }
 
 function onEditModeMouseUp() {
+  state._canvasRatioDragging = false;
+  // 清理临时属性
+  for (const img of state.images) {
+    delete img._canvasRatioOldWidth;
+  }
   if (state.editAction) {
     state.editAction = null;
     state.editActionStart = null;
