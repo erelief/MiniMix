@@ -401,16 +401,24 @@ function enforceCanvasRatio() {
     let newCropW = effH * newRatio;
     let newCropH = effH;
 
-    // 确保图片能填满裁切区域
+    // 确保图片能填满裁切区域（不超出原始尺寸）
     const origRatio = img.originalWidth / img.originalHeight;
-    if (origRatio > newRatio) {
-      newCropW = newCropH * newRatio;
+    if (origRatio < newRatio) {
+      // 图片太窄：裁切框不能超出图片宽度
+      newCropH = Math.round(newCropW / newRatio);
+      if (newCropH > img.originalHeight) {
+        newCropH = img.originalHeight;
+        newCropW = Math.round(newCropH * newRatio);
+      }
     } else {
-      newCropH = newCropW / newRatio;
-      newCropW = newCropH * newRatio;
+      // 图片太矮：裁切框不能超出图片高度
+      if (newCropH > img.originalHeight) {
+        newCropH = img.originalHeight;
+        newCropW = Math.round(newCropH * newRatio);
+      }
     }
-    newCropW = Math.max(50, Math.round(newCropW));
-    newCropH = Math.max(50, Math.round(newCropH));
+    newCropW = Math.max(50, newCropW);
+    newCropH = Math.max(50, newCropH);
 
     if (!img.editState) {
       img.editState = { cropWidth: newCropW, cropHeight: newCropH, zoom: 1, panX: 0, panY: 0, rotation: 0 };
