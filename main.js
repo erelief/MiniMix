@@ -540,6 +540,43 @@ function buildRatioDropdown() {
   ratioDropdown.appendChild(footer);
 }
 
+function buildCanvasRatioDropdown() {
+  const header = document.createElement('div');
+  header.className = 'ratio-header';
+  header.dataset.canvasIndex = '0';
+  header.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M14 15H9v-5"/><path d="M16 3h5v5"/><path d="M21 3 9 15"/></svg>
+    <span>恢复自由比例</span>
+  `;
+  canvasRatioDropdown.appendChild(header);
+
+  const grid = document.createElement('div');
+  grid.className = 'ratio-grid';
+  for (let i = 1; i < ASPECT_RATIOS.length; i++) {
+    const r = ASPECT_RATIOS[i].ratio;
+    const maxH = 24, maxW = 36;
+    let pw, ph;
+    if (maxW / maxH > r) { ph = maxH; pw = maxH * r; }
+    else { pw = maxW; ph = maxW / r; }
+    const item = document.createElement('div');
+    item.className = 'ratio-grid-item';
+    item.dataset.canvasIndex = String(i);
+    item.innerHTML = `<div class="ratio-preview" style="width:${pw}px;height:${ph}px"></div><span>${ASPECT_RATIOS[i].label}</span>`;
+    grid.appendChild(item);
+  }
+  canvasRatioDropdown.appendChild(grid);
+}
+
+function deactivateCanvasRatioLock() {
+  state.canvasRatioLocked = false;
+  state.canvasRatioIndex = -1;
+  btnCanvasRatio.classList.remove('locked');
+  canvasRatioDropdown.querySelectorAll('[data-canvas-index]').forEach(el => {
+    el.classList.remove('active');
+  });
+  updateButtonStates();
+}
+
 function applyGlobalRatio(index) {
   const entry = ASPECT_RATIOS[index];
   if (state.images.length === 0) return;
@@ -641,6 +678,53 @@ ratioDropdown.addEventListener('click', (e) => {
 // 自动裁剪开关
 ratioAutoCropCheckbox.addEventListener('change', () => {
   state.autoCropNewImages = ratioAutoCropCheckbox.checked;
+});
+
+// 锁定全局画布比例
+buildCanvasRatioDropdown();
+
+btnCanvasRatio.addEventListener('click', () => {
+  if (state.editModeImageId !== -1) return;
+  canvasRatioDropdown.classList.toggle('open');
+});
+
+// 点击菜单外关闭
+document.addEventListener('mousedown', (e) => {
+  if (!canvasRatioDropdown.classList.contains('open')) return;
+  const wrapper = btnCanvasRatio.closest('.ratio-toolbar-wrapper');
+  if (!wrapper.contains(e.target)) {
+    canvasRatioDropdown.classList.remove('open');
+  }
+});
+
+// 菜单项点击
+canvasRatioDropdown.addEventListener('click', (e) => {
+  const item = e.target.closest('[data-canvas-index]');
+  if (!item) return;
+  const index = parseInt(item.dataset.canvasIndex);
+
+  if (index === 0) {
+    // 恢复自由比例
+    deactivateCanvasRatioLock();
+  } else {
+    // 激活锁定
+    if (state.images.length === 0) return;
+    pushUndo();
+    state.canvasRatioLocked = true;
+    state.canvasRatioIndex = index;
+    btnCanvasRatio.classList.add('locked');
+    // 关闭"新图片自动调整"
+    state.autoCropNewImages = false;
+    ratioAutoCropCheckbox.checked = false;
+  }
+
+  // 更新活跃状态
+  canvasRatioDropdown.querySelectorAll('[data-canvas-index]').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.canvasIndex) === state.canvasRatioIndex);
+  });
+  canvasRatioDropdown.classList.remove('open');
+  updateButtonStates();
+  recomputeAndRender();
 });
 
 // ========== 撤销/重做 ==========
