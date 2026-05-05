@@ -347,20 +347,12 @@ function computeDropZone(mouseX, mouseY) {
 function updateButtonStates() {
   const hasImages = state.images.length > 0;
   const editing = state.editModeImageId !== -1;
-  const locked = state.canvasRatioLocked;
   btnCopy.disabled = !hasImages || editing;
   btnSave.disabled = !hasImages || editing;
   btnClear.disabled = !hasImages || editing;
   btnUndo.disabled = !state.undoManager.canUndo();
   btnRedo.disabled = !state.undoManager.canRedo();
-  btnRatio.disabled = !hasImages || editing || locked;
-  // 锁定时禁用横排/竖排按钮
-  layoutBtns.forEach(b => { b.disabled = editing || locked; });
-  if (locked) {
-    layoutBtns.forEach(b => b.classList.add('disabled'));
-  } else if (!editing) {
-    layoutBtns.forEach(b => b.classList.remove('disabled'));
-  }
+  btnRatio.disabled = !hasImages || editing;
   btnCanvasRatio.disabled = !hasImages || editing;
 }
 
@@ -556,6 +548,8 @@ layoutBtns.forEach(btn => {
     const mode = btn.dataset.layout;
     if (mode === state.layoutMode) return;
     if (state.editModeImageId !== -1) return;
+    // 切换布局时自动解除画布比例锁定
+    if (state.canvasRatioLocked) deactivateCanvasRatioLock();
     state.layoutMode = mode;
     computeGroupedLayout(state.groups, imagePool, state.layoutMode);
     for (const img of state.images) {
@@ -729,6 +723,8 @@ ratioDropdown.addEventListener('click', (e) => {
   const item = e.target.closest('[data-index]');
   if (!item) return;
   const index = parseInt(item.dataset.index);
+  // 调整比例时自动解除画布比例锁定
+  if (state.canvasRatioLocked) deactivateCanvasRatioLock();
   if (index === 0) {
     // 恢复原图比例：重置所有图片的裁剪
     state.globalRatioIndex = 0;
