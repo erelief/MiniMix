@@ -2228,13 +2228,18 @@ async function initTauriDragDrop() {
         hideDropOverlay();
         const paths = payload.paths.filter(isImageFile);
         if (paths.length > 0) {
-          const { convertFileSrc } = await import('@tauri-apps/api/core');
-          const urls = [];
-          for (const fp of paths) {
-            try { urls.push(convertFileSrc(fp)); }
-            catch (err) { console.error(`Failed to process: ${fp}`, err); }
-          }
-          if (urls.length > 0) await addImages(urls);
+          try {
+            const { readFile } = await import('@tauri-apps/plugin-fs');
+            const files = [];
+            for (const fp of paths) {
+              try {
+                const buf = await readFile(fp);
+                const name = fp.split(/[/\\]/).pop() || 'image.png';
+                files.push(new File([buf], name, { type: 'image/*' }));
+              } catch (err) { console.error(`Failed to read: ${fp}`, err); }
+            }
+            if (files.length > 0) await addImages(files);
+          } catch (err) { console.error('Tauri fs error:', err); }
         }
       } else if (payload.type === 'leave') {
         hideDropOverlay();
@@ -2269,13 +2274,20 @@ document.addEventListener('drop', async (e) => {
 
 async function loadFilesFromPaths(paths) {
   if (!paths || paths.length === 0) return;
-  const { convertFileSrc } = await import('@tauri-apps/api/core');
-  const urls = [];
-  for (const fp of paths) {
-    try { urls.push(convertFileSrc(fp)); }
-    catch (err) { console.error(`Failed to process: ${fp}`, err); }
+  try {
+    const { readFile } = await import('@tauri-apps/plugin-fs');
+    const files = [];
+    for (const fp of paths) {
+      try {
+        const buf = await readFile(fp);
+        const name = fp.split(/[/\\]/).pop() || 'image.png';
+        files.push(new File([buf], name, { type: 'image/*' }));
+      } catch (err) { console.error(`Failed to read: ${fp}`, err); }
+    }
+    if (files.length > 0) await addImages(files);
+  } catch {
+    // 非 Tauri 环境
   }
-  if (urls.length > 0) await addImages(urls);
 }
 
 async function initApp() {
