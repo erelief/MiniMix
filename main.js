@@ -1173,13 +1173,16 @@ function updateSavePreview() {
     const du = generatePreviewDataURL(format, quality);
 
     // 按像素比例从预览数据估算最终文件大小
-    const previewPixels = du.split(',')[1]?.length || 0;
-    const totalPixels = outW * outH;
-    const srcPixels = baseW * baseH;
-    const ratio = totalPixels / Math.max(srcPixels, 1);
-    const estimatedSize = formatFileSize(Math.round(previewPixels * 0.75 * ratio));
-    saveFileSizeInfo.textContent = (format === 'png' && losslessCompressCheckbox.checked)
-      ? estimatedSize + '（压缩后更小）' : estimatedSize;
+    const previewBase64Len = du.split(',')[1]?.length || 0;
+    const previewBytes = previewBase64Len * 0.75;
+    const previewScale = Math.min(320 / baseW, 320 / baseH, 1);
+    const previewW = Math.round(baseW * previewScale);
+    const previewH = Math.round(baseH * previewScale);
+    const pixelRatio = (outW * outH) / Math.max(previewW * previewH, 1);
+    const rawSize = Math.round(previewBytes * pixelRatio);
+    const displaySize = (format === 'png' && losslessCompressCheckbox.checked)
+      ? formatFileSize(Math.round(rawSize * 0.75)) : formatFileSize(rawSize);
+    saveFileSizeInfo.textContent = displaySize;
 
     const pi = new Image();
     pi.onload = () => {
