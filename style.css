@@ -742,6 +742,22 @@ body {
   color: var(--text-primary);
 }
 
+.save-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.save-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .inline-edit-input {
   width: 36px;
   padding: 1px 3px;

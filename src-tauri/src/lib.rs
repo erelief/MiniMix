@@ -33,6 +33,44 @@ fn is_image_path(path: &str) -> bool {
         || lower.ends_with(".webp")
 }
 
+fn format_bytes(bytes: usize) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+#[tauri::command]
+fn compress_and_save_png(data: Vec<u8>, path: String) -> Result<String, String> {
+    let original_size = data.len();
+    let opts = oxipng::Options {
+        strip: oxipng::StripChunks::Safe,
+        ..Default::default()
+    };
+
+    let final_data = match oxipng::optimize_from_memory(&data, &opts) {
+        Ok(compressed) if compressed.len() < original_size => compressed,
+        _ => data,
+    };
+
+    std::fs::write(&path, &final_data)
+        .map_err(|e| format!("文件写入失败: {}", e))?;
+
+    let compressed_size = final_data.len();
+    let savings = (original_size - compressed_size) as f64 / original_size as f64 * 100.0;
+
+    Ok(format!(
+        "已保存: {} ({} → {}, {:.1}% 更小)",
+        path,
+        format_bytes(original_size),
+        format_bytes(compressed_size),
+        savings
+    ))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -80,6 +118,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_opened_files,
             get_pending_files,
+            compress_and_save_png,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

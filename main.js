@@ -142,6 +142,8 @@ const saveSizeW = document.getElementById('save-size-w');
 const saveSizeH = document.getElementById('save-size-h');
 const saveFileSizeInfo = document.getElementById('save-file-size');
 const qualityRow = document.getElementById('quality-row');
+const losslessCompressRow = document.getElementById('lossless-compress-row');
+const losslessCompressCheckbox = document.getElementById('save-lossless-compress');
 const savePreviewCanvas = document.getElementById('save-preview-canvas');
 
 // ========== 工具函数 ==========
@@ -1044,6 +1046,7 @@ btnSave.addEventListener('click', () => {
 document.getElementById('save-modal-close').addEventListener('click', closeSaveModal);
 document.getElementById('save-modal-cancel').addEventListener('click', closeSaveModal);
 saveFormatSelect.addEventListener('change', updateSavePreview);
+losslessCompressCheckbox.addEventListener('change', updateSavePreview);
 saveQualitySlider.addEventListener('input', () => {
   saveQualityValue.textContent = saveQualitySlider.value;
   updateSavePreview();
@@ -1155,6 +1158,7 @@ function updateSavePreview() {
   const quality = parseInt(saveQualitySlider.value);
   const resolution = parseFloat(saveResolutionSelect.value) / 100;
   qualityRow.style.display = format === 'jpg' ? '' : 'none';
+  losslessCompressRow.style.display = format === 'png' ? '' : 'none';
   const baseW = Math.round(state.lastLayoutResult.width * state.lastLayoutResult.scaleFactor);
   const baseH = Math.round(state.lastLayoutResult.height * state.lastLayoutResult.scaleFactor);
   saveSizeInfo._baseW = baseW;
@@ -1173,7 +1177,9 @@ function updateSavePreview() {
     const totalPixels = outW * outH;
     const srcPixels = baseW * baseH;
     const ratio = totalPixels / Math.max(srcPixels, 1);
-    saveFileSizeInfo.textContent = formatFileSize(Math.round(previewPixels * 0.75 * ratio));
+    const estimatedSize = formatFileSize(Math.round(previewPixels * 0.75 * ratio));
+    saveFileSizeInfo.textContent = (format === 'png' && losslessCompressCheckbox.checked)
+      ? estimatedSize + '（压缩后更小）' : estimatedSize;
 
     const pi = new Image();
     pi.onload = () => {
@@ -1252,10 +1258,19 @@ document.getElementById('save-modal-confirm').addEventListener('click', async ()
 
     // 4. 写入文件
     if (window.__TAURI_INTERNALS__) {
-      const { writeFile } = await import('@tauri-apps/plugin-fs');
-      await writeFile(fp, bytes);
-      statusBar.textContent = `已保存: ${fp}`;
-      setTimeout(updateStatusBar, 2000);
+      const useCompression = fmt === 'png' && losslessCompressCheckbox.checked;
+      if (useCompression) {
+        await updateProgress('正在压缩PNG', 90);
+        const { invoke } = await import('@tauri-apps/api/core');
+        const resultMsg = await invoke('compress_and_save_png', { data: Array.from(bytes), path: fp });
+        statusBar.textContent = resultMsg;
+        setTimeout(updateStatusBar, 3000);
+      } else {
+        const { writeFile } = await import('@tauri-apps/plugin-fs');
+        await writeFile(fp, bytes);
+        statusBar.textContent = `已保存: ${fp}`;
+        setTimeout(updateStatusBar, 2000);
+      }
     } else if ('showSaveFilePicker' in window) {
       const handle = await window.showSaveFilePicker({
         suggestedName: defaultName,
