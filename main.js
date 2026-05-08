@@ -1369,17 +1369,145 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
   });
 })();
 
-// 信息弹窗
-btnInfo.addEventListener('click', () => {
-  infoModal.classList.add('modal-open');
-  document.getElementById('info-version-number').textContent = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.0';
-  const iconEl = document.getElementById('info-app-icon');
-  if (typeof __APP_ICON__ !== 'undefined' && __APP_ICON__) {
-    iconEl.src = __APP_ICON__;
+// ========== 自动更新模块 ==========
+(async function initUpdater() {
+  const btnCheck = document.getElementById('btn-check-update');
+  const statusEl = document.getElementById('update-status');
+  const autoToggle = document.getElementById('auto-update-toggle');
+  if (!btnCheck || !statusEl || !autoToggle) return;
+
+  const isTauri = typeof window.__TAURI_INTERNALS__ !== 'undefined';
+  if (!isTauri) return;
+
+  btnCheck.disabled = false;
+
+  const AUTO_UPDATE_KEY = 'minimix-auto-update';
+  const saved = localStorage.getItem(AUTO_UPDATE_KEY);
+  if (saved !== null) autoToggle.checked = saved === 'true';
+  autoToggle.addEventListener('change', () => {
+    localStorage.setItem(AUTO_UPDATE_KEY, String(autoToggle.checked));
+  });
+
+  const { check } = await import('@tauri-apps/plugin-updater');
+  const { relaunch } = await import('@tauri-apps/plugin-process');
+
+  function setStatus(text, className) {
+    statusEl.className = 'update-status' + (className ? ' ' + className : '');
+    statusEl.innerHTML = '';
+    if (typeof text === 'string') statusEl.textContent = text;
   }
-});
-document.getElementById('info-modal-close').addEventListener('click', () => infoModal.classList.remove('modal-open'));
-[saveModal, infoModal].forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('modal-open'); }));
+
+  function clearStatus() {
+    statusEl.className = 'update-status';
+    statusEl.innerHTML = '';
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  async function checkForUpdate({ silent = false } = {}) {
+    setStatus('正在检查更新...', 'checking');
+    try {
+      const update = await check();
+      if (!update) {
+        if (!silent) setStatus('已是最新版本', 'up-to-date');
+        else clearStatus();
+        return;
+      }
+
+      setStatus('', 'update-available');
+      const textSpan = document.createElement('span');
+      textSpan.textContent = '发现新版本 v' + update.version;
+      statusEl.appendChild(textSpan);
+
+      const installBtn = document.createElement('button');
+      installBtn.className = 'btn-install-update';
+      installBtn.textContent = '立即安装';
+      statusEl.appendChild(installBtn);
+
+      // 启动时静默检查发现新版本，显示 toast
+      if (silent) {
+        const toast = document.getElementById('update-toast');
+        const toastText = document.getElementById('update-toast-text');
+        const toastBtn = document.getElementById('update-toast-btn');
+        const toastClose = document.getElementById('update-toast-close');
+        if (toast && toastText && toastBtn && toastClose) {
+          toastText.textContent = '发现新版本 v' + update.version;
+          toast.classList.add('visible');
+          toastBtn.addEventListener('click', () => {
+            toast.classList.remove('visible');
+            infoModal.classList.add('modal-open');
+          });
+          toastClose.addEventListener('click', () => toast.classList.remove('visible'));
+          setTimeout(() => toast.classList.remove('visible'), 10000);
+        }
+      }
+
+      installBtn.addEventListener('click', async () => {
+        installBtn.disabled = true;
+        installBtn.textContent = '下载中...';
+
+        const progressDiv = document.createElement('div');
+        progressDiv.className = 'update-progress';
+        const progressBar = document.createElement('div');
+        progressBar.className = 'update-progress-bar';
+        const progressFill = document.createElement('div');
+        progressFill.className = 'update-progress-bar-fill';
+        progressBar.appendChild(progressFill);
+        const progressText = document.createElement('div');
+        progressText.className = 'update-progress-text';
+        progressText.textContent = '准备下载...';
+        progressDiv.appendChild(progressBar);
+        progressDiv.appendChild(progressText);
+        statusEl.appendChild(progressDiv);
+
+        let downloaded = 0;
+        let contentLength = 0;
+
+        try {
+          await update.downloadAndInstall((event) => {
+            switch (event.event) {
+              case 'Started':
+                contentLength = event.data.contentLength || 0;
+                break;
+              case 'Progress':
+                downloaded += event.data.chunkLength;
+                if (contentLength > 0) {
+                  const pct = Math.round((downloaded / contentLength) * 100);
+                  progressFill.style.width = pct + '%';
+                  progressText.textContent = '正在下载 ' + pct + '% (' + formatBytes(downloaded) + ' / ' + formatBytes(contentLength) + ')';
+                } else {
+                  progressText.textContent = '正在下载... ' + formatBytes(downloaded);
+                }
+                break;
+              case 'Finished':
+                progressFill.style.width = '100%';
+                progressText.textContent = '下载完成，正在安装...';
+                break;
+            }
+          });
+
+          progressText.textContent = '安装完成，即将重启...';
+          await relaunch();
+        } catch (e) {
+          setStatus('更新失败: ' + e.message, 'error');
+        }
+      });
+    } catch (e) {
+      if (!silent) setStatus('检查失败: ' + e.message, 'error');
+      else clearStatus();
+    }
+  }
+
+  btnCheck.addEventListener('click', () => checkForUpdate({ silent: false }));
+
+  if (autoToggle.checked) {
+    checkForUpdate({ silent: true });
+  }
+})();
 
 // ========== 编辑模式函数 ==========
 

@@ -12,6 +12,12 @@
   "plugins": {
     "shell": {
       "open": true
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/erelief/MiniMix/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI1QjAyMTZGRjYzNjI5QjAKUldTd0tUYjJieUd3dFFMSlRtNitrVVdxTU5Xa1A1THlKUWY1VnQ3UFQrd3JqRnh4ZjRMeFhvNy8K"
     }
   },
   "app": {
@@ -39,6 +45,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["nsis", "dmg", "app"],
     "icon": [
       "icons/32x32.png",
