@@ -278,6 +278,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     showRatioMenu = false,
     hoveredRatioIndex = -1,
     hoveredEditBtnId = -1,
+    hoveredDupBtnId = -1,
     dropZone = null,
     groups = [],
     imagePool = null,
@@ -344,6 +345,9 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     img.ratioBtnY = 0;
     img.ratioBtnSize = 0;
     img.ratioMenuW = 0;
+    img.dupBtnX = 0;
+    img.dupBtnY = 0;
+    img.dupBtnSize = 0;
   }
 
   const ctx = canvas.getContext('2d');
@@ -776,6 +780,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     for (const img of images) {
       if (img.id === hoveredImageId) {
         drawEditButton(ctx, img, hoveredEditBtnId === img.id, scaleFactor, displayScale, gOx, gOy);
+        drawDuplicateButton(ctx, img, hoveredDupBtnId === img.id, scaleFactor, displayScale, gOx, gOy);
         drawCloseButton(ctx, img, hoveredCloseId === img.id, scaleFactor, displayScale, gOx, gOy);
       }
     }
@@ -812,6 +817,42 @@ function drawEditButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, g
     'M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
     'M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z'
   );
+  ctx.restore();
+}
+
+// ========== 复制按钮（编辑按钮右侧） ==========
+
+function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+  const sf = scaleFactor * displayScale;
+  const screenX = img.editBtnX + EDIT_BTN_SIZE + EDIT_BTN_PADDING;
+  const screenY = img.editBtnY;
+  const canvasSize = EDIT_BTN_SIZE / displayScale;
+  const canvasX = screenX / displayScale;
+  const canvasY = screenY / displayScale;
+
+  img.dupBtnX = screenX;
+  img.dupBtnY = screenY;
+  img.dupBtnSize = EDIT_BTN_SIZE;
+
+  ctx.save();
+  ctx.fillStyle = hovered ? 'rgba(66, 133, 244, 0.9)' : 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
+  ctx.fill();
+
+  // images icon (Lucide)
+  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, displayScale,
+    'm22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16',
+    'M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2',
+    'M10 2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z'
+  );
+  // Filled dot (circle at 13,7)
+  const s = canvasSize / 24;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(canvasX + 13 * s, canvasY + 7 * s, 1 * s, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.restore();
 }
 
@@ -1277,6 +1318,13 @@ export function hitTest(mouseX, mouseY, images, hoveredImageId = -1, editModeIma
         mouseX >= img.editBtnX && mouseX < img.editBtnX + img.editBtnSize &&
         mouseY >= img.editBtnY && mouseY < img.editBtnY + img.editBtnSize) {
       return { image: img, isEditBtn: true };
+    }
+
+    // 复制按钮（仅对悬停图片）
+    if (img.id === hoveredImageId && img.dupBtnSize > 0 &&
+        mouseX >= img.dupBtnX && mouseX < img.dupBtnX + img.dupBtnSize &&
+        mouseY >= img.dupBtnY && mouseY < img.dupBtnY + img.dupBtnSize) {
+      return { image: img, isDupBtn: true };
     }
 
     // 关闭按钮（仅对悬停图片，且不在编辑模式）

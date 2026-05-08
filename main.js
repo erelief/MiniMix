@@ -52,6 +52,7 @@ const state = {
   showRatioMenu: false,
   hoveredRatioIndex: -1,
   hoveredEditBtnId: -1,
+  hoveredDupBtnId: -1,
   // 全局比例
   globalRatioIndex: -1,
   autoCropNewImages: false,
@@ -561,6 +562,7 @@ function recomputeAndRender() {
     showRatioMenu: state.showRatioMenu,
     hoveredRatioIndex: state.hoveredRatioIndex,
     hoveredEditBtnId: state.hoveredEditBtnId,
+    hoveredDupBtnId: state.hoveredDupBtnId,
     dropZone: state.dropZone,
     groups: state.groups,
     imagePool: imagePool,
@@ -643,6 +645,21 @@ async function addImages(imageFilesOrDataUrls) {
     }
   }
 
+  syncImagesFromGroups();
+  recomputeAndRender();
+}
+
+function duplicateImage(original) {
+  pushUndo();
+  const dup = new ImageItem(original.image, original.fileName);
+  if (original.editState) {
+    dup.editState = { ...original.editState };
+  }
+  imagePool.set(dup.id, dup);
+  for (const group of state.groups) {
+    const idx = group.indexOf(original.id);
+    if (idx !== -1) { group.splice(idx + 1, 0, dup.id); break; }
+  }
   syncImagesFromGroups();
   recomputeAndRender();
 }
@@ -1660,6 +1677,12 @@ canvas.addEventListener('mousedown', (e) => {
     return;
   }
 
+  // 复制按钮
+  if (hit.isDupBtn && hit.image) {
+    duplicateImage(hit.image);
+    return;
+  }
+
   // 关闭按钮
   if (hit.isCloseBtn && hit.image) {
     pushUndo();
@@ -2248,16 +2271,19 @@ canvas.addEventListener('mousemove', (e) => {
   const prevHovered = state.hoveredImageId;
   const prevClose = state.hoveredCloseId;
   const prevEditBtn = state.hoveredEditBtnId;
+  const prevDupBtn = state.hoveredDupBtnId;
 
   state.hoveredImageId = hit.image ? hit.image.id : -1;
   state.hoveredCloseId = (hit.isCloseBtn && hit.image) ? hit.image.id : -1;
   state.hoveredEditBtnId = (hit.isEditBtn && hit.image) ? hit.image.id : -1;
+  state.hoveredDupBtnId = (hit.isDupBtn && hit.image) ? hit.image.id : -1;
 
-  if (state.hoveredImageId !== prevHovered || state.hoveredCloseId !== prevClose || state.hoveredEditBtnId !== prevEditBtn) {
+  if (state.hoveredImageId !== prevHovered || state.hoveredCloseId !== prevClose || state.hoveredEditBtnId !== prevEditBtn || state.hoveredDupBtnId !== prevDupBtn) {
     recomputeAndRender();
   }
 
   if (hit.isEditBtn) { canvas.style.cursor = 'pointer'; canvas.title = '编辑'; }
+  else if (hit.isDupBtn) { canvas.style.cursor = 'pointer'; canvas.title = '复制'; }
   else if (hit.isCloseBtn) { canvas.style.cursor = 'pointer'; canvas.title = '删除'; }
   else if (hit.image) { canvas.style.cursor = 'grab'; canvas.title = ''; }
   else { canvas.style.cursor = 'default'; canvas.title = ''; }
@@ -2291,6 +2317,7 @@ canvas.addEventListener('mouseleave', () => {
     state.hoveredImageId = -1;
     state.hoveredCloseId = -1;
     state.hoveredEditBtnId = -1;
+    state.hoveredDupBtnId = -1;
     recomputeAndRender();
   }
   canvas.style.cursor = 'default';
