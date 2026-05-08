@@ -322,14 +322,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   canvas.style.boxShadow = '';
 
   const images = layoutResult._images || [];
-  // 仅在正在拖拽操作时显示溢出（裁剪/平移/旋转过程中）
-  const isActiveEditing = editAction !== null;
-
-  // 编辑图片引用（用于绘制循环）
-  let editingImg = null;
-  if (editModeImageId !== -1) {
-    editingImg = images.find(i => i.id === editModeImageId);
-  }
 
   // 重置按钮坐标
   for (const img of images) {
@@ -381,7 +373,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
         for (const img of images) {
           if (img.id === dragImageId) continue;
           if (img.editState) {
-            drawEditedImage(ctx, img, scaleFactor, { showOverflow: false });
+            drawEditedImage(ctx, img, scaleFactor);
           } else {
             ctx.drawImage(img.image, img.x, img.y, img.renderWidth, img.renderHeight);
           }
@@ -453,7 +445,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
                 if (img.editState) {
                   const saved = savedPos.get(img.id);
                   if (saved) { img.x = reordered.x; img.y = reordered.y; }
-                  drawEditedImage(ctx, img, scaleFactor, { showOverflow: false });
+                  drawEditedImage(ctx, img, scaleFactor);
                   if (saved) { img.x = saved.x; img.y = saved.y; }
                 } else {
                   ctx.drawImage(img.image, reordered.x, reordered.y, reordered.renderWidth, reordered.renderHeight);
@@ -461,7 +453,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
               }
             } else {
               if (img.editState) {
-                drawEditedImage(ctx, img, scaleFactor, { showOverflow: false });
+                drawEditedImage(ctx, img, scaleFactor);
               } else {
                 ctx.drawImage(img.image, img.x, img.y, img.renderWidth, img.renderHeight);
               }
@@ -511,7 +503,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
           for (const img of tempLayout._images) {
             if (img.id === dragImageId) continue;
             if (img.editState) {
-              drawEditedImage(ctx, img, tempSF, { showOverflow: false });
+              drawEditedImage(ctx, img, tempSF);
             } else {
               ctx.drawImage(img.image, img.x, img.y, img.renderWidth, img.renderHeight);
             }
@@ -539,7 +531,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
         for (const img of images) {
           if (img.id === dragImageId) continue;
           if (img.editState) {
-            drawEditedImage(ctx, img, scaleFactor, { showOverflow: false });
+            drawEditedImage(ctx, img, scaleFactor);
           } else {
             ctx.drawImage(img.image, img.x, img.y, img.renderWidth, img.renderHeight);
           }
@@ -566,7 +558,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
         const savedDragPos = { x: dragImg.x, y: dragImg.y };
         dragImg.x = ghostCanvasX;
         dragImg.y = ghostCanvasY;
-        drawEditedImage(ctx, dragImg, scaleFactor, { showOverflow: false });
+        drawEditedImage(ctx, dragImg, scaleFactor);
         dragImg.x = savedDragPos.x;
         dragImg.y = savedDragPos.y;
       } else {
@@ -643,7 +635,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       for (const img of images) {
         if (dragGroupIds.includes(img.id)) continue;
         if (img.editState) {
-          drawEditedImage(ctx, img, scaleFactor, { showOverflow: false });
+          drawEditedImage(ctx, img, scaleFactor);
         } else {
           ctx.drawImage(img.image, img.x, img.y, img.renderWidth, img.renderHeight);
         }
@@ -684,7 +676,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
             const savedX = img.x, savedY = img.y;
             img.x = drawX / scaleFactor;
             img.y = drawY / scaleFactor;
-            drawEditedImage(ctx, img, scaleFactor, { showOverflow: false });
+            drawEditedImage(ctx, img, scaleFactor);
             img.x = savedX;
             img.y = savedY;
           } else {
@@ -709,41 +701,20 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   ctx.translate(gOx, gOy);
   if (scaleFactor < 1) ctx.scale(scaleFactor, scaleFactor);
 
-  // 先绘制所有非编辑图片（让编辑图片的溢出能显示在最上层）
+  // 绘制所有图片
   for (const img of images) {
-    if (img === editingImg) continue;
     if (img.editState) {
-      drawEditedImage(ctx, img, scaleFactor, { showOverflow: false });
+      drawEditedImage(ctx, img, scaleFactor);
     } else {
       ctx.drawImage(img.image, img.x, img.y, img.renderWidth, img.renderHeight);
     }
   }
 
-  // 最后绘制编辑图片（showOverflow 时溢出显示在其他图片之上）
-  if (editingImg) {
-    drawEditedImage(ctx, editingImg, scaleFactor, { showOverflow: isActiveEditing });
-  }
-
   // 恢复到画布像素空间
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-  // 编辑模式溢出暗化：显示区域外统一变暗（原始像素坐标，不受变换影响）
-  if (editingImg && editingImg.editState && isActiveEditing) {
-    const ox = editingImg.x * scaleFactor + gOx;
-    const oy = editingImg.y * scaleFactor + gOy;
-    const ow = editingImg.renderWidth * scaleFactor;
-    const oh = editingImg.renderHeight * scaleFactor;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(ox - 9999, oy - 9999, ow + 19998, oh + 19998);
-    ctx.rect(ox, oy, ow, oh);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.fill('evenodd');
-    ctx.restore();
-  }
-
-  // 编辑模式：非编辑图片变暗（拖拽中由溢出暗化统一处理，不再重复叠加）
-  if (editModeImageId !== -1 && !isActiveEditing) {
+  // 编辑模式：非编辑图片变暗
+  if (editModeImageId !== -1) {
     for (const img of images) {
       if (img.id === editModeImageId) continue;
       const bx = img.x * scaleFactor + gOx;
@@ -1096,7 +1067,7 @@ function drawSvgIcon(ctx, x, y, size, displayScale, ...pathStrings) {
 
 // ========== 编辑图片渲染 ==========
 
-function drawEditedImage(ctx, img, scaleFactor, { showOverflow = false } = {}) {
+function drawEditedImage(ctx, img, scaleFactor) {
   const es = img.editState;
   if (!es) return;
 
@@ -1123,11 +1094,9 @@ function drawEditedImage(ctx, img, scaleFactor, { showOverflow = false } = {}) {
 
   ctx.save();
 
-  if (!showOverflow) {
-    ctx.beginPath();
-    ctx.rect(img.x, img.y, displayW, displayH);
-    ctx.clip();
-  }
+  ctx.beginPath();
+  ctx.rect(img.x, img.y, displayW, displayH);
+  ctx.clip();
 
   ctx.translate(centerX, centerY);
   ctx.scale(editScale, editScale);
