@@ -557,6 +557,7 @@ body {
   position: relative;
   pointer-events: none;
   opacity: 0.8;
+  padding-right: 32px;
 }
 .btn-saving::after {
   content: '';

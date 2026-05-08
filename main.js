@@ -1332,9 +1332,7 @@ btnInfo.addEventListener('click', () => {
   infoModal.classList.add('modal-open');
   document.getElementById('info-version-number').textContent = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.0';
   const iconEl = document.getElementById('info-app-icon');
-  if (typeof __APP_ICON__ !== 'undefined' && __APP_ICON__) {
-    iconEl.src = __APP_ICON__;
-  }
+  iconEl.src = (typeof __APP_ICON__ !== 'undefined' && __APP_ICON__) ? __APP_ICON__ : './images/minimix-logo.png';
 });
 document.getElementById('info-modal-close').addEventListener('click', () => infoModal.classList.remove('modal-open'));
 [saveModal, infoModal].forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('modal-open'); }));
