@@ -279,6 +279,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     hoveredRatioIndex = -1,
     hoveredEditBtnId = -1,
     hoveredDupBtnId = -1,
+    hoveredDlBtnId = -1,
     dropZone = null,
     groups = [],
     imagePool = null,
@@ -348,6 +349,9 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     img.dupBtnX = 0;
     img.dupBtnY = 0;
     img.dupBtnSize = 0;
+    img.dlBtnX = 0;
+    img.dlBtnY = 0;
+    img.dlBtnSize = 0;
   }
 
   const ctx = canvas.getContext('2d');
@@ -781,6 +785,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       if (img.id === hoveredImageId) {
         drawEditButton(ctx, img, hoveredEditBtnId === img.id, scaleFactor, displayScale, gOx, gOy);
         drawDuplicateButton(ctx, img, hoveredDupBtnId === img.id, scaleFactor, displayScale, gOx, gOy);
+        drawDownloadButton(ctx, img, hoveredDlBtnId === img.id, scaleFactor, displayScale, gOx, gOy);
         drawCloseButton(ctx, img, hoveredCloseId === img.id, scaleFactor, displayScale, gOx, gOy);
       }
     }
@@ -1181,6 +1186,38 @@ function drawCloseButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, 
   ctx.restore();
 }
 
+// ========== 下载按钮（右下角，普通模式悬停时显示） ==========
+
+const DL_BTN_SIZE = 28;
+const DL_BTN_PADDING = 4;
+
+function drawDownloadButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+  const sf = scaleFactor * displayScale;
+  const screenX = (img.x + img.renderWidth) * sf + gOx * displayScale - DL_BTN_SIZE - DL_BTN_PADDING;
+  const screenY = (img.y + img.renderHeight) * sf + gOy * displayScale - DL_BTN_SIZE - DL_BTN_PADDING;
+  const canvasSize = DL_BTN_SIZE / displayScale;
+  const canvasX = screenX / displayScale;
+  const canvasY = screenY / displayScale;
+
+  img.dlBtnX = screenX;
+  img.dlBtnY = screenY;
+  img.dlBtnSize = DL_BTN_SIZE;
+
+  ctx.save();
+  ctx.fillStyle = hovered ? 'rgba(66, 133, 244, 0.9)' : 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
+  ctx.fill();
+
+  // Lucide download icon
+  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, displayScale,
+    'M12 15V3',
+    'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4',
+    'm7 10 5 5 5-5'
+  );
+  ctx.restore();
+}
+
 // ========== 命中检测（屏幕/CSS 像素坐标，与鼠标事件一致） ==========
 
 const CROP_EDGE_THRESHOLD = 8;
@@ -1327,6 +1364,13 @@ export function hitTest(mouseX, mouseY, images, hoveredImageId = -1, editModeIma
       return { image: img, isDupBtn: true };
     }
 
+    // 下载按钮（仅对悬停图片）
+    if (img.id === hoveredImageId && img.dlBtnSize > 0 &&
+        mouseX >= img.dlBtnX && mouseX < img.dlBtnX + img.dlBtnSize &&
+        mouseY >= img.dlBtnY && mouseY < img.dlBtnY + img.dlBtnSize) {
+      return { image: img, isDlBtn: true };
+    }
+
     // 关闭按钮（仅对悬停图片，且不在编辑模式）
     if (editModeImageId === -1 && img.id === hoveredImageId && img.closeBtnSize > 0 &&
         mouseX >= img.closeBtnX && mouseX < img.closeBtnX + img.closeBtnSize &&
@@ -1396,6 +1440,73 @@ export function generatePreviewDataURL(format = 'png', quality = 90) {
   ctx.drawImage(fullCanvas, 0, 0, w, h);
   if (format === 'png') return previewCanvas.toDataURL('image/png');
   return previewCanvas.toDataURL('image/jpeg', quality / 100);
+}
+
+/** 导出单张图片（含编辑：裁剪/平移/旋转/缩放） */
+export function exportSingleImage(img, format = 'png', quality = 90, resolutionScale = 1) {
+  const baseW = img.editState ? img.editState.cropWidth : img.originalWidth;
+  const baseH = img.editState ? img.editState.cropHeight : img.originalHeight;
+  const outputW = Math.round(baseW * resolutionScale);
+  const outputH = Math.round(baseH * resolutionScale);
+
+  const offscreen = document.createElement('canvas');
+  offscreen.width = outputW;
+  offscreen.height = outputH;
+  const ctx = offscreen.getContext('2d');
+
+  if (format === 'jpg') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, outputW, outputH);
+  }
+
+  if (img.editState) {
+    const es = img.editState;
+    const cropW = es.cropWidth;
+    const cropH = es.cropHeight;
+    const origW = img.originalWidth;
+    const origH = img.originalHeight;
+
+    const displayW = outputW;
+    const displayH = outputH;
+    const editScale = Math.max(displayW / cropW, displayH / cropH);
+
+    const absCos = Math.abs(Math.cos(es.rotation));
+    const absSin = Math.abs(Math.sin(es.rotation));
+    const baseFit = Math.max(
+      (cropW * absCos + cropH * absSin) / origW,
+      (cropW * absSin + cropH * absCos) / origH
+    );
+    const effectiveScale = baseFit * Math.max(1.0, es.zoom);
+
+    const centerX = displayW / 2;
+    const centerY = displayH / 2;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, displayW, displayH);
+    ctx.clip();
+    ctx.translate(centerX, centerY);
+    ctx.scale(editScale, editScale);
+    ctx.translate(es.panX, es.panY);
+    ctx.scale(effectiveScale, effectiveScale);
+    ctx.rotate(es.rotation);
+    ctx.drawImage(img.image, -origW / 2, -origH / 2, origW, origH);
+    ctx.restore();
+  } else {
+    ctx.drawImage(img.image, 0, 0, outputW, outputH);
+  }
+
+  if (format === 'png') return offscreen.toDataURL('image/png');
+  else return offscreen.toDataURL('image/jpeg', quality / 100);
+}
+
+/** 单张图片小尺寸预览 DataURL（最大 320px） */
+export function generateSingleImagePreviewDataURL(img, format = 'png', quality = 90) {
+  const baseW = img.editState ? img.editState.cropWidth : img.originalWidth;
+  const baseH = img.editState ? img.editState.cropHeight : img.originalHeight;
+  const MAX_PREVIEW = 320;
+  const scale = Math.min(MAX_PREVIEW / baseW, MAX_PREVIEW / baseH, 1);
+  return exportSingleImage(img, format, quality, scale);
 }
 
 export function formatFileSize(bytes) {

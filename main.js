@@ -13,6 +13,8 @@ import {
   setLayoutResult,
   exportImage,
   generatePreviewDataURL,
+  exportSingleImage,
+  generateSingleImagePreviewDataURL,
   formatFileSize,
   ASPECT_RATIOS,
 } from './stitch-engine.js';
@@ -53,6 +55,8 @@ const state = {
   hoveredRatioIndex: -1,
   hoveredEditBtnId: -1,
   hoveredDupBtnId: -1,
+  hoveredDlBtnId: -1,
+  saveTargetImage: null,
   // 全局比例
   globalRatioIndex: -1,
   autoCropNewImages: false,
@@ -563,6 +567,7 @@ function recomputeAndRender() {
     hoveredRatioIndex: state.hoveredRatioIndex,
     hoveredEditBtnId: state.hoveredEditBtnId,
     hoveredDupBtnId: state.hoveredDupBtnId,
+    hoveredDlBtnId: state.hoveredDlBtnId,
     dropZone: state.dropZone,
     groups: state.groups,
     imagePool: imagePool,
@@ -1075,10 +1080,17 @@ saveResolutionSelect.addEventListener('input', () => {
 
 function openSaveModal() {
   if (state.images.length === 0) return;
+  const headerSpan = saveModal.querySelector('.modal-header span');
+  if (headerSpan) {
+    headerSpan.textContent = state.saveTargetImage ? '保存单张图片' : '保存图片';
+  }
   saveModal.classList.add('modal-open');
   updateSavePreview();
 }
-function closeSaveModal() { saveModal.classList.remove('modal-open'); }
+function closeSaveModal() {
+  saveModal.classList.remove('modal-open');
+  state.saveTargetImage = null;
+}
 
 // ========== 双击内联编辑（参考 laymask） ==========
 
@@ -1170,14 +1182,25 @@ enableDimensionEdit(saveSizeW, true);
 enableDimensionEdit(saveSizeH, false);
 
 function updateSavePreview() {
-  if (!state.lastLayoutResult) return;
   const format = saveFormatSelect.value;
   const quality = parseInt(saveQualitySlider.value);
   const resolution = parseFloat(saveResolutionSelect.value) / 100;
   qualityRow.style.display = format === 'jpg' ? '' : 'none';
   losslessCompressRow.style.display = format === 'png' ? '' : 'none';
-  const baseW = Math.round(state.lastLayoutResult.width * state.lastLayoutResult.scaleFactor);
-  const baseH = Math.round(state.lastLayoutResult.height * state.lastLayoutResult.scaleFactor);
+
+  let baseW, baseH, du;
+
+  if (state.saveTargetImage) {
+    const img = state.saveTargetImage;
+    baseW = img.editState ? img.editState.cropWidth : img.originalWidth;
+    baseH = img.editState ? img.editState.cropHeight : img.originalHeight;
+    du = generateSingleImagePreviewDataURL(img, format, quality);
+  } else {
+    if (!state.lastLayoutResult) return;
+    baseW = Math.round(state.lastLayoutResult.width * state.lastLayoutResult.scaleFactor);
+    baseH = Math.round(state.lastLayoutResult.height * state.lastLayoutResult.scaleFactor);
+    du = generatePreviewDataURL(format, quality);
+  }
   saveSizeInfo._baseW = baseW;
   saveSizeInfo._baseH = baseH;
   const outW = Math.round(baseW * resolution);
@@ -1187,7 +1210,6 @@ function updateSavePreview() {
 
   // 使用小尺寸预览（最大 320px），避免大图时滑块卡顿
   try {
-    const du = generatePreviewDataURL(format, quality);
 
     // 按像素比例从预览数据估算最终文件大小
     const previewBase64Len = du.split(',')[1]?.length || 0;
@@ -1222,10 +1244,17 @@ document.getElementById('save-modal-confirm').addEventListener('click', async ()
   const qual = parseInt(saveQualitySlider.value);
   const res = parseFloat(saveResolutionSelect.value) / 100;
 
-  const firstFile = state.images[0]?.fileName || '';
+  let firstFile;
+  if (state.saveTargetImage) {
+    firstFile = state.saveTargetImage.fileName || '';
+  } else {
+    firstFile = state.images[0]?.fileName || '';
+  }
   const baseName = firstFile.replace(/\.[^.]+$/, '');
   const ext = fmt === 'png' ? 'png' : 'jpg';
-  const defaultName = `minimix_${baseName || ''}.${ext}`;
+  const defaultName = state.saveTargetImage
+    ? `${baseName || 'image'}.${ext}`
+    : `minimix_${baseName || ''}.${ext}`;
 
   // 禁用按钮并进入保存状态
   saveConfirmBtn.classList.add('btn-saving');
@@ -1250,7 +1279,12 @@ document.getElementById('save-modal-confirm').addEventListener('click', async ()
     await updateProgress('正在合成图片', 10);
 
     // 2. 渲染导出图片
-    const du = exportImage(state.lastLayoutResult, fmt, qual, res);
+    let du;
+    if (state.saveTargetImage) {
+      du = exportSingleImage(state.saveTargetImage, fmt, qual, res);
+    } else {
+      du = exportImage(state.lastLayoutResult, fmt, qual, res);
+    }
 
     await updateProgress('正在转换数据格式', 45);
 
@@ -1685,6 +1719,13 @@ canvas.addEventListener('mousedown', (e) => {
     state.hoveredImageId = -1;
     state.hoveredCloseId = -1;
     recomputeAndRender();
+    return;
+  }
+
+  // 下载按钮
+  if (hit.isDlBtn && hit.image) {
+    state.saveTargetImage = hit.image;
+    openSaveModal();
     return;
   }
 
@@ -2264,18 +2305,21 @@ canvas.addEventListener('mousemove', (e) => {
   const prevClose = state.hoveredCloseId;
   const prevEditBtn = state.hoveredEditBtnId;
   const prevDupBtn = state.hoveredDupBtnId;
+  const prevDlBtn = state.hoveredDlBtnId;
 
   state.hoveredImageId = hit.image ? hit.image.id : -1;
   state.hoveredCloseId = (hit.isCloseBtn && hit.image) ? hit.image.id : -1;
   state.hoveredEditBtnId = (hit.isEditBtn && hit.image) ? hit.image.id : -1;
   state.hoveredDupBtnId = (hit.isDupBtn && hit.image) ? hit.image.id : -1;
+  state.hoveredDlBtnId = (hit.isDlBtn && hit.image) ? hit.image.id : -1;
 
-  if (state.hoveredImageId !== prevHovered || state.hoveredCloseId !== prevClose || state.hoveredEditBtnId !== prevEditBtn || state.hoveredDupBtnId !== prevDupBtn) {
+  if (state.hoveredImageId !== prevHovered || state.hoveredCloseId !== prevClose || state.hoveredEditBtnId !== prevEditBtn || state.hoveredDupBtnId !== prevDupBtn || state.hoveredDlBtnId !== prevDlBtn) {
     recomputeAndRender();
   }
 
   if (hit.isEditBtn) { canvas.style.cursor = 'pointer'; canvas.title = '编辑'; }
   else if (hit.isDupBtn) { canvas.style.cursor = 'pointer'; canvas.title = '复制'; }
+  else if (hit.isDlBtn) { canvas.style.cursor = 'pointer'; canvas.title = '下载此图片'; }
   else if (hit.isCloseBtn) { canvas.style.cursor = 'pointer'; canvas.title = '删除'; }
   else if (hit.image) { canvas.style.cursor = 'grab'; canvas.title = ''; }
   else { canvas.style.cursor = 'default'; canvas.title = ''; }
@@ -2310,6 +2354,7 @@ canvas.addEventListener('mouseleave', () => {
     state.hoveredCloseId = -1;
     state.hoveredEditBtnId = -1;
     state.hoveredDupBtnId = -1;
+    state.hoveredDlBtnId = -1;
     recomputeAndRender();
   }
   canvas.style.cursor = 'default';
