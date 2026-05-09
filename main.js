@@ -1387,14 +1387,15 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
 // ========== 自动更新模块 ==========
 (async function initUpdater() {
   const btnCheck = document.getElementById('btn-check-update');
-  const statusEl = document.getElementById('update-status');
   const autoToggle = document.getElementById('auto-update-toggle');
-  if (!btnCheck || !statusEl || !autoToggle) return;
+  if (!btnCheck || !autoToggle) return;
 
   const isTauri = typeof window.__TAURI_INTERNALS__ !== 'undefined';
   if (!isTauri) return;
 
   btnCheck.disabled = false;
+
+  const origHTML = btnCheck.innerHTML;
 
   const AUTO_UPDATE_KEY = 'minimix-auto-update';
   const saved = localStorage.getItem(AUTO_UPDATE_KEY);
@@ -1406,44 +1407,38 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
   const { check } = await import('@tauri-apps/plugin-updater');
   const { relaunch } = await import('@tauri-apps/plugin-process');
 
-  function setStatus(text, className) {
-    statusEl.className = 'update-status' + (className ? ' ' + className : '');
-    statusEl.innerHTML = '';
-    if (typeof text === 'string') statusEl.textContent = text;
-  }
-
-  function clearStatus() {
-    statusEl.className = 'update-status';
-    statusEl.innerHTML = '';
-  }
-
-  function formatBytes(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  function resetBtn() {
+    btnCheck.className = 'btn btn-update-check';
+    btnCheck.disabled = false;
+    btnCheck.innerHTML = origHTML;
   }
 
   async function checkForUpdate({ silent = false } = {}) {
-    setStatus('正在检查更新...', 'checking');
+    btnCheck.classList.add('btn-checking');
+    btnCheck.disabled = true;
+    btnCheck.textContent = '检查中...';
+
     try {
       const update = await check();
       if (!update) {
-        if (!silent) setStatus('已是最新版本', 'up-to-date');
-        else clearStatus();
+        if (!silent) {
+          btnCheck.classList.remove('btn-checking');
+          btnCheck.classList.add('btn-up-to-date');
+          btnCheck.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg> 已是最新';
+          setTimeout(resetBtn, 2000);
+        } else {
+          resetBtn();
+        }
         return;
       }
 
-      setStatus('', 'update-available');
-      const textSpan = document.createElement('span');
-      textSpan.textContent = '发现新版本 v' + update.version;
-      statusEl.appendChild(textSpan);
+      // 发现新版本，按钮变为"立即更新"
+      btnCheck.classList.remove('btn-checking');
+      btnCheck.classList.add('btn-has-update');
+      btnCheck.disabled = false;
+      btnCheck.innerHTML = '<span class="update-ver-text">v' + update.version + '</span><span class="update-action-text">立即更新</span>';
 
-      const installBtn = document.createElement('button');
-      installBtn.className = 'btn-install-update';
-      installBtn.textContent = '立即安装';
-      statusEl.appendChild(installBtn);
-
-      // 启动时静默检查发现新版本，显示 toast
+      // 静默检查时显示 toast
       if (silent) {
         const toast = document.getElementById('update-toast');
         const toastText = document.getElementById('update-toast-text');
@@ -1461,23 +1456,12 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
         }
       }
 
-      installBtn.addEventListener('click', async () => {
-        installBtn.disabled = true;
-        installBtn.textContent = '下载中...';
-
-        const progressDiv = document.createElement('div');
-        progressDiv.className = 'update-progress';
-        const progressBar = document.createElement('div');
-        progressBar.className = 'update-progress-bar';
-        const progressFill = document.createElement('div');
-        progressFill.className = 'update-progress-bar-fill';
-        progressBar.appendChild(progressFill);
-        const progressText = document.createElement('div');
-        progressText.className = 'update-progress-text';
-        progressText.textContent = '准备下载...';
-        progressDiv.appendChild(progressBar);
-        progressDiv.appendChild(progressText);
-        statusEl.appendChild(progressDiv);
+      // 点击按钮开始下载安装
+      btnCheck.addEventListener('click', async function onInstall() {
+        btnCheck.classList.remove('btn-has-update');
+        btnCheck.classList.add('btn-downloading');
+        btnCheck.disabled = true;
+        btnCheck.textContent = '准备下载...';
 
         let downloaded = 0;
         let contentLength = 0;
@@ -1492,28 +1476,38 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
                 downloaded += event.data.chunkLength;
                 if (contentLength > 0) {
                   const pct = Math.round((downloaded / contentLength) * 100);
-                  progressFill.style.width = pct + '%';
-                  progressText.textContent = '正在下载 ' + pct + '% (' + formatBytes(downloaded) + ' / ' + formatBytes(contentLength) + ')';
+                  btnCheck.textContent = pct + '%';
                 } else {
-                  progressText.textContent = '正在下载... ' + formatBytes(downloaded);
+                  btnCheck.textContent = '下载中...';
                 }
                 break;
               case 'Finished':
-                progressFill.style.width = '100%';
-                progressText.textContent = '下载完成，正在安装...';
+                btnCheck.textContent = '安装中...';
                 break;
             }
           });
 
-          progressText.textContent = '安装完成，即将重启...';
+          btnCheck.textContent = '重启中...';
           await relaunch();
         } catch (e) {
-          setStatus('更新失败: ' + e.message, 'error');
+          btnCheck.classList.remove('btn-downloading');
+          btnCheck.classList.add('btn-error');
+          btnCheck.disabled = false;
+          btnCheck.textContent = '更新失败';
+          setTimeout(resetBtn, 3000);
         }
-      });
+      }, { once: true });
+
     } catch (e) {
-      if (!silent) setStatus('检查失败: ' + e.message, 'error');
-      else clearStatus();
+      if (!silent) {
+        btnCheck.classList.remove('btn-checking');
+        btnCheck.classList.add('btn-error');
+        btnCheck.disabled = false;
+        btnCheck.textContent = '检查失败';
+        setTimeout(resetBtn, 3000);
+      } else {
+        resetBtn();
+      }
     }
   }
 
