@@ -5,6 +5,8 @@
 
 import { ImageItem } from './image-item.js';
 import { UndoManager } from './undo-manager.js';
+import { createDefaultToolSettings, createAnnotation } from './annotation.js';
+import { createFloatingToolbar, closeSubmenu } from './floating-toolbar.js';
 import {
   computeLayout,
   computeGroupedLayout,
@@ -57,6 +59,12 @@ const state = {
   hoveredDupBtnId: -1,
   hoveredDlBtnId: -1,
   saveTargetImage: null,
+  // 标注
+  activeAnnotationTool: 'geometry',
+  toolSettings: createDefaultToolSettings(),
+  annotations: new Map(),  // Map<imageId, Annotation[]>
+  _annotationDrawing: null,
+  _erasing: false,
   // 全局比例
   globalRatioIndex: -1,
   autoCropNewImages: false,
@@ -545,6 +553,11 @@ function recomputeAndRender() {
   enforceCanvasRatio();
   state.lastLayoutResult = computeGroupedLayout(state.groups, imagePool, state.layoutMode);
   setLayoutResult(state.lastLayoutResult);
+  // Expose annotation data to stitch-engine (no module cycle)
+  window.__annotations = state.annotations;
+  window.__annotationDrawing = state._annotationDrawing;
+  window.__activeAnnotationTool = state.activeAnnotationTool;
+  window.__editModeImageId = state.editModeImageId;
   const result = renderPreview(canvas, state.lastLayoutResult, {
     hoveredCloseId: state.hoveredCloseId,
     hoveredImageId: state.hoveredImageId,
@@ -619,6 +632,7 @@ function pushUndo() {
     editModeImageId: state.editModeImageId,
     canvasRatioLocked: state.canvasRatioLocked,
     canvasRatioIndex: state.canvasRatioIndex,
+    annotations: structuredClone(Array.from(state.annotations.entries())),
   });
 }
 
@@ -964,6 +978,7 @@ function makeCurrentSnapshot() {
     editModeImageId: state.editModeImageId,
     canvasRatioLocked: state.canvasRatioLocked,
     canvasRatioIndex: state.canvasRatioIndex,
+    annotations: structuredClone(Array.from(state.annotations.entries())),
   };
 }
 
@@ -1011,6 +1026,8 @@ function restoreSnapshot(snapshot) {
       img.editState = null;
     }
   }
+  // 恢复标注
+  state.annotations = new Map(snapshot.annotations || []);
   // 仅在当前处于编辑模式时才恢复编辑模式状态
   if (state.editModeImageId !== -1) {
     state.editModeImageId = snapshot.editModeImageId ?? -1;
@@ -1573,9 +1590,41 @@ function enterEditMode(image) {
   layoutBtns.forEach(b => { b.disabled = true; b.classList.add('disabled'); });
   btnCanvasRatio.disabled = true;
   recomputeAndRender();
+  // 创建/显示浮动标注工具栏
+  if (!state.floatingToolbar) {
+    state.floatingToolbar = createFloatingToolbar(
+      document.body,
+      state.activeAnnotationTool,
+      () => state.toolSettings,
+      (tool) => {
+        state.activeAnnotationTool = tool;
+        closeSubmenu();
+      },
+      (tool, key, value) => {
+        state.toolSettings[tool][key] = value;
+      }
+    );
+  }
+  state.floatingToolbar.show();
+  // 将工具栏定位在编辑图片下方
+  const editedImg = imagePool.get(image.id);
+  if (editedImg && state.lastLayoutResult) {
+    const canvasRect = canvas.getBoundingClientRect();
+    const tbEl = document.getElementById('annotation-toolbar');
+    if (tbEl) {
+      state.floatingToolbar.setPosition(
+        canvasRect.left + editedImg.x + editedImg.renderWidth / 2 - 160,
+        canvasRect.top + editedImg.y + editedImg.renderHeight + 12
+      );
+    }
+  }
 }
 
 function exitEditMode() {
+  closeSubmenu();
+  if (state.floatingToolbar) {
+    state.floatingToolbar.hide();
+  }
   state.editModeImageId = -1;
   state.editAction = null;
   state.editActionStart = null;
@@ -1691,6 +1740,9 @@ canvas.addEventListener('mousedown', (e) => {
 
   // 编辑模式下的交互
   if (state.editModeImageId !== -1) {
+    // 检查点击是否在标注工具栏/子菜单上，如果是则跳过画布交互
+    const tbEl = document.getElementById('annotation-toolbar');
+    if (tbEl && tbEl.contains(e.target)) return;
     handleEditModeMouseDown(mx, my);
     return;
   }
@@ -1746,6 +1798,12 @@ function handleEditModeMouseDown(mx, my) {
   if (!img || !img.editState) return;
 
   const hit = hitTest(mx, my, state.images, state.editModeImageId, state.editModeImageId, state.layoutMode);
+
+  // 标注工具绘制：非按钮区域点击时进行标注绘制
+  if (!hit.isSaveBtn && !hit.isResetBtn && !hit.isRatioMenuItem && !hit.isRatioBtn && !hit.isCropEdge && !hit.isRotateBtn) {
+    handleAnnotationMouseDown(mx, my, img);
+    return;
+  }
 
   // 点击菜单外区域关闭比例菜单
   if (state.showRatioMenu && !hit.isRatioMenuItem && !hit.isRatioBtn) {
@@ -1856,6 +1914,241 @@ function handleEditModeMouseDown(mx, my) {
   }
 
   // 点击编辑图片区域外 → 不做任何操作
+}
+
+// ========== 标注绘制交互 ==========
+
+function isClickOnAnnotationUI(target) {
+  const tb = document.getElementById('annotation-toolbar');
+  return tb && tb.contains(target);
+}
+
+function handleAnnotationMouseDown(mx, my, editedImg) {
+  const tool = state.activeAnnotationTool;
+  const settings = state.toolSettings[tool];
+  const canvasRect = canvas.getBoundingClientRect();
+  const sf = getLayoutScale();
+
+  // Convert screen coords to image-local coords
+  const lx = (mx - canvasRect.left - sf * editedImg.x) / sf;
+  const ly = (my - canvasRect.top - sf * editedImg.y) / sf;
+
+  if (!state.annotations.has(editedImg.id)) {
+    state.annotations.set(editedImg.id, []);
+  }
+  const annots = state.annotations.get(editedImg.id);
+
+  switch (tool) {
+    case 'geometry': {
+      pushUndo();
+      state._annotationDrawing = {
+        startX: lx, startY: ly,
+        currentX: lx, currentY: ly,
+      };
+      break;
+    }
+    case 'pencil': {
+      pushUndo();
+      state._annotationDrawing = {
+        points: [{ x: lx, y: ly }],
+      };
+      break;
+    }
+    case 'arrow': {
+      pushUndo();
+      state._annotationDrawing = {
+        startX: lx, startY: ly,
+        currentX: lx, currentY: ly,
+      };
+      break;
+    }
+    case 'sequence': {
+      pushUndo();
+      const s = settings;
+      const annot = createAnnotation('sequence', {
+        x: lx, y: ly,
+        number: s.nextNumber,
+        numberStyle: s.numberStyle,
+        fontSize: s.fontSize,
+        color: s.color,
+      }, editedImg.id);
+      annots.push(annot);
+      s.nextNumber++;
+      break;
+    }
+    case 'text': {
+      const s = settings;
+      const text = prompt('输入文本:');
+      if (text) {
+        pushUndo();
+        const annot = createAnnotation('text', {
+          x: lx, y: ly,
+          text,
+          bold: s.bold,
+          italic: s.italic,
+          fontFamily: s.fontFamily,
+          fontSize: s.fontSize,
+          color: s.color,
+        }, editedImg.id);
+        annots.push(annot);
+      }
+      break;
+    }
+    case 'eraser': {
+      pushUndo();
+      state._erasing = true;
+      eraseAt(lx, ly, editedImg.id);
+      break;
+    }
+  }
+  recomputeAndRender();
+}
+
+function updateAnnotationDrawing(mx, my, editedImg) {
+  if (!state._annotationDrawing && !state._erasing) return;
+  const canvasRect = canvas.getBoundingClientRect();
+  const sf = getLayoutScale();
+  const lx = (mx - canvasRect.left - sf * editedImg.x) / sf;
+  const ly = (my - canvasRect.top - sf * editedImg.y) / sf;
+
+  const tool = state.activeAnnotationTool;
+  if (tool === 'geometry' || tool === 'arrow') {
+    state._annotationDrawing.currentX = lx;
+    state._annotationDrawing.currentY = ly;
+  } else if (tool === 'pencil') {
+    state._annotationDrawing.points.push({ x: lx, y: ly });
+  } else if (tool === 'eraser' && state._erasing) {
+    eraseAt(lx, ly, editedImg.id);
+  }
+  recomputeAndRender();
+}
+
+function finishAnnotationDrawing(editedImg) {
+  if (!state._annotationDrawing && !state._erasing) return;
+
+  if (state._erasing) {
+    state._erasing = false;
+    state._annotationDrawing = null;
+    recomputeAndRender();
+    return;
+  }
+
+  const tool = state.activeAnnotationTool;
+  const settings = state.toolSettings[tool];
+  const annots = state.annotations.get(editedImg.id);
+  if (!annots) { state._annotationDrawing = null; return; }
+
+  switch (tool) {
+    case 'geometry': {
+      const { startX, startY, currentX, currentY } = state._annotationDrawing;
+      const w = currentX - startX;
+      const h = currentY - startY;
+      if (Math.abs(w) > 2 && Math.abs(h) > 2) {
+        const shape = settings.shape === 'ellipse' ? 'ellipse' : 'rectangle';
+        const annot = createAnnotation(shape, {
+          x: Math.min(startX, currentX),
+          y: Math.min(startY, currentY),
+          width: Math.abs(w),
+          height: Math.abs(h),
+          lineStyle: settings.lineStyle,
+          lineWidth: settings.lineWidth,
+          color: settings.color,
+          fill: settings.fill,
+          cornerRadius: settings.shape !== 'ellipse' ? settings.cornerRadius : 0,
+        }, editedImg.id);
+        annots.push(annot);
+      }
+      break;
+    }
+    case 'pencil': {
+      const { points } = state._annotationDrawing;
+      if (points && points.length >= 2) {
+        const annot = createAnnotation('pencil', {
+          points,
+          lineStyle: settings.lineStyle,
+          lineWidth: settings.lineWidth,
+          color: settings.color,
+        }, editedImg.id);
+        annots.push(annot);
+      }
+      break;
+    }
+    case 'arrow': {
+      const { startX, startY, currentX, currentY } = state._annotationDrawing;
+      if (Math.abs(currentX - startX) > 2 || Math.abs(currentY - startY) > 2) {
+        const annot = createAnnotation('arrow', {
+          startPoint: { x: startX, y: startY },
+          endPoint: { x: currentX, y: currentY },
+          arrowStyle: settings.arrowStyle,
+          lineStyle: settings.lineStyle,
+          lineWidth: settings.lineWidth,
+          color: settings.color,
+        }, editedImg.id);
+        annots.push(annot);
+      }
+      break;
+    }
+  }
+
+  state._annotationDrawing = null;
+  recomputeAndRender();
+}
+
+function eraseAt(lx, ly, imageId) {
+  const annots = state.annotations.get(imageId);
+  if (!annots) return;
+  const eraserRadius = (state.toolSettings.eraser.lineWidth / 2);
+
+  for (let i = annots.length - 1; i >= 0; i--) {
+    if (annotationIntersectsPoint(annots[i], lx, ly, eraserRadius)) {
+      annots.splice(i, 1);
+    }
+  }
+}
+
+function annotationIntersectsPoint(annot, px, py, radius) {
+  const bbox = getAnnotationBBox(annot);
+  if (!bbox) return false;
+  const closestX = Math.max(bbox.x, Math.min(px, bbox.x + bbox.width));
+  const closestY = Math.max(bbox.y, Math.min(py, bbox.y + bbox.height));
+  const distX = px - closestX;
+  const distY = py - closestY;
+  return (distX * distX + distY * distY) < (radius * radius);
+}
+
+function getAnnotationBBox(annot) {
+  const p = annot.params;
+  switch (annot.type) {
+    case 'rectangle':
+    case 'ellipse':
+      return { x: p.x, y: p.y, width: p.width, height: p.height };
+    case 'arrow':
+      return {
+        x: Math.min(p.startPoint.x, p.endPoint.x) - 20,
+        y: Math.min(p.startPoint.y, p.endPoint.y) - 20,
+        width: Math.abs(p.endPoint.x - p.startPoint.x) + 40,
+        height: Math.abs(p.endPoint.y - p.startPoint.y) + 40,
+      };
+    case 'sequence': {
+      const r = Math.max(p.fontSize * 0.8, 16);
+      return { x: p.x, y: p.y, width: r * 2, height: r * 2 };
+    }
+    case 'text': {
+      const w = p.text.length * p.fontSize * 0.6;
+      return { x: p.x, y: p.y, width: w, height: p.fontSize * 1.2 };
+    }
+    case 'pencil': {
+      if (!p.points || p.points.length === 0) return null;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      p.points.forEach(pt => {
+        minX = Math.min(minX, pt.x); minY = Math.min(minY, pt.y);
+        maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y);
+      });
+      return { x: minX - 5, y: minY - 5, width: maxX - minX + 10, height: maxY - minY + 10 };
+    }
+    default:
+      return null;
+  }
 }
 
 // 拖拽过程中的 document 级别监听（防止鼠标移出 canvas）
@@ -2230,6 +2523,11 @@ function onEditModeMouseUp() {
 }
 
 document.addEventListener('mousemove', (e) => {
+  // 标注绘制中的鼠标移动
+  if (state.editModeImageId !== -1 && (state._annotationDrawing || state._erasing)) {
+    const editedImg = state.images.find(i => i.id === state.editModeImageId);
+    if (editedImg) updateAnnotationDrawing(e.clientX, e.clientY, editedImg);
+  }
   if (state.editModeImageId !== -1 && state.editAction) {
     onEditModeMouseMove(e);
     return;
@@ -2244,6 +2542,11 @@ document.addEventListener('mousemove', (e) => {
   }
 });
 document.addEventListener('mouseup', () => {
+  // 标注绘制结束
+  if (state.editModeImageId !== -1 && (state._annotationDrawing || state._erasing)) {
+    const editedImg = state.images.find(i => i.id === state.editModeImageId);
+    if (editedImg) finishAnnotationDrawing(editedImg);
+  }
   if (state.editModeImageId !== -1 && state.editAction) {
     onEditModeMouseUp();
     return;
@@ -2526,5 +2829,13 @@ async function initApp() {
   }
   recomputeAndRender();
 }
+
+document.addEventListener('annotation-clear-all', () => {
+  if (state.editModeImageId !== -1) {
+    pushUndo();
+    state.annotations.set(state.editModeImageId, []);
+    recomputeAndRender();
+  }
+});
 
 initApp();

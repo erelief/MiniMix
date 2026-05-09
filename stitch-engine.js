@@ -3,6 +3,8 @@
  * 仅负责：布局计算、Canvas 预览渲染、全分辨率导出
  */
 
+import { renderAnnotation } from './annotation.js';
+
 const MAX_PIXELS = 5120 * 5120;
 
 export const ASPECT_RATIOS = [
@@ -715,6 +717,24 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       drawEditedImage(ctx, img, scaleFactor);
     } else {
       ctx.drawImage(img.image, img.x, img.y, img.renderWidth, img.renderHeight);
+    }
+  }
+
+  // 绘制标注层
+  if (window.__editModeImageId !== -1 && window.__annotations) {
+    const annots = window.__annotations.get(window.__editModeImageId);
+    if (annots && annots.length > 0) {
+      ctx.save();
+      for (const a of annots) {
+        renderAnnotation(ctx, a);
+      }
+      ctx.restore();
+    }
+    // 绘制进行中的标注（几何图形/箭头/铅笔预览）
+    if (window.__annotationDrawing) {
+      ctx.save();
+      renderInProgressDrawing(ctx, window.__annotationDrawing, window.__activeAnnotationTool);
+      ctx.restore();
     }
   }
 
@@ -1507,6 +1527,48 @@ export function generateSingleImagePreviewDataURL(img, format = 'png', quality =
   const MAX_PREVIEW = 320;
   const scale = Math.min(MAX_PREVIEW / baseW, MAX_PREVIEW / baseH, 1);
   return exportSingleImage(img, format, quality, scale);
+}
+
+function renderInProgressDrawing(ctx, drawing, tool) {
+  if (!drawing) return;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 3]);
+  ctx.lineCap = 'round';
+
+  switch (tool) {
+    case 'geometry': {
+      const { startX, startY, currentX, currentY } = drawing;
+      ctx.strokeRect(
+        Math.min(startX, currentX),
+        Math.min(startY, currentY),
+        Math.abs(currentX - startX),
+        Math.abs(currentY - startY)
+      );
+      break;
+    }
+    case 'arrow': {
+      const { startX, startY, currentX, currentY } = drawing;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(currentX, currentY);
+      ctx.stroke();
+      break;
+    }
+    case 'pencil': {
+      const { points } = drawing;
+      if (points && points.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+  }
+  ctx.setLineDash([]);
 }
 
 export function formatFileSize(bytes) {
