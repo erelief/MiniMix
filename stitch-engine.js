@@ -1225,6 +1225,9 @@ function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgre
   ctx.restore();
 }
 
+const CLOSE_BTN_SIZE = 28;
+const CLOSE_BTN_PADDING = 4;
+
 function drawCloseButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
   const sf = scaleFactor * displayScale;
   const screenX = (img.x + img.renderWidth) * sf + gOx * displayScale - CLOSE_BTN_SIZE - CLOSE_BTN_PADDING;
