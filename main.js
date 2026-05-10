@@ -1591,9 +1591,10 @@ function enterEditMode(image) {
   btnCanvasRatio.disabled = true;
   recomputeAndRender();
   // 创建/显示浮动标注工具栏
+  const workspaceEl = document.getElementById('workspace');
   if (!state.floatingToolbar) {
     state.floatingToolbar = createFloatingToolbar(
-      document.body,
+      workspaceEl,
       state.activeAnnotationTool,
       () => state.toolSettings,
       (tool) => {
@@ -1606,17 +1607,16 @@ function enterEditMode(image) {
     );
   }
   state.floatingToolbar.show();
-  // 将工具栏定位在编辑图片下方
-  const editedImg = imagePool.get(image.id);
-  if (editedImg && state.lastLayoutResult) {
+  // 将工具栏定位在编辑图片下方（workspace 相对坐标）
+  if (state.lastLayoutResult) {
+    const sf = getLayoutScale();
     const canvasRect = canvas.getBoundingClientRect();
-    const tbEl = document.getElementById('annotation-toolbar');
-    if (tbEl) {
-      state.floatingToolbar.setPosition(
-        canvasRect.left + editedImg.x + editedImg.renderWidth / 2 - 160,
-        canvasRect.top + editedImg.y + editedImg.renderHeight + 12
-      );
-    }
+    const workspaceRect = workspaceEl.getBoundingClientRect();
+    const canvasOffX = canvasRect.left - workspaceRect.left;
+    const canvasOffY = canvasRect.top - workspaceRect.top;
+    const cx = canvasOffX + image.x * sf + image.renderWidth / 2 * sf;
+    const cy = canvasOffY + (image.y + image.renderHeight) * sf + 12;
+    state.floatingToolbar.setPosition(cx - 160, cy);
   }
 }
 
