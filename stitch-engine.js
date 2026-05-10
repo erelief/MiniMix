@@ -1181,48 +1181,47 @@ function drawEditedImage(ctx, img, scaleFactor) {
 }
 
 /**
- * 在图片上方绘制标注层，应用与 drawEditedImage 相同的编辑变换（裁切/旋转/缩放/平移）。
- * 有编辑状态时标注跟随图片内容变换；无编辑状态时仅按位置绘制。
+ * 在图片上方绘制标注层。
+ * 裁切到图片显示区域内，与图片同步缩放/旋转/平移。
  */
 function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgressTool) {
-  if (!img.editState) {
-    // 无编辑状态：直接在图片位置绘制
-    ctx.save();
-    ctx.translate(img.x, img.y);
-    for (const a of annotations) renderAnnotation(ctx, a);
-    ctx.restore();
-    return;
-  }
-
-  const es = img.editState;
-  const displayW = img.renderWidth;
-  const displayH = img.renderHeight;
-  const editScale = Math.max(displayW / es.cropWidth, displayH / es.cropHeight);
-  const absCos = Math.abs(Math.cos(es.rotation));
-  const absSin = Math.abs(Math.sin(es.rotation));
-  const baseFit = Math.max(
-    (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
-    (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
-  );
-  const effectiveScale = baseFit * Math.max(1.0, es.zoom);
-  const centerX = img.x + displayW / 2;
-  const centerY = img.y + displayH / 2;
-
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(img.x, img.y, displayW, displayH);
-  ctx.clip();
-  // 与 drawEditedImage 相同的编辑变换
-  ctx.translate(centerX, centerY);
-  ctx.scale(editScale, editScale);
-  ctx.translate(es.panX, es.panY);
-  ctx.scale(effectiveScale, effectiveScale);
-  ctx.rotate(es.rotation);
-  // 标注坐标相对图片左上角：偏移回 (-displayW/2, -displayH/2) 再除以 editScale
-  ctx.translate(-displayW / 2 / editScale, -displayH / 2 / editScale);
-  ctx.scale(1 / editScale, 1 / editScale);
-  for (const a of annotations) renderAnnotation(ctx, a);
-  if (inProgressDrawing) renderInProgressDrawing(ctx, inProgressDrawing, inProgressTool);
+  try {
+    ctx.beginPath();
+    ctx.rect(img.x, img.y, img.renderWidth, img.renderHeight);
+    ctx.clip();
+    ctx.translate(img.x, img.y);
+
+    if (img.editState) {
+      const es = img.editState;
+      const displayW = img.renderWidth;
+      const displayH = img.renderHeight;
+      const editScale = Math.max(displayW / es.cropWidth, displayH / es.cropHeight);
+      const absCos = Math.abs(Math.cos(es.rotation));
+      const absSin = Math.abs(Math.sin(es.rotation));
+      const baseFit = Math.max(
+        (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
+        (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
+      );
+      const effectiveScale = baseFit * Math.max(1.0, es.zoom);
+      const centerX = displayW / 2;
+      const centerY = displayH / 2;
+      ctx.translate(centerX, centerY);
+      ctx.scale(editScale, editScale);
+      ctx.translate(es.panX, es.panY);
+      ctx.scale(effectiveScale, effectiveScale);
+      ctx.rotate(es.rotation);
+      // 转换标注坐标：布局空间 → 编辑变换空间
+      const invEdit = 1 / editScale;
+      ctx.translate(-centerX * invEdit, -centerY * invEdit);
+      ctx.scale(invEdit, invEdit);
+    }
+
+    for (const a of annotations) renderAnnotation(ctx, a);
+    if (inProgressDrawing) renderInProgressDrawing(ctx, inProgressDrawing, inProgressTool);
+  } catch (e) {
+    console.warn('drawImageAnnotations error:', e);
+  }
   ctx.restore();
 }
 
