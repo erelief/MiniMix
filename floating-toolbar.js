@@ -1,6 +1,6 @@
 // floating-toolbar.js
 
-import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2, Circle, Bold, Italic } from 'lucide';
+import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2, Circle, Bold, Italic, ChevronUp, ChevronDown } from 'lucide';
 import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, COLOR_PRESETS } from './annotation.js';
 import { createSlider } from './slider-widget.js';
 
@@ -28,6 +28,7 @@ let toolbarEl = null;
 let submenuEl = null;
 let activeSubmenuTool = null;
 let sliderWidgets = {};
+let _inlineValueEls = {};
 let _activePopup = null;
 let _activePopupSlider = null;
 let isDragging = false;
@@ -75,23 +76,38 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (activeTool === tool) {
-        // Toggle submenu for active tool (scaling has no submenu)
-        if (tool !== 'scaling') toggleSubmenu(tool);
+        if (tool !== 'scaling' && tool !== 'eraser') toggleSubmenu(tool);
       } else {
         setActiveTool(tool);
-        // Auto-open submenu when switching tools (scaling has no submenu)
-        if (tool !== 'scaling') toggleSubmenu(tool);
+        if (tool !== 'scaling' && tool !== 'eraser') toggleSubmenu(tool);
       }
     });
     btnsContainer.appendChild(btn);
   });
 
   toolbarEl.appendChild(btnsContainer);
+
+  // 分隔符 + 一键清除按钮（紧挨删除按钮右侧）
+  const clearSep = document.createElement('span');
+  clearSep.className = 'annotation-toolbar-separator';
+  btnsContainer.appendChild(clearSep);
+
+  const clearAllBtn = document.createElement('button');
+  clearAllBtn.className = 'annotation-tool-btn annotation-clear-all-btn';
+  clearAllBtn.title = '一键清除';
+  clearAllBtn.innerHTML = '<i data-lucide="trash-2"></i>';
+  clearAllBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const event = new CustomEvent('annotation-clear-all');
+    document.dispatchEvent(event);
+  });
+  btnsContainer.appendChild(clearAllBtn);
+
   parent.appendChild(toolbarEl);
 
   // Initialize Lucide icons inside toolbar
   createIcons({
-    icons: { GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser },
+    icons: { GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2 },
     root: toolbarEl,
   });
 
@@ -255,9 +271,6 @@ function buildSubmenu(tool, settings) {
       break;
     case 'text':
       buildTextMenu(panel, settings, onChange);
-      break;
-    case 'eraser':
-      buildEraserMenu(panel, settings, onChange);
       break;
   }
 
@@ -652,6 +665,7 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
   });
 
   container.appendChild(valEl);
+  _inlineValueEls[toolKey + '_' + settingKey] = { el: valEl, label };
   return valEl;
 }
 
@@ -711,6 +725,165 @@ function addInlineColorTrigger(container, currentColor, onChange) {
   return dot;
 }
 
+function addInlineNumberSpinner(container, value, label, min, max, step, toolKey, settingKey, onChange) {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'annotation-inline-spinner';
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'annotation-inline-spinner-label';
+  labelEl.textContent = label;
+  wrapper.appendChild(labelEl);
+
+  const valEl = document.createElement('span');
+  valEl.className = 'annotation-inline-spinner-value';
+  valEl.textContent = value;
+  wrapper.appendChild(valEl);
+
+  const btns = document.createElement('span');
+  btns.className = 'annotation-inline-spinner-arrows';
+
+  const upBtn = document.createElement('button');
+  upBtn.className = 'annotation-inline-spinner-btn';
+  upBtn.innerHTML = '<i data-lucide="chevron-up"></i>';
+  upBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const cur = parseInt(valEl.textContent);
+    const next = Math.min(max, cur + step);
+    if (next !== cur) {
+      valEl.textContent = next;
+      onChange(toolKey, settingKey, next);
+    }
+  });
+  btns.appendChild(upBtn);
+
+  const downBtn = document.createElement('button');
+  downBtn.className = 'annotation-inline-spinner-btn';
+  downBtn.innerHTML = '<i data-lucide="chevron-down"></i>';
+  downBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const cur = parseInt(valEl.textContent);
+    const next = Math.max(min, cur - step);
+    if (next !== cur) {
+      valEl.textContent = next;
+      onChange(toolKey, settingKey, next);
+    }
+  });
+  btns.appendChild(downBtn);
+
+  wrapper.appendChild(btns);
+  container.appendChild(wrapper);
+
+  createIcons({ icons: { ChevronUp, ChevronDown }, root: wrapper });
+
+  _inlineValueEls[toolKey + '_' + settingKey] = { el: valEl, label: '' };
+  return wrapper;
+}
+
+// --- Shared preview generators ---
+
+function makeLineStylePreview(value) {
+  const cvs = document.createElement('canvas');
+  cvs.width = 40; cvs.height = 12;
+  const ctx = cvs.getContext('2d');
+  switch (value) {
+    case 'solid': ctx.setLineDash([]); break;
+    case 'dashed': ctx.setLineDash([8, 3]); break;
+    case 'dotted': ctx.setLineDash([2, 2]); break;
+    case 'dash-dot': ctx.setLineDash([6, 3, 2, 3]); break;
+    case 'dash-dot-dot': ctx.setLineDash([6, 3, 2, 3, 2, 3]); break;
+  }
+  ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(40, 6); ctx.stroke();
+  return cvs;
+}
+
+function makeArrowStylePreview(value) {
+  const cvs = document.createElement('canvas');
+  cvs.width = 40; cvs.height = 14;
+  const ctx = cvs.getContext('2d');
+  ctx.strokeStyle = '#ddd'; ctx.fillStyle = '#ddd'; ctx.lineWidth = 1.5;
+  ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+  const cx1 = 4, cy = 7, cx2 = 36;
+  ctx.beginPath(); ctx.moveTo(cx1, cy); ctx.lineTo(cx2, cy); ctx.stroke();
+  if (value === 'single' || value === 'double') {
+    ctx.beginPath(); ctx.moveTo(cx2, cy);
+    ctx.lineTo(cx2 - 6, cy - 3.5); ctx.lineTo(cx2 - 6, cy + 3.5);
+    ctx.closePath(); ctx.fill();
+  }
+  if (value === 'double') {
+    ctx.beginPath(); ctx.moveTo(cx1, cy);
+    ctx.lineTo(cx1 + 6, cy - 3.5); ctx.lineTo(cx1 + 6, cy + 3.5);
+    ctx.closePath(); ctx.fill();
+  }
+  if (value === 'line') {
+    const barH = 5;
+    ctx.beginPath(); ctx.moveTo(cx1, cy - barH / 2); ctx.lineTo(cx1, cy + barH / 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx2, cy - barH / 2); ctx.lineTo(cx2, cy + barH / 2); ctx.stroke();
+  }
+  return cvs;
+}
+
+function addInlineDropdown(container, { options, currentValue, makePreview, settingKey, onChange }) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'annotation-linestyle-select';
+
+  const trigger = document.createElement('button');
+  trigger.className = 'annotation-linestyle-trigger';
+
+  function updatePreview(value) {
+    trigger.innerHTML = '';
+    if (makePreview) {
+      trigger.appendChild(makePreview(value));
+    } else {
+      const opt = options.find(o => o.value === value);
+      trigger.textContent = opt ? opt.label : value;
+    }
+  }
+
+  updatePreview(currentValue);
+  wrapper.appendChild(trigger);
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'annotation-linestyle-dropdown';
+
+  options.forEach(opt => {
+    const item = document.createElement('div');
+    item.className = 'annotation-linestyle-option' + (opt.value === currentValue ? ' active' : '');
+    if (makePreview) {
+      item.appendChild(makePreview(opt.value));
+    } else {
+      item.textContent = opt.label;
+    }
+    item.title = opt.label;
+    item.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      onChange(activeSubmenuTool, settingKey, opt.value);
+      updatePreview(opt.value);
+      dropdown.querySelectorAll('.annotation-linestyle-option').forEach(o => o.classList.remove('active'));
+      item.classList.add('active');
+      closeAllCustomDropdowns();
+    });
+    dropdown.appendChild(item);
+  });
+  wrapper.appendChild(dropdown);
+
+  trigger.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    closeAllCustomDropdowns();
+    closeActivePopup();
+    const submenu = trigger.closest('.annotation-submenu');
+    dropdown.classList.toggle('pop-up', submenu && submenu.classList.contains('pop-up'));
+    dropdown.style.display = 'block';
+    dropdown.style.animation = dropdown.classList.contains('pop-up')
+      ? 'popupFadeInUp 0.1s ease-out'
+      : 'popupFadeIn 0.1s ease-out';
+    _openCustomDropdowns.push(dropdown);
+  });
+
+  wrapper.addEventListener('mousedown', (ev) => ev.stopPropagation());
+  container.appendChild(wrapper);
+}
+
 // --- Tool-specific submenu builders ---
 
 function buildGeometryMenu(panel, settings, onChange) {
@@ -760,76 +933,21 @@ function buildGeometryMenu(panel, settings, onChange) {
 
   addInlineSeparator(panel);
 
-  // Line style (compact dropdown, same logic as addLineStyleRow)
-  const lineWrapper = document.createElement('div');
-  lineWrapper.className = 'annotation-linestyle-select';
-
-  const lineTrigger = document.createElement('button');
-  lineTrigger.className = 'annotation-linestyle-trigger';
-
-  function makeLinePreview(value) {
-    const cvs = document.createElement('canvas');
-    cvs.width = 40; cvs.height = 12;
-    const ctx = cvs.getContext('2d');
-    switch (value) {
-      case 'solid': ctx.setLineDash([]); break;
-      case 'dashed': ctx.setLineDash([8, 3]); break;
-      case 'dotted': ctx.setLineDash([2, 2]); break;
-      case 'dash-dot': ctx.setLineDash([6, 3, 2, 3]); break;
-      case 'dash-dot-dot': ctx.setLineDash([6, 3, 2, 3, 2, 3]); break;
-    }
-    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(40, 6); ctx.stroke();
-    return cvs;
-  }
-
-  lineTrigger.appendChild(makeLinePreview(s.lineStyle));
-  lineWrapper.appendChild(lineTrigger);
-
-  const lineDropdown = document.createElement('div');
-  lineDropdown.className = 'annotation-linestyle-dropdown';
-  LINE_STYLES.forEach(ls => {
-    const item = document.createElement('div');
-    item.className = 'annotation-linestyle-option' + (ls.value === s.lineStyle ? ' active' : '');
-    item.appendChild(makeLinePreview(ls.value));
-    item.title = ls.label;
-    item.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      onChange('geometry', 'lineStyle', ls.value);
-      lineTrigger.innerHTML = '';
-      lineTrigger.appendChild(makeLinePreview(ls.value));
-      lineDropdown.querySelectorAll('.annotation-linestyle-option').forEach(o => o.classList.remove('active'));
-      item.classList.add('active');
-      closeAllCustomDropdowns();
-    });
-    lineDropdown.appendChild(item);
+  // Line style
+  addInlineDropdown(panel, {
+    options: LINE_STYLES,
+    currentValue: s.lineStyle,
+    makePreview: makeLineStylePreview,
+    settingKey: 'lineStyle',
+    onChange,
   });
-  lineWrapper.appendChild(lineDropdown);
-
-  lineTrigger.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    closeAllCustomDropdowns();
-    closeActivePopup();
-    // Follow submenu direction
-    const submenu = lineTrigger.closest('.annotation-submenu');
-    lineDropdown.classList.toggle('pop-up', submenu && submenu.classList.contains('pop-up'));
-    lineDropdown.style.display = 'block';
-    lineDropdown.style.animation = 'popupFadeIn 0.1s ease-out';
-    if (lineDropdown.classList.contains('pop-up')) {
-      lineDropdown.style.animation = 'popupFadeInUp 0.1s ease-out';
-    }
-    _openCustomDropdowns.push(lineDropdown);
-  });
-
-  lineWrapper.addEventListener('mousedown', (ev) => ev.stopPropagation());
-  panel.appendChild(lineWrapper);
 
   addInlineSeparator(panel);
 
-  // Line width → clickable value opens slider popup
+  // Line width
   addInlineSliderValue(panel, s.lineWidth, '线条粗细', 1, 75, 1, 'geometry', 'lineWidth', onChange);
 
-  // Corner radius → only for non-ellipse
+  // Corner radius (only for non-ellipse)
   if (s.shape !== 'ellipse') {
     addInlineSeparator(panel);
     addInlineSliderValue(panel, s.cornerRadius, '圆角角度', 0, 90, 1, 'geometry', 'cornerRadius', onChange);
@@ -837,52 +955,99 @@ function buildGeometryMenu(panel, settings, onChange) {
 
   addInlineSeparator(panel);
 
-  // Color → current-color dot, opens color picker popup
+  // Color
   addInlineColorTrigger(panel, s.color, onChange);
 }
 
 function buildPencilMenu(panel, settings, onChange) {
   const s = settings.pencil;
   if (!s) return;
-  addLineStyleRow(panel, s.lineStyle, onChange);
-  addSliderRow(panel, '线条粗细', 1, 75, s.lineWidth, 1, 'pencil', 'lineWidth', onChange);
-  addDivider(panel);
-  addColorRow(panel, s.color, onChange);
+
+  panel.classList.add('annotation-submenu-inline');
+
+  addInlineDropdown(panel, {
+    options: LINE_STYLES,
+    currentValue: s.lineStyle,
+    makePreview: makeLineStylePreview,
+    settingKey: 'lineStyle',
+    onChange,
+  });
+
+  addInlineSeparator(panel);
+
+  addInlineSliderValue(panel, s.lineWidth, '线条粗细', 1, 75, 1, 'pencil', 'lineWidth', onChange);
+
+  addInlineSeparator(panel);
+
+  addInlineColorTrigger(panel, s.color, onChange);
 }
 
 function buildArrowMenu(panel, settings, onChange) {
   const s = settings.arrow;
   if (!s) return;
-  addArrowStyleRow(panel, s.arrowStyle, onChange);
-  addLineStyleRow(panel, s.lineStyle, onChange);
-  addSliderRow(panel, '线条粗细', 1, 75, s.lineWidth, 1, 'arrow', 'lineWidth', onChange);
-  addDivider(panel);
-  addColorRow(panel, s.color, onChange);
+
+  panel.classList.add('annotation-submenu-inline');
+
+  addInlineDropdown(panel, {
+    options: ARROW_STYLES,
+    currentValue: s.arrowStyle,
+    makePreview: makeArrowStylePreview,
+    settingKey: 'arrowStyle',
+    onChange,
+  });
+
+  addInlineSeparator(panel);
+
+  addInlineDropdown(panel, {
+    options: LINE_STYLES,
+    currentValue: s.lineStyle,
+    makePreview: makeLineStylePreview,
+    settingKey: 'lineStyle',
+    onChange,
+  });
+
+  addInlineSeparator(panel);
+
+  addInlineSliderValue(panel, s.lineWidth, '线条粗细', 1, 75, 1, 'arrow', 'lineWidth', onChange);
+
+  addInlineSeparator(panel);
+
+  addInlineColorTrigger(panel, s.color, onChange);
 }
 
 function buildSequenceMenu(panel, settings, onChange) {
   const s = settings.sequence;
   if (!s) return;
-  addSliderRow(panel, '起始数字', 1, 9999, s.nextNumber, 1, 'sequence', 'nextNumber', onChange);
-  addSelectRow(panel, '样式', NUMBER_STYLES, s.numberStyle, 'sequence', 'numberStyle', onChange);
-  addSliderRow(panel, '字号', 5, 72, s.fontSize, 1, 'sequence', 'fontSize', onChange);
-  addDivider(panel);
-  addColorRow(panel, s.color, onChange);
+
+  panel.classList.add('annotation-submenu-inline');
+
+  addInlineNumberSpinner(panel, s.nextNumber, '起始', 0, 9999, 1, 'sequence', 'nextNumber', onChange);
+
+  addInlineSeparator(panel);
+
+  addInlineDropdown(panel, {
+    options: NUMBER_STYLES,
+    currentValue: s.numberStyle,
+    settingKey: 'numberStyle',
+    onChange,
+  });
+
+  addInlineSeparator(panel);
+
+  addInlineSliderValue(panel, s.fontSize, '字号', 5, 72, 1, 'sequence', 'fontSize', onChange);
+
+  addInlineSeparator(panel);
+
+  addInlineColorTrigger(panel, s.color, onChange);
 }
 
 function buildTextMenu(panel, settings, onChange) {
   const s = settings.text;
   if (!s) return;
 
-  // Bold + Italic row
-  const styleRow = document.createElement('div');
-  styleRow.className = 'annotation-submenu-row';
-  const styleLabel = document.createElement('span');
-  styleLabel.className = 'annotation-submenu-label';
-  styleLabel.textContent = '样式';
-  styleRow.appendChild(styleLabel);
-  const styleBtns = document.createElement('div');
-  styleBtns.className = 'annotation-style-btns';
+  panel.classList.add('annotation-submenu-inline');
+
+  // Bold + Italic
   const boldBtn = document.createElement('button');
   boldBtn.className = 'annotation-style-btn' + (s.bold ? ' active' : '');
   boldBtn.innerHTML = '<i data-lucide="bold"></i>';
@@ -892,6 +1057,8 @@ function buildTextMenu(panel, settings, onChange) {
     boldBtn.classList.toggle('active');
     onChange('text', 'bold', !s.bold);
   });
+  panel.appendChild(boldBtn);
+
   const italicBtn = document.createElement('button');
   italicBtn.className = 'annotation-style-btn' + (s.italic ? ' active' : '');
   italicBtn.innerHTML = '<i data-lucide="italic"></i>';
@@ -901,12 +1068,11 @@ function buildTextMenu(panel, settings, onChange) {
     italicBtn.classList.toggle('active');
     onChange('text', 'italic', !s.italic);
   });
-  styleBtns.appendChild(boldBtn);
-  styleBtns.appendChild(italicBtn);
-  styleRow.appendChild(styleBtns);
-  panel.appendChild(styleRow);
+  panel.appendChild(italicBtn);
 
   createIcons({ icons: { Bold, Italic }, root: panel });
+
+  addInlineSeparator(panel);
 
   // Font family
   const fonts = [
@@ -916,22 +1082,39 @@ function buildTextMenu(panel, settings, onChange) {
     { value: '"DengXian", "PingFang SC", "Noto Sans CJK SC", sans-serif', label: '黑体' },
     { value: '"SimSun", "Songti SC", "Noto Serif CJK SC", serif', label: '宋体' },
   ];
-  addSelectRow(panel, '字体', fonts, s.fontFamily, 'text', 'fontFamily', onChange);
-  addSliderRow(panel, '字号', 5, 72, s.fontSize, 1, 'text', 'fontSize', onChange);
-  addDivider(panel);
-  addColorRow(panel, s.color, onChange);
+  addInlineDropdown(panel, {
+    options: fonts,
+    currentValue: s.fontFamily,
+    settingKey: 'fontFamily',
+    onChange,
+  });
+
+  addInlineSeparator(panel);
+
+  addInlineSliderValue(panel, s.fontSize, '字号', 5, 72, 1, 'text', 'fontSize', onChange);
+
+  addInlineSeparator(panel);
+
+  addInlineColorTrigger(panel, s.color, onChange);
 }
 
 function buildEraserMenu(panel, settings, onChange) {
   const s = settings.eraser;
   if (!s) return;
 
+  panel.classList.add('annotation-submenu-inline');
+
   createIcons({ icons: { Trash2 }, root: panel });
 
-  addButtonRow(panel, '清除所有标记', '一键清除', () => {
+  const btn = document.createElement('button');
+  btn.className = 'annotation-submenu-btn';
+  btn.innerHTML = '<i data-lucide="trash-2"></i><span>一键清除</span>';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
     const event = new CustomEvent('annotation-clear-all');
     document.dispatchEvent(event);
-  }, '<i data-lucide="trash-2"></i>');
+  });
+  panel.appendChild(btn);
 }
 
 export { activeTool };
@@ -939,4 +1122,6 @@ export { activeTool };
 export function updateSliderValue(key, value) {
   const slider = sliderWidgets[key];
   if (slider) slider.setValue(value);
+  const inline = _inlineValueEls[key];
+  if (inline) inline.el.textContent = inline.label ? (inline.label + ' ' + value) : value;
 }

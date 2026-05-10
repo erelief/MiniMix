@@ -812,8 +812,9 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   if (editModeImageId !== -1) {
     const eImg = images.find(i => i.id === editModeImageId);
     if (eImg) {
-      drawEditModeButtons(ctx, eImg, hoveredSaveBtn, hoveredResetBtn, scaleFactor, displayScale, gOx, gOy);
+      drawEditModeButtons(ctx, eImg, hoveredSaveBtn, scaleFactor, displayScale, gOx, gOy);
       if (!window.__activeAnnotationTool || window.__activeAnnotationTool === 'scaling') {
+        drawResetButton(ctx, eImg, hoveredResetBtn, scaleFactor, displayScale, gOx, gOy);
         drawRatioButton(ctx, eImg, hoveredRatioBtn, scaleFactor, displayScale, gOx, gOy);
         drawRotateButton(ctx, eImg, hoveredRotateBtn, scaleFactor, displayScale, gOx, gOy);
         if (showRatioMenu) {
@@ -905,30 +906,11 @@ function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale, gOx =
 
 // ========== 编辑模式按钮（保存退出 + 复位） ==========
 
-function drawEditModeButtons(ctx, img, saveHovered, resetHovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+function drawEditModeButtons(ctx, img, saveHovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
   const sf = scaleFactor * displayScale;
   const screenY = img.y * sf + gOy * displayScale + EDIT_BTN_PADDING;
   const canvasSize = EDIT_BTN_SIZE / displayScale;
   const canvasY = screenY / displayScale;
-
-  // 复位按钮 — 左上角（原保存位置）
-  const resetScreenX = img.x * sf + gOx * displayScale + EDIT_BTN_PADDING;
-  img.resetBtnX = resetScreenX;
-  img.resetBtnY = screenY;
-  img.resetBtnSize = EDIT_BTN_SIZE;
-
-  const resetCanvasX = resetScreenX / displayScale;
-
-  ctx.save();
-  ctx.fillStyle = resetHovered ? 'rgba(233, 69, 96, 0.9)' : 'rgba(0, 0, 0, 0.45)';
-  ctx.beginPath();
-  ctx.roundRect(resetCanvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
-  ctx.fill();
-  drawSvgIcon(ctx, resetCanvasX, canvasY, canvasSize, displayScale,
-    'm2 9 3-3 3 3', 'M13 18H7a2 2 0 0 1-2-2V6',
-    'm22 15-3 3-3-3', 'M11 6h6a2 2 0 0 1 2 2v10'
-  );
-  ctx.restore();
 
   // 保存退出按钮 — 右上角（与删除按钮位置一致）
   const saveScreenX = (img.x + img.renderWidth) * sf + gOx * displayScale - EDIT_BTN_SIZE - CLOSE_BTN_PADDING;
@@ -945,6 +927,31 @@ function drawEditModeButtons(ctx, img, saveHovered, resetHovered, scaleFactor, d
   ctx.fill();
   drawSvgIcon(ctx, saveCanvasX, canvasY, canvasSize, displayScale,
     'm16 17 5-5-5-5', 'M21 12H9', 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'
+  );
+  ctx.restore();
+}
+
+function drawResetButton(ctx, img, resetHovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+  const sf = scaleFactor * displayScale;
+  const screenY = img.y * sf + gOy * displayScale + EDIT_BTN_PADDING;
+  const canvasSize = EDIT_BTN_SIZE / displayScale;
+  const canvasY = screenY / displayScale;
+
+  const resetScreenX = img.x * sf + gOx * displayScale + EDIT_BTN_PADDING;
+  img.resetBtnX = resetScreenX;
+  img.resetBtnY = screenY;
+  img.resetBtnSize = EDIT_BTN_SIZE;
+
+  const resetCanvasX = resetScreenX / displayScale;
+
+  ctx.save();
+  ctx.fillStyle = resetHovered ? 'rgba(233, 69, 96, 0.9)' : 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.roundRect(resetCanvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
+  ctx.fill();
+  drawSvgIcon(ctx, resetCanvasX, canvasY, canvasSize, displayScale,
+    'm2 9 3-3 3 3', 'M13 18H7a2 2 0 0 1-2-2V6',
+    'm22 15-3 3-3-3', 'M11 6h6a2 2 0 0 1 2 2v10'
   );
   ctx.restore();
 }

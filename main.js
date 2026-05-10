@@ -1621,6 +1621,7 @@ function enterEditMode(image) {
         state.activeAnnotationTool = tool;
         closeSubmenu();
         if (tool !== 'text') commitTextInput(true); // 切换工具时确认文本
+        recomputeAndRender();
       },
       (tool, key, value) => {
         state.toolSettings[tool][key] = value;
@@ -2275,7 +2276,6 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
     }
     case 'eraser': {
       pushUndo();
-      state._erasing = true;
       eraseAt(lx, ly, editedImg.id);
       break;
     }
@@ -2299,21 +2299,12 @@ function updateAnnotationDrawing(mx, my, editedImg) {
     state._annotationDrawing.currentY = ly;
   } else if (tool === 'pencil') {
     state._annotationDrawing.points.push({ x: lx, y: ly });
-  } else if (tool === 'eraser' && state._erasing) {
-    eraseAt(lx, ly, editedImg.id);
   }
   recomputeAndRender();
 }
 
 function finishAnnotationDrawing(editedImg) {
-  if (!state._annotationDrawing && !state._erasing) return;
-
-  if (state._erasing) {
-    state._erasing = false;
-    state._annotationDrawing = null;
-    recomputeAndRender();
-    return;
-  }
+  if (!state._annotationDrawing) return;
 
   const tool = state.activeAnnotationTool;
   const settings = state.toolSettings[tool];
@@ -2379,23 +2370,23 @@ function finishAnnotationDrawing(editedImg) {
 function eraseAt(lx, ly, imageId) {
   const annots = state.annotations.get(imageId);
   if (!annots) return;
-  const eraserRadius = 15;
 
+  // 删除最上层的一个标注（从后往前找，第一个即是最上层）
   for (let i = annots.length - 1; i >= 0; i--) {
-    if (annotationIntersectsPoint(annots[i], lx, ly, eraserRadius)) {
+    if (annotationIntersectsPoint(annots[i], lx, ly)) {
       annots.splice(i, 1);
+      break;
     }
   }
 }
 
-function annotationIntersectsPoint(annot, px, py, radius) {
+function annotationIntersectsPoint(annot, px, py) {
   const bbox = getAnnotationBBox(annot);
   if (!bbox) return false;
-  const closestX = Math.max(bbox.x, Math.min(px, bbox.x + bbox.width));
-  const closestY = Math.max(bbox.y, Math.min(py, bbox.y + bbox.height));
-  const distX = px - closestX;
-  const distY = py - closestY;
-  return (distX * distX + distY * distY) < (radius * radius);
+  // 点是否在 bbox 内（含少量容差）
+  const margin = 5;
+  return px >= bbox.x - margin && px <= bbox.x + bbox.width + margin &&
+         py >= bbox.y - margin && py <= bbox.y + bbox.height + margin;
 }
 
 function getAnnotationBBox(annot) {

@@ -1096,6 +1096,23 @@ body {
   background: var(--accent-hover);
 }
 
+.annotation-toolbar-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.annotation-clear-all-btn {
+  color: #e94560;
+}
+
+.annotation-clear-all-btn:hover {
+  background: rgba(233, 69, 96, 0.15);
+  color: #ff6b81;
+}
+
 /* --- Annotation Submenu --- */
 
 .annotation-submenu {
@@ -1194,9 +1211,13 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 4px;
   height: 24px;
-  width: 62px;
+  min-width: 62px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--text-primary);
   cursor: pointer;
   transition: border-color 0.15s;
+  white-space: nowrap;
 }
 
 .annotation-linestyle-trigger:hover {
@@ -1208,6 +1229,7 @@ body {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
+  min-width: 100%;
   background: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -1227,6 +1249,8 @@ body {
   padding: 4px 8px;
   border-radius: 3px;
   cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
   transition: background 0.12s;
 }
 
@@ -1458,6 +1482,58 @@ body {
 .annotation-popup-input::-webkit-inner-spin-button,
 .annotation-popup-input::-webkit-outer-spin-button {
   -webkit-appearance: none;
+}
+
+/* Inline number spinner */
+.annotation-inline-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.annotation-inline-spinner-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.annotation-inline-spinner-value {
+  font-size: 11px;
+  color: var(--text-primary);
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+}
+
+.annotation-inline-spinner-arrows {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.annotation-inline-spinner-btn {
+  width: 16px;
+  height: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.annotation-inline-spinner-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.annotation-inline-spinner-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .annotation-inline-color {
