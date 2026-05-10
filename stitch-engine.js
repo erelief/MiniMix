@@ -1181,6 +1181,30 @@ function drawEditedImage(ctx, img, scaleFactor) {
 }
 
 /**
+ * 如果图片渲染尺寸自标注创建以来发生了变化，按比例重新缩放所有标注坐标。
+ */
+function rescaleAnnotationsIfNeeded(annotations, img) {
+  const dims = window.__annotationDims && window.__annotationDims.get(img.id);
+  if (!dims || dims.rw === img.renderWidth && dims.rh === img.renderHeight) {
+    return annotations;
+  }
+  const sx = img.renderWidth / dims.rw;
+  const sy = img.renderHeight / dims.rh;
+  return annotations.map(a => {
+    const copy = { ...a, params: { ...a.params } };
+    const p = copy.params;
+    if (p.x != null) p.x *= sx;
+    if (p.y != null) p.y *= sy;
+    if (p.width != null) p.width *= sx;
+    if (p.height != null) p.height *= sy;
+    if (p.points) p.points = p.points.map(pt => ({ x: pt.x * sx, y: pt.y * sy }));
+    if (p.startPoint) p.startPoint = { x: p.startPoint.x * sx, y: p.startPoint.y * sy };
+    if (p.endPoint) p.endPoint = { x: p.endPoint.x * sx, y: p.endPoint.y * sy };
+    return copy;
+  });
+}
+
+/**
  * 在图片上方绘制标注层。
  * 裁切到图片显示区域内，与图片同步缩放/旋转/平移。
  */
@@ -1217,7 +1241,9 @@ function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgre
       ctx.scale(invEdit, invEdit);
     }
 
-    for (const a of annotations) renderAnnotation(ctx, a);
+    // Rescale annotations if image render dims changed since creation
+    const rescaledAnnots = rescaleAnnotationsIfNeeded(annotations, img);
+    for (const a of rescaledAnnots) renderAnnotation(ctx, a);
     if (inProgressDrawing) renderInProgressDrawing(ctx, inProgressDrawing, inProgressTool);
   } catch (e) {
     console.warn('drawImageAnnotations error:', e);

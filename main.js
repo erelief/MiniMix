@@ -63,6 +63,7 @@ const state = {
   activeAnnotationTool: 'scaling',
   toolSettings: createDefaultToolSettings(),
   annotations: new Map(),  // Map<imageId, Annotation[]>
+  _annotationDims: new Map(), // Map<imageId, {rw, rh}> at annotation creation time
   _annotationDrawing: null,
   _erasing: false,
   // 全局比例
@@ -555,6 +556,7 @@ function recomputeAndRender() {
   setLayoutResult(state.lastLayoutResult);
   // Expose annotation data to stitch-engine (no module cycle)
   window.__annotations = state.annotations;
+  window.__annotationDims = state._annotationDims;
   window.__annotationDrawing = state._annotationDrawing;
   window.__activeAnnotationTool = state.activeAnnotationTool;
   window.__editModeImageId = state.editModeImageId;
@@ -633,6 +635,7 @@ function pushUndo() {
     canvasRatioLocked: state.canvasRatioLocked,
     canvasRatioIndex: state.canvasRatioIndex,
     annotations: structuredClone(Array.from(state.annotations.entries())),
+    annotationDims: structuredClone(Array.from(state._annotationDims.entries())),
   });
 }
 
@@ -675,12 +678,21 @@ function duplicateImage(original) {
     dup.editState = { ...original.editState };
   }
   imagePool.set(dup.id, dup);
+  // 复制标注
+  const annots = state.annotations.get(original.id);
+  if (annots && annots.length > 0) {
+    state.annotations.set(dup.id, structuredClone(annots));
+  }
   for (const group of state.groups) {
     const idx = group.indexOf(original.id);
     if (idx !== -1) { group.splice(idx + 1, 0, dup.id); break; }
   }
   syncImagesFromGroups();
   recomputeAndRender();
+  // 布局计算后记录标注尺寸（renderWidth/renderHeight 此时已确定）
+  if (annots && annots.length > 0) {
+    recordAnnotationDims(dup.id, dup.renderWidth, dup.renderHeight);
+  }
 }
 
 // ========== 事件绑定 ==========
@@ -979,6 +991,7 @@ function makeCurrentSnapshot() {
     canvasRatioLocked: state.canvasRatioLocked,
     canvasRatioIndex: state.canvasRatioIndex,
     annotations: structuredClone(Array.from(state.annotations.entries())),
+    annotationDims: structuredClone(Array.from(state._annotationDims.entries())),
   };
 }
 
@@ -1028,6 +1041,7 @@ function restoreSnapshot(snapshot) {
   }
   // 恢复标注
   state.annotations = new Map(snapshot.annotations || []);
+  state._annotationDims = new Map(snapshot.annotationDims || []);
   // 仅在当前处于编辑模式时才恢复编辑模式状态
   if (state.editModeImageId !== -1) {
     state.editModeImageId = snapshot.editModeImageId ?? -1;
@@ -1933,14 +1947,21 @@ function isClickOnAnnotationUI(target) {
   return tb && tb.contains(target);
 }
 
+function recordAnnotationDims(imageId, rw, rh) {
+  state._annotationDims.set(imageId, { rw, rh });
+}
+
 function handleAnnotationMouseDown(mx, my, editedImg) {
   const tool = state.activeAnnotationTool;
   const settings = state.toolSettings[tool];
   const sf = getLayoutScale();
 
-  // Convert canvas-relative coords to image-local layout coords
+  // Convert canvas-relative coords → image-local layout coords (pixels)
   const lx = (mx - sf * editedImg.x) / sf;
   const ly = (my - sf * editedImg.y) / sf;
+
+  // Record image dims at annotation time for future rescaling
+  recordAnnotationDims(editedImg.id, editedImg.renderWidth, editedImg.renderHeight);
 
   if (!state.annotations.has(editedImg.id)) {
     state.annotations.set(editedImg.id, []);
@@ -2109,7 +2130,7 @@ function finishAnnotationDrawing(editedImg) {
 function eraseAt(lx, ly, imageId) {
   const annots = state.annotations.get(imageId);
   if (!annots) return;
-  const eraserRadius = (state.toolSettings.eraser.lineWidth / 2);
+  const eraserRadius = 15;
 
   for (let i = annots.length - 1; i >= 0; i--) {
     if (annotationIntersectsPoint(annots[i], lx, ly, eraserRadius)) {
