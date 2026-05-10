@@ -720,25 +720,19 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     }
   }
 
-  // 绘制标注层
-  if (window.__editModeImageId !== -1 && window.__annotations) {
-    const eImg = images.find(i => i.id === window.__editModeImageId);
-    if (eImg) {
-      const annots = window.__annotations.get(window.__editModeImageId);
+  // 绘制标注层（所有有标注的图片）
+  if (window.__annotations) {
+    for (const img of images) {
+      const annots = window.__annotations.get(img.id);
       if (annots && annots.length > 0) {
-        ctx.save();
-        ctx.translate(eImg.x, eImg.y);
-        for (const a of annots) {
-          renderAnnotation(ctx, a);
-        }
-        ctx.restore();
+        drawImageAnnotations(ctx, img, annots);
       }
-      // 绘制进行中的标注（几何图形/箭头/铅笔预览）
-      if (window.__annotationDrawing) {
-        ctx.save();
-        ctx.translate(eImg.x, eImg.y);
-        renderInProgressDrawing(ctx, window.__annotationDrawing, window.__activeAnnotationTool);
-        ctx.restore();
+    }
+    // 绘制进行中的标注（几何图形/箭头/铅笔预览）
+    if (window.__editModeImageId !== -1 && window.__annotationDrawing) {
+      const eImg = images.find(i => i.id === window.__editModeImageId);
+      if (eImg) {
+        drawImageAnnotations(ctx, eImg, [], window.__annotationDrawing, window.__activeAnnotationTool);
       }
     }
   }
@@ -1186,8 +1180,51 @@ function drawEditedImage(ctx, img, scaleFactor) {
   ctx.restore();
 }
 
-const CLOSE_BTN_SIZE = 28;
-const CLOSE_BTN_PADDING = 4;
+/**
+ * 在图片上方绘制标注层，应用与 drawEditedImage 相同的编辑变换（裁切/旋转/缩放/平移）。
+ * 有编辑状态时标注跟随图片内容变换；无编辑状态时仅按位置绘制。
+ */
+function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgressTool) {
+  if (!img.editState) {
+    // 无编辑状态：直接在图片位置绘制
+    ctx.save();
+    ctx.translate(img.x, img.y);
+    for (const a of annotations) renderAnnotation(ctx, a);
+    ctx.restore();
+    return;
+  }
+
+  const es = img.editState;
+  const displayW = img.renderWidth;
+  const displayH = img.renderHeight;
+  const editScale = Math.max(displayW / es.cropWidth, displayH / es.cropHeight);
+  const absCos = Math.abs(Math.cos(es.rotation));
+  const absSin = Math.abs(Math.sin(es.rotation));
+  const baseFit = Math.max(
+    (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
+    (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
+  );
+  const effectiveScale = baseFit * Math.max(1.0, es.zoom);
+  const centerX = img.x + displayW / 2;
+  const centerY = img.y + displayH / 2;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(img.x, img.y, displayW, displayH);
+  ctx.clip();
+  // 与 drawEditedImage 相同的编辑变换
+  ctx.translate(centerX, centerY);
+  ctx.scale(editScale, editScale);
+  ctx.translate(es.panX, es.panY);
+  ctx.scale(effectiveScale, effectiveScale);
+  ctx.rotate(es.rotation);
+  // 标注坐标相对图片左上角：偏移回 (-displayW/2, -displayH/2) 再除以 editScale
+  ctx.translate(-displayW / 2 / editScale, -displayH / 2 / editScale);
+  ctx.scale(1 / editScale, 1 / editScale);
+  for (const a of annotations) renderAnnotation(ctx, a);
+  if (inProgressDrawing) renderInProgressDrawing(ctx, inProgressDrawing, inProgressTool);
+  ctx.restore();
+}
 
 function drawCloseButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
   const sf = scaleFactor * displayScale;
@@ -1436,6 +1473,15 @@ export function renderFullResolution(layoutResult) {
       drawEditedImage(ctx, img, scaleFactor);
     } else {
       ctx.drawImage(img.image, img.x, img.y, img.renderWidth, img.renderHeight);
+    }
+  }
+  // 绘制标注层（导出时也包含标注）
+  if (window.__annotations) {
+    for (const img of images) {
+      const annots = window.__annotations.get(img.id);
+      if (annots && annots.length > 0) {
+        drawImageAnnotations(ctx, img, annots);
+      }
     }
   }
   return offscreen;
