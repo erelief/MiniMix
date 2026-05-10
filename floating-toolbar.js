@@ -1,6 +1,6 @@
 // floating-toolbar.js
 
-import { createIcons, GripVertical, Scale, Square, Pencil, ArrowRight, Hash, Type, Eraser, Circle, Bold, Italic } from 'lucide';
+import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Circle, Bold, Italic } from 'lucide';
 import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, COLOR_PRESETS } from './annotation.js';
 import { createSlider } from './slider-widget.js';
 
@@ -59,11 +59,13 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
   const btnsContainer = document.createElement('div');
   btnsContainer.className = 'annotation-toolbar-btns';
 
+  const SCALING_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M14 15H9v-5"/><path d="M16 3h5v5"/><path d="M21 3 9 15"/></svg>';
+
   TOOLS.forEach(tool => {
     const btn = document.createElement('button');
     btn.className = 'annotation-tool-btn';
     btn.title = TOOL_LABELS[tool];
-    btn.innerHTML = `<i data-lucide="${TOOL_ICON_NAMES[tool]}"></i>`;
+    btn.innerHTML = tool === 'scaling' ? SCALING_SVG : `<i data-lucide="${TOOL_ICON_NAMES[tool]}"></i>`;
     btn.dataset.tool = tool;
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -84,7 +86,7 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
 
   // Initialize Lucide icons inside toolbar
   createIcons({
-    icons: { GripVertical, Scale, Square, Pencil, ArrowRight, Hash, Type, Eraser },
+    icons: { GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser },
     root: toolbarEl,
   });
 

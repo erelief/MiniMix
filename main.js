@@ -1580,6 +1580,9 @@ function enterEditMode(image) {
   state.hoveredImageId = image.id;
   state.editAction = null;
   state.editActionStart = null;
+  // 进入编辑模式时始终回到 scaling 工具
+  state.activeAnnotationTool = 'scaling';
+  closeSubmenu();
   ratioDropdown.classList.remove('open');
   // 编辑模式下禁用除撤销/重做/信息外的所有工具栏按钮
   addImagesInput.disabled = true;
@@ -1607,6 +1610,7 @@ function enterEditMode(image) {
     );
   }
   state.floatingToolbar.show();
+  state.floatingToolbar.updateActiveTool('scaling');
   // 将工具栏定位在编辑图片内部靠近底部（workspace 相对坐标）
   if (state.lastLayoutResult) {
     const sf = getLayoutScale();
@@ -2600,12 +2604,16 @@ canvas.addEventListener('mousemove', (e) => {
     // 光标 & tooltip
     if (hit.isSaveBtn) { canvas.style.cursor = 'pointer'; canvas.title = '保存退出'; }
     else if (hit.isResetBtn) { canvas.style.cursor = 'pointer'; canvas.title = '复位'; }
-    else if (hit.isRatioBtn) { canvas.style.cursor = 'pointer'; canvas.title = '预设比例'; }
-    else if (hit.isRatioMenuItem) { canvas.style.cursor = 'pointer'; canvas.title = ''; }
-    else if (hit.isRotateBtn) { canvas.style.cursor = ROTATE_CURSOR; canvas.title = '按住旋转'; }
-    else if (hit.isCropEdge) { canvas.style.cursor = hit.cropEdgeAxis === 'width' ? 'ew-resize' : 'ns-resize'; canvas.title = ''; }
-    else if (hit.isImageBody && img && isPanAvailable(img)) { canvas.style.cursor = 'grab'; canvas.title = '平移'; }
-    else { canvas.style.cursor = 'default'; canvas.title = ''; }
+    else if (state.activeAnnotationTool === 'scaling') {
+      if (hit.isRatioBtn) { canvas.style.cursor = 'pointer'; canvas.title = '预设比例'; }
+      else if (hit.isRatioMenuItem) { canvas.style.cursor = 'pointer'; canvas.title = ''; }
+      else if (hit.isRotateBtn) { canvas.style.cursor = ROTATE_CURSOR; canvas.title = '按住旋转'; }
+      else if (hit.isCropEdge) { canvas.style.cursor = hit.cropEdgeAxis === 'width' ? 'ew-resize' : 'ns-resize'; canvas.title = ''; }
+      else if (hit.isImageBody && img && isPanAvailable(img)) { canvas.style.cursor = 'grab'; canvas.title = '平移'; }
+      else { canvas.style.cursor = 'default'; canvas.title = ''; }
+    } else {
+      canvas.style.cursor = 'default'; canvas.title = '';
+    }
     return;
   }
 
@@ -2639,6 +2647,7 @@ canvas.addEventListener('mousemove', (e) => {
 // 滚轮缩放（编辑模式）
 canvas.addEventListener('wheel', (e) => {
   if (state.editModeImageId === -1) return;
+  if (state.activeAnnotationTool !== 'scaling') return;
   const img = state.images.find(i => i.id === state.editModeImageId);
   if (!img || !img.editState) return;
   e.preventDefault();
