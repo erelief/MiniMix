@@ -73,7 +73,7 @@ export function createDefaultToolSettings() {
       bold: false,
       italic: false,
       fontFamily: 'sans-serif',
-      fontSize: 24,
+      fontSize: 48,
       color: '#FF0000',
     },
     eraser: {},

@@ -656,6 +656,8 @@ function buildTextMenu(panel, settings, onChange) {
     { value: 'sans-serif', label: 'Sans Serif' },
     { value: 'serif', label: 'Serif' },
     { value: 'monospace', label: 'Monospace' },
+    { value: '"DengXian", "PingFang SC", "Noto Sans CJK SC", sans-serif', label: '黑体' },
+    { value: '"SimSun", "Songti SC", "Noto Serif CJK SC", serif', label: '宋体' },
   ];
   addSelectRow(panel, '字体', fonts, s.fontFamily, 'text', 'fontFamily', onChange);
   addSliderRow(panel, '字号', 5, 72, s.fontSize, 1, 'text', 'fontSize', onChange);

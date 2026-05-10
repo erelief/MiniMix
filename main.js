@@ -66,6 +66,8 @@ const state = {
   _annotationDims: new Map(), // Map<imageId, {rw, rh}> at annotation creation time
   _annotationDrawing: null,
   _erasing: false,
+  _textAnnot: null,  // { x, y, imageId, annotId?, text, ...style } being edited
+  _hoveredTextAnnotId: null,
   // 全局比例
   globalRatioIndex: -1,
   autoCropNewImages: false,
@@ -560,6 +562,7 @@ function recomputeAndRender() {
   window.__annotationDrawing = state._annotationDrawing;
   window.__activeAnnotationTool = state.activeAnnotationTool;
   window.__editModeImageId = state.editModeImageId;
+  window.__editingTextAnnot = state._textAnnot;
   const result = renderPreview(canvas, state.lastLayoutResult, {
     hoveredCloseId: state.hoveredCloseId,
     hoveredImageId: state.hoveredImageId,
@@ -1617,9 +1620,26 @@ function enterEditMode(image) {
       (tool) => {
         state.activeAnnotationTool = tool;
         closeSubmenu();
+        if (tool !== 'text') commitTextInput(true); // 切换工具时确认文本
       },
       (tool, key, value) => {
         state.toolSettings[tool][key] = value;
+        // 编辑时实时更新 textarea 样式
+        if (_textInput && tool === 'text') {
+          const s = state.toolSettings.text;
+          let fs = '';
+          if (s.bold) fs += 'bold ';
+          if (s.italic) fs += 'italic ';
+          _textInput.style.font = `${fs}${s.fontSize * getLayoutScale()}px ${s.fontFamily}`;
+          _textInput.style.color = s.color;
+          _textInput.style.caretColor = s.color;
+          _textInput.style.minHeight = `${s.fontSize * getLayoutScale() * 1.2}px`;
+          // 重新触发自适应尺寸
+          _textInput.style.width = '1px';
+          _textInput.style.height = '1px';
+          _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
+          _textInput.style.height = _textInput.scrollHeight + 'px';
+        }
       }
     );
   }
@@ -1644,6 +1664,7 @@ function enterEditMode(image) {
 
 function exitEditMode() {
   closeSubmenu();
+  commitTextInput(true); // 确认正在编辑的文本
   if (state.floatingToolbar) {
     state.floatingToolbar.hide();
   }
@@ -1944,11 +1965,229 @@ function handleEditModeMouseDown(mx, my) {
 
 function isClickOnAnnotationUI(target) {
   const tb = document.getElementById('annotation-toolbar');
-  return tb && tb.contains(target);
+  if (tb && tb.contains(target)) return true;
+  if (_textWrapper && _textWrapper.contains(target)) return true;
+  return false;
 }
 
 function recordAnnotationDims(imageId, rw, rh) {
   state._annotationDims.set(imageId, { rw, rh });
+}
+
+// --- 画布上内联文本框（Photoshop 风格） ---
+
+let _textInput = null;    // textarea DOM element
+let _textAnnot = null;    // { x, y, imageId, annotId?, text, ...style }
+let _textWrapper = null;  // wrapper div (grip + textarea)
+let _textDragging = false;
+let _textDragOffX = 0, _textDragOffY = 0;
+
+const GRIP_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>';
+
+function createTextInput(x, y, imageId, existingAnnot) {
+  commitTextInput(true);
+
+  const s = state.toolSettings.text;
+  const sf = getLayoutScale();
+  const img = state.images.find(i => i.id === imageId);
+  if (!img) return;
+
+  const initialText = existingAnnot ? existingAnnot.params.text : '';
+  if (existingAnnot) {
+    s.bold = existingAnnot.params.bold;
+    s.italic = existingAnnot.params.italic;
+    s.fontSize = existingAnnot.params.fontSize;
+    s.color = existingAnnot.params.color;
+    existingAnnot._originalText = existingAnnot.params.text;
+    existingAnnot.params.text = '';
+  }
+
+  const canvasRect = canvas.getBoundingClientRect();
+  const workspaceRect = document.getElementById('workspace').getBoundingClientRect();
+  const canvasOffX = canvasRect.left - workspaceRect.left;
+  const canvasOffY = canvasRect.top - workspaceRect.top;
+
+  const sx = canvasOffX + sf * (img.x + x);
+  const sy = canvasOffY + sf * (img.y + y);
+
+  // Wrapper
+  const wrapper = document.createElement('div');
+  wrapper.className = 'annotation-text-wrapper';
+  wrapper.style.left = sx + 'px';
+  wrapper.style.top = sy + 'px';
+
+  // Grip handle
+  const grip = document.createElement('div');
+  grip.className = 'annotation-text-grip';
+  grip.innerHTML = GRIP_ICON;
+  grip.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    _textDragging = true;
+    const wr = wrapper.getBoundingClientRect();
+    _textDragOffX = e.clientX - wr.left;
+    _textDragOffY = e.clientY - wr.top;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const onMove = (ev) => {
+      if (!_textDragging || !_textWrapper) return;
+      const wsRect = document.getElementById('workspace').getBoundingClientRect();
+      _textWrapper.style.left = (ev.clientX - _textDragOffX - wsRect.left) + 'px';
+      _textWrapper.style.top = (ev.clientY - _textDragOffY - wsRect.top) + 'px';
+    };
+    const onUp = () => {
+      if (!_textDragging) return;
+      _textDragging = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      // Reverse-map new position back to image-local coords
+      if (_textWrapper && _textAnnot) {
+        const sf = getLayoutScale();
+        const wr = _textWrapper.getBoundingClientRect();
+        const wsRect = document.getElementById('workspace').getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        const img = state.images.find(i => i.id === _textAnnot.imageId);
+        if (img) {
+          _textAnnot.x = (wr.left - canvasRect.left) / sf - img.x;
+          _textAnnot.y = (wr.top - canvasRect.top) / sf - img.y;
+        }
+      }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  wrapper.appendChild(grip);
+
+  // Textarea
+  const ta = document.createElement('textarea');
+  ta.className = 'annotation-text-box';
+  ta.value = initialText;
+  ta.style.background = 'rgba(255, 255, 255, 0.08)';
+  ta.style.border = '1.5px dashed rgba(255, 255, 255, 0.6)';
+  ta.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.5)';
+  ta.style.outline = 'none';
+  ta.style.padding = '4px';
+  ta.style.margin = '-6px 0 0 0';
+  ta.style.minWidth = '80px';
+  ta.style.minHeight = `${s.fontSize * sf * 1.2}px`;
+  ta.style.overflow = 'hidden';
+  ta.style.resize = 'none';
+  ta.style.whiteSpace = 'pre';
+  ta.style.lineHeight = '1.2';
+  ta.style.caretColor = s.color;
+
+  let fontStyle = '';
+  if (s.bold) fontStyle += 'bold ';
+  if (s.italic) fontStyle += 'italic ';
+  ta.style.font = `${fontStyle}${s.fontSize * sf}px ${s.fontFamily}`;
+  ta.style.color = s.color;
+
+  wrapper.appendChild(ta);
+  document.getElementById('workspace').appendChild(wrapper);
+  _textInput = ta;
+  _textWrapper = wrapper;
+  _textAnnot = {
+    x, y, imageId,
+    annotId: existingAnnot ? existingAnnot.id : null,
+    bold: s.bold, italic: s.italic, fontSize: s.fontSize,
+    color: s.color, fontFamily: s.fontFamily,
+  };
+
+  setTimeout(() => {
+    ta.focus();
+    if (existingAnnot) {
+      ta.selectionStart = ta.selectionEnd = ta.value.length;
+    }
+  }, 0);
+
+  const autoSize = () => {
+    ta.style.width = '1px';
+    ta.style.height = '1px';
+    ta.style.width = (ta.scrollWidth + 4) + 'px';
+    ta.style.height = ta.scrollHeight + 'px';
+    // 同步 grip 高度
+    grip.style.height = ta.scrollHeight + 'px';
+  };
+  ta.addEventListener('input', autoSize);
+  autoSize();
+
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      commitTextInput(true);
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      commitTextInput(false);
+    }
+  });
+
+  recomputeAndRender();
+}
+
+function commitTextInput(save) {
+  if (!_textInput || !_textAnnot) return;
+
+  const text = _textInput.value;
+
+  const ea = _textAnnot;
+  const s = state.toolSettings.text;
+  const annots = state.annotations.get(ea.imageId) || [];
+
+  if (save) {
+    if (text.trim().length > 0) {
+      if (ea.annotId) {
+        const existing = annots.find(a => a.id === ea.annotId);
+        if (existing) {
+          pushUndo();
+          existing.params.text = text;
+          existing.params.bold = s.bold;
+          existing.params.italic = s.italic;
+          existing.params.fontSize = s.fontSize;
+          existing.params.color = s.color;
+          existing.params.fontFamily = s.fontFamily;
+          delete existing._originalText;
+        }
+      } else {
+        pushUndo();
+        if (!state.annotations.has(ea.imageId)) state.annotations.set(ea.imageId, []);
+        const annot = createAnnotation('text', {
+          x: ea.x, y: ea.y,
+          text,
+          bold: s.bold,
+          italic: s.italic,
+          fontFamily: s.fontFamily,
+          fontSize: s.fontSize,
+          color: s.color,
+        }, ea.imageId);
+        state.annotations.get(ea.imageId).push(annot);
+        const img = state.images.find(i => i.id === ea.imageId);
+        if (img) recordAnnotationDims(ea.imageId, img.renderWidth, img.renderHeight);
+      }
+    } else {
+      // 文字被删光 → 删除标注
+      if (ea.annotId) {
+        pushUndo();
+        const idx = annots.findIndex(a => a.id === ea.annotId);
+        if (idx !== -1) annots.splice(idx, 1);
+      }
+    }
+  } else {
+    // 取消编辑 → 恢复原文字
+    if (ea.annotId) {
+      const existing = annots.find(a => a.id === ea.annotId);
+      if (existing && existing._originalText !== undefined) {
+        existing.params.text = existing._originalText;
+        delete existing._originalText;
+      }
+    }
+  }
+
+  _textWrapper.remove();
+  _textInput = null;
+  _textWrapper = null;
+  _textAnnot = null;
+  recomputeAndRender();
 }
 
 function handleAnnotationMouseDown(mx, my, editedImg) {
@@ -2008,20 +2247,29 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
       break;
     }
     case 'text': {
-      const s = settings;
-      const text = prompt('输入文本:');
-      if (text) {
-        pushUndo();
-        const annot = createAnnotation('text', {
-          x: lx, y: ly,
-          text,
-          bold: s.bold,
-          italic: s.italic,
-          fontFamily: s.fontFamily,
-          fontSize: s.fontSize,
-          color: s.color,
-        }, editedImg.id);
-        annots.push(annot);
+      // 如果有正在编辑的文本，先确认保存
+      if (_textInput) {
+        commitTextInput(true);
+        // 继续往下执行，检测已有文本或新建
+      }
+
+      // 检测是否点击了已有文本 → 编辑模式
+      const imgAnnots = state.annotations.get(editedImg.id);
+      let hitExisting = null;
+      if (imgAnnots) {
+        for (const a of imgAnnots) {
+          if (a.type === 'text') {
+            const bbox = getAnnotationBBox(a);
+            if (bbox && lx >= bbox.x && lx <= bbox.x + bbox.width && ly >= bbox.y && ly <= bbox.y + bbox.height) {
+              hitExisting = a; break;
+            }
+          }
+        }
+      }
+      if (hitExisting) {
+        createTextInput(hitExisting.params.x, hitExisting.params.y, editedImg.id, hitExisting);
+      } else {
+        createTextInput(lx, ly, editedImg.id, null);
       }
       break;
     }
@@ -2633,6 +2881,25 @@ canvas.addEventListener('mousemove', (e) => {
       else if (hit.isCropEdge) { canvas.style.cursor = hit.cropEdgeAxis === 'width' ? 'ew-resize' : 'ns-resize'; canvas.title = ''; }
       else if (hit.isImageBody && img && isPanAvailable(img)) { canvas.style.cursor = 'grab'; canvas.title = '平移'; }
       else { canvas.style.cursor = 'default'; canvas.title = ''; }
+    } else if (state.activeAnnotationTool === 'text') {
+      // 检测是否悬停在已有文本上 → pointer；否则 I-beam
+      const sf = getLayoutScale();
+      const lx = (mx - sf * img.x) / sf;
+      const ly = (my - sf * img.y) / sf;
+      let overText = false;
+      const imgAnnots = state.annotations.get(img.id);
+      if (imgAnnots) {
+        for (const a of imgAnnots) {
+          if (a.type === 'text') {
+            const bbox = getAnnotationBBox(a);
+            if (bbox && lx >= bbox.x && lx <= bbox.x + bbox.width && ly >= bbox.y && ly <= bbox.y + bbox.height) {
+              overText = true; break;
+            }
+          }
+        }
+      }
+      canvas.style.cursor = overText ? 'pointer' : 'text';
+      canvas.title = overText ? '点击编辑文字' : '';
     } else {
       canvas.style.cursor = 'default'; canvas.title = '';
     }
@@ -2713,18 +2980,27 @@ window.addEventListener('blur', () => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.editModeImageId !== -1) {
-    e.preventDefault();
+    if (_textInput) { commitTextInput(false); return; } // 文本编辑中取消
     if (state.showRatioMenu) {
+      e.preventDefault();
       state.showRatioMenu = false;
       state.hoveredRatioIndex = -1;
       recomputeAndRender();
     } else {
+      e.preventDefault();
       exitEditMode();
     }
     return;
   }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); doUndo(); return; }
-  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); doRedo(); return; }
+  if (e.key === 'Enter' && _textInput) { commitTextInput(true); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+    e.preventDefault(); doUndo(); return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+    e.preventDefault(); doRedo(); return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
     if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
     if (state.editModeImageId !== -1) return;
