@@ -1607,16 +1607,20 @@ function enterEditMode(image) {
     );
   }
   state.floatingToolbar.show();
-  // 将工具栏定位在编辑图片下方（workspace 相对坐标）
+  // 将工具栏定位在编辑图片内部靠近底部（workspace 相对坐标）
   if (state.lastLayoutResult) {
     const sf = getLayoutScale();
     const canvasRect = canvas.getBoundingClientRect();
     const workspaceRect = workspaceEl.getBoundingClientRect();
     const canvasOffX = canvasRect.left - workspaceRect.left;
     const canvasOffY = canvasRect.top - workspaceRect.top;
-    const cx = canvasOffX + image.x * sf + image.renderWidth / 2 * sf;
-    const cy = canvasOffY + (image.y + image.renderHeight) * sf + 12;
-    state.floatingToolbar.setPosition(cx - 160, cy);
+    const imgLeft = canvasOffX + image.x * sf;
+    const imgTop = canvasOffY + image.y * sf;
+    const imgW = image.renderWidth * sf;
+    const imgH = image.renderHeight * sf;
+    const cx = imgLeft + imgW / 2;
+    const cy = imgTop + imgH - 50;
+    state.floatingToolbar.setPosition(cx - 160, Math.max(imgTop, cy));
   }
 }
 
