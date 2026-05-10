@@ -789,14 +789,17 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   }
 
   // 编辑模式按钮（保存+复位+旋转）
+  // 标注工具（非 scaling）下隐藏比例和旋转按钮，仅显示保存和复位
   if (editModeImageId !== -1) {
     const eImg = images.find(i => i.id === editModeImageId);
     if (eImg) {
       drawEditModeButtons(ctx, eImg, hoveredSaveBtn, hoveredResetBtn, scaleFactor, displayScale, gOx, gOy);
-      drawRatioButton(ctx, eImg, hoveredRatioBtn, scaleFactor, displayScale, gOx, gOy);
-      drawRotateButton(ctx, eImg, hoveredRotateBtn, scaleFactor, displayScale, gOx, gOy);
-      if (showRatioMenu) {
-        drawRatioMenu(ctx, eImg, hoveredRatioIndex, displayScale);
+      if (!window.__activeAnnotationTool || window.__activeAnnotationTool === 'scaling') {
+        drawRatioButton(ctx, eImg, hoveredRatioBtn, scaleFactor, displayScale, gOx, gOy);
+        drawRotateButton(ctx, eImg, hoveredRotateBtn, scaleFactor, displayScale, gOx, gOy);
+        if (showRatioMenu) {
+          drawRatioMenu(ctx, eImg, hoveredRatioIndex, displayScale);
+        }
       }
     }
   } else {

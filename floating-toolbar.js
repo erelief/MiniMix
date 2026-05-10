@@ -1,10 +1,11 @@
 // floating-toolbar.js
 
-import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Circle, Bold, Italic } from 'lucide';
+import { createIcons, GripVertical, Scale, Square, Pencil, ArrowRight, Hash, Type, Eraser, Circle, Bold, Italic } from 'lucide';
 import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, COLOR_PRESETS } from './annotation.js';
 import { createSlider } from './slider-widget.js';
 
 const TOOL_LABELS = {
+  scaling: '缩放',
   geometry: '几何图形',
   pencil: '铅笔',
   arrow: '箭头',
@@ -14,6 +15,7 @@ const TOOL_LABELS = {
 };
 
 const TOOL_ICON_NAMES = {
+  scaling: 'scale',
   geometry: 'square',
   pencil: 'pencil',
   arrow: 'arrow-right',
@@ -29,7 +31,7 @@ let sliderWidgets = {};
 let isDragging = false;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
-let activeTool = 'geometry';
+let activeTool = 'scaling';
 let onToolChangeCallback = null;
 let onToolSettingsChangeCallback = null;
 let getSettingsFn = null;
@@ -66,12 +68,12 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (activeTool === tool) {
-        // Toggle submenu for active tool
-        toggleSubmenu(tool);
+        // Toggle submenu for active tool (scaling has no submenu)
+        if (tool !== 'scaling') toggleSubmenu(tool);
       } else {
         setActiveTool(tool);
-        // Auto-open submenu when switching tools
-        toggleSubmenu(tool);
+        // Auto-open submenu when switching tools (scaling has no submenu)
+        if (tool !== 'scaling') toggleSubmenu(tool);
       }
     });
     btnsContainer.appendChild(btn);
@@ -82,7 +84,7 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
 
   // Initialize Lucide icons inside toolbar
   createIcons({
-    icons: { GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser },
+    icons: { GripVertical, Scale, Square, Pencil, ArrowRight, Hash, Type, Eraser },
     root: toolbarEl,
   });
 

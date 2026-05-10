@@ -60,7 +60,7 @@ const state = {
   hoveredDlBtnId: -1,
   saveTargetImage: null,
   // 标注
-  activeAnnotationTool: 'geometry',
+  activeAnnotationTool: 'scaling',
   toolSettings: createDefaultToolSettings(),
   annotations: new Map(),  // Map<imageId, Annotation[]>
   _annotationDrawing: null,
@@ -1803,12 +1803,6 @@ function handleEditModeMouseDown(mx, my) {
 
   const hit = hitTest(mx, my, state.images, state.editModeImageId, state.editModeImageId, state.layoutMode);
 
-  // 标注工具绘制：非按钮区域点击时进行标注绘制
-  if (!hit.isSaveBtn && !hit.isResetBtn && !hit.isRatioMenuItem && !hit.isRatioBtn && !hit.isCropEdge && !hit.isRotateBtn) {
-    handleAnnotationMouseDown(mx, my, img);
-    return;
-  }
-
   // 点击菜单外区域关闭比例菜单
   if (state.showRatioMenu && !hit.isRatioMenuItem && !hit.isRatioBtn) {
     state.showRatioMenu = false;
@@ -1816,6 +1810,7 @@ function handleEditModeMouseDown(mx, my) {
     recomputeAndRender();
   }
 
+  // 保存和复位按钮在两种模式下都有效
   if (hit.isSaveBtn) {
     exitEditMode();
     return;
@@ -1826,6 +1821,13 @@ function handleEditModeMouseDown(mx, my) {
     return;
   }
 
+  // 非 scaling 工具：标注绘制模式
+  if (state.activeAnnotationTool !== 'scaling') {
+    handleAnnotationMouseDown(mx, my, img);
+    return;
+  }
+
+  // 以下为 scaling 模式：原有的编辑操作（裁切/旋转/平移/比例）
   if (hit.isRatioMenuItem) {
     const entry = ASPECT_RATIOS[hit.ratioMenuIndex];
     state.showRatioMenu = false;

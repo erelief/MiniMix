@@ -7,7 +7,7 @@ export function resetAnnotationIdCounter() {
 }
 
 // --- Tool definitions ---
-export const TOOLS = ['geometry', 'pencil', 'arrow', 'sequence', 'text', 'eraser'];
+export const TOOLS = ['scaling', 'geometry', 'pencil', 'arrow', 'sequence', 'text', 'eraser'];
 
 // Line style options (5 common styles)
 export const LINE_STYLES = [
