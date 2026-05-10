@@ -1932,12 +1932,11 @@ function isClickOnAnnotationUI(target) {
 function handleAnnotationMouseDown(mx, my, editedImg) {
   const tool = state.activeAnnotationTool;
   const settings = state.toolSettings[tool];
-  const canvasRect = canvas.getBoundingClientRect();
   const sf = getLayoutScale();
 
-  // Convert screen coords to image-local coords
-  const lx = (mx - canvasRect.left - sf * editedImg.x) / sf;
-  const ly = (my - canvasRect.top - sf * editedImg.y) / sf;
+  // Convert canvas-relative coords to image-local layout coords
+  const lx = (mx - sf * editedImg.x) / sf;
+  const ly = (my - sf * editedImg.y) / sf;
 
   if (!state.annotations.has(editedImg.id)) {
     state.annotations.set(editedImg.id, []);
@@ -2014,8 +2013,11 @@ function updateAnnotationDrawing(mx, my, editedImg) {
   if (!state._annotationDrawing && !state._erasing) return;
   const canvasRect = canvas.getBoundingClientRect();
   const sf = getLayoutScale();
-  const lx = (mx - canvasRect.left - sf * editedImg.x) / sf;
-  const ly = (my - canvasRect.top - sf * editedImg.y) / sf;
+  // mx, my are window coords → convert to canvas-relative
+  const cx = mx - canvasRect.left;
+  const cy = my - canvasRect.top;
+  const lx = (cx - sf * editedImg.x) / sf;
+  const ly = (cy - sf * editedImg.y) / sf;
 
   const tool = state.activeAnnotationTool;
   if (tool === 'geometry' || tool === 'arrow') {

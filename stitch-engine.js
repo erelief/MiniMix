@@ -722,19 +722,24 @@ export function renderPreview(canvas, layoutResult, options = {}) {
 
   // 绘制标注层
   if (window.__editModeImageId !== -1 && window.__annotations) {
-    const annots = window.__annotations.get(window.__editModeImageId);
-    if (annots && annots.length > 0) {
-      ctx.save();
-      for (const a of annots) {
-        renderAnnotation(ctx, a);
+    const eImg = images.find(i => i.id === window.__editModeImageId);
+    if (eImg) {
+      const annots = window.__annotations.get(window.__editModeImageId);
+      if (annots && annots.length > 0) {
+        ctx.save();
+        ctx.translate(eImg.x, eImg.y);
+        for (const a of annots) {
+          renderAnnotation(ctx, a);
+        }
+        ctx.restore();
       }
-      ctx.restore();
-    }
-    // 绘制进行中的标注（几何图形/箭头/铅笔预览）
-    if (window.__annotationDrawing) {
-      ctx.save();
-      renderInProgressDrawing(ctx, window.__annotationDrawing, window.__activeAnnotationTool);
-      ctx.restore();
+      // 绘制进行中的标注（几何图形/箭头/铅笔预览）
+      if (window.__annotationDrawing) {
+        ctx.save();
+        ctx.translate(eImg.x, eImg.y);
+        renderInProgressDrawing(ctx, window.__annotationDrawing, window.__activeAnnotationTool);
+        ctx.restore();
+      }
     }
   }
 
