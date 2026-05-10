@@ -98,6 +98,9 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
   document.addEventListener('mousemove', onGripMouseMove);
   document.addEventListener('mouseup', onGripMouseUp);
 
+  // 全局点击关闭自定义下拉选单（线条样式、箭头样式等）
+  document.addEventListener('mousedown', () => closeAllCustomDropdowns());
+
   updateActiveToolUI();
 
   return {
@@ -278,6 +281,13 @@ function addColorRow(panel, currentColor, onChange) {
   panel.appendChild(row);
 }
 
+// 全局关闭所有自定义下拉选单
+let _openCustomDropdowns = [];
+function closeAllCustomDropdowns() {
+  _openCustomDropdowns.forEach(d => { if (d) d.style.display = 'none'; });
+  _openCustomDropdowns = [];
+}
+
 function addLineStyleRow(panel, currentStyle, onChange) {
   const row = document.createElement('div');
   row.className = 'annotation-submenu-row';
@@ -286,7 +296,6 @@ function addLineStyleRow(panel, currentStyle, onChange) {
   label.textContent = '线条样式';
   row.appendChild(label);
 
-  // 自定义下拉：选中项显示 canvas 预览，点击展开选项列表
   const wrapper = document.createElement('div');
   wrapper.className = 'annotation-linestyle-select';
 
@@ -326,7 +335,7 @@ function addLineStyleRow(panel, currentStyle, onChange) {
       trigger.appendChild(makePreview(ls.value));
       dropdown.querySelectorAll('.annotation-linestyle-option').forEach(o => o.classList.remove('active'));
       item.classList.add('active');
-      dropdown.style.display = 'none';
+      closeAllCustomDropdowns();
     });
     dropdown.appendChild(item);
   });
@@ -334,13 +343,92 @@ function addLineStyleRow(panel, currentStyle, onChange) {
 
   trigger.addEventListener('click', (e) => {
     e.stopPropagation();
-    dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+    closeAllCustomDropdowns();
+    dropdown.style.display = 'block';
+    _openCustomDropdowns.push(dropdown);
   });
 
-  const closeDrop = () => { dropdown.style.display = 'none'; };
   wrapper.addEventListener('mousedown', (e) => e.stopPropagation());
-  document.addEventListener('mousedown', closeDrop);
-  sliderWidgets['_ls_close_' + Date.now()] = { destroy: () => document.removeEventListener('mousedown', closeDrop) };
+
+  row.appendChild(wrapper);
+  panel.appendChild(row);
+}
+
+function addArrowStyleRow(panel, currentStyle, onChange) {
+  const row = document.createElement('div');
+  row.className = 'annotation-submenu-row';
+  const label = document.createElement('span');
+  label.className = 'annotation-submenu-label';
+  label.textContent = '箭头样式';
+  row.appendChild(label);
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'annotation-linestyle-select';
+
+  const trigger = document.createElement('button');
+  trigger.className = 'annotation-linestyle-trigger';
+
+  function makeArrowPreview(value) {
+    const cvs = document.createElement('canvas');
+    cvs.width = 48; cvs.height = 16;
+    const ctx = cvs.getContext('2d');
+    ctx.strokeStyle = '#ddd'; ctx.fillStyle = '#ddd'; ctx.lineWidth = 1.5;
+    ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+    const cx1 = 5, cy = 8, cx2 = 43;
+    // 先画线
+    ctx.beginPath(); ctx.moveTo(cx1, cy); ctx.lineTo(cx2, cy); ctx.stroke();
+    const barH = 5; // 竖线高度
+    if (value === 'single' || value === 'double') {
+      // 右端箭头
+      ctx.beginPath(); ctx.moveTo(cx2, cy);
+      ctx.lineTo(cx2 - 7, cy - 4); ctx.lineTo(cx2 - 7, cy + 4);
+      ctx.closePath(); ctx.fill();
+    }
+    if (value === 'double') {
+      // 左端箭头
+      ctx.beginPath(); ctx.moveTo(cx1, cy);
+      ctx.lineTo(cx1 + 7, cy - 4); ctx.lineTo(cx1 + 7, cy + 4);
+      ctx.closePath(); ctx.fill();
+    }
+    if (value === 'line') {
+      // 两端竖线 |——|
+      ctx.beginPath(); ctx.moveTo(cx1, cy - barH/2); ctx.lineTo(cx1, cy + barH/2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx2, cy - barH/2); ctx.lineTo(cx2, cy + barH/2); ctx.stroke();
+    }
+    return cvs;
+  }
+
+  trigger.appendChild(makeArrowPreview(currentStyle));
+  wrapper.appendChild(trigger);
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'annotation-linestyle-dropdown';
+  ARROW_STYLES.forEach(as => {
+    const item = document.createElement('div');
+    item.className = 'annotation-linestyle-option' + (as.value === currentStyle ? ' active' : '');
+    item.appendChild(makeArrowPreview(as.value));
+    item.title = as.label;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onChange(activeSubmenuTool, 'arrowStyle', as.value);
+      trigger.innerHTML = '';
+      trigger.appendChild(makeArrowPreview(as.value));
+      dropdown.querySelectorAll('.annotation-linestyle-option').forEach(o => o.classList.remove('active'));
+      item.classList.add('active');
+      closeAllCustomDropdowns();
+    });
+    dropdown.appendChild(item);
+  });
+  wrapper.appendChild(dropdown);
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllCustomDropdowns();
+    dropdown.style.display = 'block';
+    _openCustomDropdowns.push(dropdown);
+  });
+
+  wrapper.addEventListener('mousedown', (e) => e.stopPropagation());
 
   row.appendChild(wrapper);
   panel.appendChild(row);
@@ -508,7 +596,7 @@ function buildPencilMenu(panel, settings, onChange) {
 function buildArrowMenu(panel, settings, onChange) {
   const s = settings.arrow;
   if (!s) return;
-  addSelectRow(panel, '箭头样式', ARROW_STYLES, s.arrowStyle, 'arrow', 'arrowStyle', onChange);
+  addArrowStyleRow(panel, s.arrowStyle, onChange);
   addLineStyleRow(panel, s.lineStyle, onChange);
   addSliderRow(panel, '线条粗细', 1, 75, s.lineWidth, 1, 'arrow', 'lineWidth', onChange);
   addDivider(panel);

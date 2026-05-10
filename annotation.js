@@ -283,40 +283,59 @@ function drawArrowAnnotation(ctx, p) {
   ctx.lineWidth = p.lineWidth;
   ctx.lineCap = 'round';
 
-  const { startPoint, endPoint, arrowStyle, lineWidth } = p;
+  const { startPoint, endPoint, arrowStyle, lineWidth: lw } = p;
   const sx = startPoint.x, sy = startPoint.y;
   const ex = endPoint.x, ey = endPoint.y;
 
-  // Draw line
+  // Draw line（round cap 在非箭头端正常显示，箭头端被三角底边覆盖）
   ctx.beginPath();
   ctx.moveTo(sx, sy);
   ctx.lineTo(ex, ey);
   ctx.stroke();
 
-  const angle = Math.atan2(ey - sy, ex - sx);
-  const headLen = 12 + lineWidth * 2;
+  const angle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x);
+  const headLen = 12 + lw * 2;
 
-  if (arrowStyle === 'single' || arrowStyle === 'double') {
-    drawArrowHead(ctx, ex, ey, angle, headLen);
-  }
-  if (arrowStyle === 'double') {
-    drawArrowHead(ctx, sx, sy, angle + Math.PI, headLen);
+  if (arrowStyle === 'line') {
+    // 线段头 |——|：两端画短竖线，用原始端点
+    const perpX = Math.cos(angle + Math.PI / 2), perpY = Math.sin(angle + Math.PI / 2);
+    const barH = lw * 2.5;
+    ctx.beginPath();
+    ctx.moveTo(startPoint.x + perpX * barH / 2, startPoint.y + perpY * barH / 2);
+    ctx.lineTo(startPoint.x - perpX * barH / 2, startPoint.y - perpY * barH / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(endPoint.x + perpX * barH / 2, endPoint.y + perpY * barH / 2);
+    ctx.lineTo(endPoint.x - perpX * barH / 2, endPoint.y - perpY * barH / 2);
+    ctx.stroke();
+  } else {
+    if (arrowStyle === 'single' || arrowStyle === 'double') {
+      drawArrowHead(ctx, endPoint.x, endPoint.y, angle, headLen);
+    }
+    if (arrowStyle === 'double') {
+      drawArrowHead(ctx, startPoint.x, startPoint.y, angle + Math.PI, headLen);
+    }
   }
 
   ctx.setLineDash([]);
 }
 
 function drawArrowHead(ctx, x, y, angle, headLen) {
+  // 三角底边中心对准线段端点(x,y)，尖端向前延伸覆盖 round cap
+  // 保持原 30° 夹角形状：底边宽 = headLen, 底边到尖距离 = headLen * cos(30°)
+  const tipX = x + headLen * Math.cos(Math.PI / 6) * Math.cos(angle);
+  const tipY = y + headLen * Math.cos(Math.PI / 6) * Math.sin(angle);
+  const hw = headLen * Math.sin(Math.PI / 6); // 半底边宽
+  // 底边两端（垂直于方向）
+  const bx1 = x - hw * Math.sin(angle);
+  const by1 = y + hw * Math.cos(angle);
+  const bx2 = x + hw * Math.sin(angle);
+  const by2 = y - hw * Math.cos(angle);
+
   ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(
-    x - headLen * Math.cos(angle - Math.PI / 6),
-    y - headLen * Math.sin(angle - Math.PI / 6)
-  );
-  ctx.lineTo(
-    x - headLen * Math.cos(angle + Math.PI / 6),
-    y - headLen * Math.sin(angle + Math.PI / 6)
-  );
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(bx1, by1);
+  ctx.lineTo(bx2, by2);
   ctx.closePath();
   ctx.fill();
 }

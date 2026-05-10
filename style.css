@@ -1192,8 +1192,9 @@ body {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
-  padding: 2px 6px;
+  padding: 3px 8px;
   min-width: 70px;
+  height: 24px;
   cursor: pointer;
   transition: border-color 0.15s;
 }
