@@ -1189,12 +1189,12 @@ body {
 .annotation-linestyle-trigger {
   display: flex;
   align-items: center;
+  justify-content: center;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
-  padding: 3px 8px;
-  min-width: 70px;
   height: 24px;
+  width: 62px;
   cursor: pointer;
   transition: border-color 0.15s;
 }
@@ -1216,6 +1216,11 @@ body {
   padding: 3px;
   z-index: 200;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.annotation-linestyle-dropdown.pop-up {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .annotation-linestyle-option {
@@ -1398,6 +1403,161 @@ body {
 @keyframes submenuFadeInUp {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Inline horizontal submenu (compact single-row layout) --- */
+
+.annotation-submenu-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 10px;
+  flex-wrap: nowrap;
+  min-width: auto;
+}
+
+.annotation-inline-separator {
+  width: 1px;
+  height: 15px;
+  background: var(--border-color);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+.annotation-inline-value {
+  font-size: 11px;
+  color: var(--text-primary);
+  font-weight: 600;
+  min-width: 48px;
+  text-align: center;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 3px;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.annotation-inline-value:hover {
+  background: var(--bg-tertiary);
+}
+
+.annotation-popup-input {
+  cursor: text;
+  width: 48px;
+  text-align: center;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 11px;
+  -moz-appearance: textfield;
+}
+
+.annotation-popup-input::-webkit-inner-spin-button,
+.annotation-popup-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+.annotation-inline-color {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.annotation-inline-color:hover {
+  transform: scale(1.2);
+  border-color: var(--text-muted);
+}
+
+/* --- 3rd-level popup --- */
+
+.annotation-popup {
+  position: fixed;
+  z-index: 250;
+  background: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  padding: 8px 10px;
+  animation: popupFadeIn 0.1s ease-out;
+}
+
+.annotation-popup.pop-up {
+  animation: popupFadeInUp 0.1s ease-out;
+}
+
+@keyframes popupFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes popupFadeInUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Slider popup */
+.annotation-popup-slider {
+  min-width: 160px;
+  padding: 6px 10px;
+}
+
+.annotation-popup-slider .annotation-slider-container {
+  padding: 0;
+  margin: 0 4px;
+}
+
+/* Color picker popup */
+.annotation-popup-color {
+  padding: 6px 8px;
+}
+
+.annotation-popup-color .annotation-color-swatches {
+  display: flex;
+  gap: 5px;
+}
+
+.annotation-popup-color .annotation-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+}
+
+.annotation-popup-color .annotation-color-swatch:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.annotation-popup-color .annotation-color-swatch.active {
+  box-shadow: 0 0 0 2px var(--text-primary);
+}
+
+/* Compact fill checkbox inside inline submenu */
+.annotation-inline-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.annotation-inline-checkbox input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* --- Canvas text box (Photoshop-style) --- */

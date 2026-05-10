@@ -735,6 +735,26 @@ export function renderPreview(canvas, layoutResult, options = {}) {
         drawImageAnnotations(ctx, eImg, [], window.__annotationDrawing, window.__activeAnnotationTool);
       }
     }
+    // 正在编辑的文本用 textarea 显示（原生光标/选择/键盘行为），此处仅做 canvas 同步
+    if (window.__editingTextAnnot && window.__editingTextAnnot.text) {
+      const et = window.__editingTextAnnot;
+      // 当 textarea 存在时不画 canvas 文字，否则画（fallback）
+      if (!document.querySelector('.annotation-text-box')) {
+        const etImg = images.find(i => i.id === et.imageId);
+        if (etImg) {
+          drawImageAnnotations(ctx, etImg, [{
+            id: -1, type: 'text', imageId: et.imageId,
+            params: {
+              x: et.x, y: et.y,
+              text: et.text,
+              bold: et.bold || false, italic: et.italic || false,
+              fontFamily: et.fontFamily || 'sans-serif',
+              fontSize: et.fontSize || 24, color: et.color || '#FF0000',
+            },
+          }]);
+        }
+      }
+    }
   }
 
   // 恢复到画布像素空间
