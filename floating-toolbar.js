@@ -676,3 +676,8 @@ function buildEraserMenu(panel, settings, onChange) {
 }
 
 export { activeTool };
+
+export function updateSliderValue(key, value) {
+  const slider = sliderWidgets[key];
+  if (slider) slider.setValue(value);
+}

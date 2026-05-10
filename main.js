@@ -6,7 +6,7 @@
 import { ImageItem } from './image-item.js';
 import { UndoManager } from './undo-manager.js';
 import { createDefaultToolSettings, createAnnotation } from './annotation.js';
-import { createFloatingToolbar, closeSubmenu } from './floating-toolbar.js';
+import { createFloatingToolbar, closeSubmenu, updateSliderValue } from './floating-toolbar.js';
 import {
   computeLayout,
   computeGroupedLayout,
@@ -2004,6 +2004,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
       }, editedImg.id);
       annots.push(annot);
       s.nextNumber++;
+      updateSliderValue('sequence_nextNumber', s.nextNumber);
       break;
     }
     case 'text': {

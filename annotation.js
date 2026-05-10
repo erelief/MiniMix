@@ -28,11 +28,11 @@ export const ARROW_STYLES = [
 
 // Number style options
 export const NUMBER_STYLES = [
-  { value: 'arabic', label: '阿拉伯数字' },
-  { value: 'roman', label: '罗马数字' },
-  { value: 'alpha-upper', label: '大写字母' },
-  { value: 'alpha-lower', label: '小写字母' },
-  { value: 'chinese', label: '汉字数字' },
+  { value: 'arabic', label: '1, 2, 3 …' },
+  { value: 'roman', label: 'I, II, III …' },
+  { value: 'alpha-upper', label: 'A, B, C …' },
+  { value: 'alpha-lower', label: 'a, b, c …' },
+  { value: 'chinese', label: '一, 二, 三 …' },
 ];
 
 // 9 color presets: 7 rainbow + black + white
@@ -66,7 +66,7 @@ export function createDefaultToolSettings() {
     sequence: {
       nextNumber: 1,
       numberStyle: 'arabic',
-      fontSize: 24,
+      fontSize: 40,
       color: '#FF0000',
     },
     text: {
@@ -351,7 +351,7 @@ function drawSequenceAnnotation(ctx, p) {
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = Math.max(fontSize * 0.1, 2);
   ctx.stroke();
 
   // Draw number inside
