@@ -1,6 +1,6 @@
 // floating-toolbar.js
 
-import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Circle, Bold, Italic } from 'lucide';
+import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2, Circle, Bold, Italic } from 'lucide';
 import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, COLOR_PRESETS } from './annotation.js';
 import { createSlider } from './slider-widget.js';
 
@@ -11,7 +11,7 @@ const TOOL_LABELS = {
   arrow: '箭头',
   sequence: '序列号',
   text: '文本',
-  eraser: '橡皮擦',
+  eraser: '删除',
 };
 
 const TOOL_ICON_NAMES = {
@@ -60,12 +60,15 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
   btnsContainer.className = 'annotation-toolbar-btns';
 
   const SCALING_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M14 15H9v-5"/><path d="M16 3h5v5"/><path d="M21 3 9 15"/></svg>';
+  const DELETE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5a2 2 0 0 0-1.344.519l-6.328 5.74a1 1 0 0 0 0 1.481l6.328 5.741A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><path d="m12 9 6 6"/><path d="m18 9-6 6"/></svg>';
 
   TOOLS.forEach(tool => {
     const btn = document.createElement('button');
     btn.className = 'annotation-tool-btn';
     btn.title = TOOL_LABELS[tool];
-    btn.innerHTML = tool === 'scaling' ? SCALING_SVG : `<i data-lucide="${TOOL_ICON_NAMES[tool]}"></i>`;
+    if (tool === 'scaling') btn.innerHTML = SCALING_SVG;
+    else if (tool === 'eraser') btn.innerHTML = DELETE_SVG;
+    else btn.innerHTML = `<i data-lucide="${TOOL_ICON_NAMES[tool]}"></i>`;
     btn.dataset.tool = tool;
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -183,6 +186,15 @@ function toggleSubmenu(tool) {
   activeSubmenuTool = tool;
   const settings = getSettingsFn ? getSettingsFn() : {};
   submenuEl = buildSubmenu(tool, settings);
+
+  // 工具栏在 UI 下半部分时，子菜单向上弹出
+  const parentRect = toolbarEl.parentElement.getBoundingClientRect();
+  const toolbarRect = toolbarEl.getBoundingClientRect();
+  const toolbarCenterY = toolbarRect.top + toolbarRect.height / 2 - parentRect.top;
+  if (toolbarCenterY > parentRect.height / 2) {
+    submenuEl.classList.add('pop-up');
+  }
+
   toolbarEl.appendChild(submenuEl);
 }
 
@@ -361,7 +373,7 @@ function addSelectRow(panel, label, options, currentValue, toolKey, settingKey, 
   panel.appendChild(row);
 }
 
-function addButtonRow(panel, label, btnLabel, onClick) {
+function addButtonRow(panel, label, btnLabel, onClick, iconHtml) {
   const row = document.createElement('div');
   row.className = 'annotation-submenu-row';
   const labelEl = document.createElement('span');
@@ -371,7 +383,8 @@ function addButtonRow(panel, label, btnLabel, onClick) {
 
   const btn = document.createElement('button');
   btn.className = 'annotation-submenu-btn';
-  btn.textContent = btnLabel;
+  if (iconHtml) btn.innerHTML = iconHtml + '<span>' + btnLabel + '</span>';
+  else btn.textContent = btnLabel;
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     onClick();
@@ -519,12 +532,13 @@ function buildTextMenu(panel, settings, onChange) {
 function buildEraserMenu(panel, settings, onChange) {
   const s = settings.eraser;
   if (!s) return;
-  addSliderRow(panel, '线条粗细', 5, 100, s.lineWidth, 1, 'eraser', 'lineWidth', onChange);
-  addDivider(panel);
+
+  createIcons({ icons: { Trash2 }, root: panel });
+
   addButtonRow(panel, '清除所有标记', '一键清除', () => {
     const event = new CustomEvent('annotation-clear-all');
     document.dispatchEvent(event);
-  });
+  }, '<i data-lucide="trash-2"></i>');
 }
 
 export { activeTool };
