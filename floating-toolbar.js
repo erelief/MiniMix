@@ -286,17 +286,63 @@ function addLineStyleRow(panel, currentStyle, onChange) {
   label.textContent = '线条样式';
   row.appendChild(label);
 
-  const select = document.createElement('select');
-  select.className = 'annotation-submenu-select';
+  // 自定义下拉：选中项显示 canvas 预览，点击展开选项列表
+  const wrapper = document.createElement('div');
+  wrapper.className = 'annotation-linestyle-select';
+
+  const trigger = document.createElement('button');
+  trigger.className = 'annotation-linestyle-trigger';
+
+  function makePreview(value) {
+    const cvs = document.createElement('canvas');
+    cvs.width = 48; cvs.height = 14;
+    const ctx = cvs.getContext('2d');
+    switch (value) {
+      case 'solid': ctx.setLineDash([]); break;
+      case 'dashed': ctx.setLineDash([10, 4]); break;
+      case 'dotted': ctx.setLineDash([2, 3]); break;
+      case 'dash-dot': ctx.setLineDash([8, 3, 2, 3]); break;
+      case 'dash-dot-dot': ctx.setLineDash([8, 3, 2, 3, 2, 3]); break;
+    }
+    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 7); ctx.lineTo(48, 7); ctx.stroke();
+    return cvs;
+  }
+
+  trigger.appendChild(makePreview(currentStyle));
+  wrapper.appendChild(trigger);
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'annotation-linestyle-dropdown';
   LINE_STYLES.forEach(ls => {
-    const opt = document.createElement('option');
-    opt.value = ls.value;
-    opt.textContent = ls.label;
-    if (ls.value === currentStyle) opt.selected = true;
-    select.appendChild(opt);
+    const item = document.createElement('div');
+    item.className = 'annotation-linestyle-option' + (ls.value === currentStyle ? ' active' : '');
+    item.appendChild(makePreview(ls.value));
+    item.title = ls.label;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onChange(activeSubmenuTool, 'lineStyle', ls.value);
+      trigger.innerHTML = '';
+      trigger.appendChild(makePreview(ls.value));
+      dropdown.querySelectorAll('.annotation-linestyle-option').forEach(o => o.classList.remove('active'));
+      item.classList.add('active');
+      dropdown.style.display = 'none';
+    });
+    dropdown.appendChild(item);
   });
-  select.addEventListener('change', () => onChange(activeSubmenuTool, 'lineStyle', select.value));
-  row.appendChild(select);
+  wrapper.appendChild(dropdown);
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+  });
+
+  const closeDrop = () => { dropdown.style.display = 'none'; };
+  wrapper.addEventListener('mousedown', (e) => e.stopPropagation());
+  document.addEventListener('mousedown', closeDrop);
+  sliderWidgets['_ls_close_' + Date.now()] = { destroy: () => document.removeEventListener('mousedown', closeDrop) };
+
+  row.appendChild(wrapper);
   panel.appendChild(row);
 }
 

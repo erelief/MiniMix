@@ -107,22 +107,27 @@ export function createAnnotation(type, params, imageId) {
 /**
  * Apply line style (dash pattern) to a canvas context.
  */
-export function applyLineStyle(ctx, lineStyle) {
+export function applyLineStyle(ctx, lineStyle, lineWidth) {
+  const lw = lineWidth || 1;
+  // 用 sqrt 缩放：lw=1→1, lw=10→~3.2, lw=30→~5.5，不会过度放大
+  const s = Math.sqrt(lw);
+  // 点线的 dot 长度不超过 lineWidth，配合 round cap 保持圆形
+  const dotLen = Math.min(3 * s, lw);
   switch (lineStyle) {
     case 'solid':
       ctx.setLineDash([]);
       break;
     case 'dashed':
-      ctx.setLineDash([12, 6]);
+      ctx.setLineDash([12 * s, 6 * s]);
       break;
     case 'dotted':
-      ctx.setLineDash([3, 6]);
+      ctx.setLineDash([dotLen, 6 * s]);
       break;
     case 'dash-dot':
-      ctx.setLineDash([12, 4, 3, 4]);
+      ctx.setLineDash([12 * s, 4 * s, Math.min(3 * s, lw), 4 * s]);
       break;
     case 'dash-dot-dot':
-      ctx.setLineDash([12, 4, 3, 4, 3, 4]);
+      ctx.setLineDash([12 * s, 4 * s, Math.min(3 * s, lw), 4 * s, Math.min(3 * s, lw), 4 * s]);
       break;
     default:
       ctx.setLineDash([]);
@@ -219,7 +224,8 @@ export function renderAnnotation(ctx, annotation) {
 }
 
 function drawRectangleAnnotation(ctx, p) {
-  applyLineStyle(ctx, p.lineStyle);
+  ctx.lineCap = 'round';
+  applyLineStyle(ctx, p.lineStyle, p.lineWidth);
   ctx.strokeStyle = p.color;
   ctx.lineWidth = p.lineWidth;
   if (p.fill) {
@@ -239,7 +245,8 @@ function drawRectangleAnnotation(ctx, p) {
 }
 
 function drawEllipseAnnotation(ctx, p) {
-  applyLineStyle(ctx, p.lineStyle);
+  ctx.lineCap = 'round';
+  applyLineStyle(ctx, p.lineStyle, p.lineWidth);
   ctx.strokeStyle = p.color;
   ctx.lineWidth = p.lineWidth;
   if (p.fill) {
@@ -255,7 +262,7 @@ function drawEllipseAnnotation(ctx, p) {
 
 function drawPencilAnnotation(ctx, p) {
   if (!p.points || p.points.length < 2) return;
-  applyLineStyle(ctx, p.lineStyle);
+  applyLineStyle(ctx, p.lineStyle, p.lineWidth);
   ctx.strokeStyle = p.color;
   ctx.lineWidth = p.lineWidth;
   ctx.lineCap = 'round';
@@ -270,7 +277,7 @@ function drawPencilAnnotation(ctx, p) {
 }
 
 function drawArrowAnnotation(ctx, p) {
-  applyLineStyle(ctx, p.lineStyle);
+  applyLineStyle(ctx, p.lineStyle, p.lineWidth);
   ctx.strokeStyle = p.color;
   ctx.fillStyle = p.color;
   ctx.lineWidth = p.lineWidth;
