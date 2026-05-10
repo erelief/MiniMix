@@ -694,7 +694,7 @@ function duplicateImage(original) {
   recomputeAndRender();
   // 布局计算后记录标注尺寸（renderWidth/renderHeight 此时已确定）
   if (annots && annots.length > 0) {
-    recordAnnotationDims(dup.id, dup.renderWidth, dup.renderHeight);
+    recordAnnotationDims(dup.id, dup.editState ? dup.originalWidth : dup.renderWidth, dup.editState ? dup.originalHeight : dup.renderHeight);
   }
 }
 
@@ -2008,8 +2008,9 @@ function createTextInput(x, y, imageId, existingAnnot) {
   const canvasOffX = canvasRect.left - workspaceRect.left;
   const canvasOffY = canvasRect.top - workspaceRect.top;
 
-  const sx = canvasOffX + sf * (img.x + x);
-  const sy = canvasOffY + sf * (img.y + y);
+  const rel = pixelToLayoutCoords(x, y, img);
+  const sx = canvasOffX + sf * (img.x + rel.x);
+  const sy = canvasOffY + sf * (img.y + rel.y);
 
   // Wrapper
   const wrapper = document.createElement('div');
@@ -2049,8 +2050,11 @@ function createTextInput(x, y, imageId, existingAnnot) {
         const canvasRect = canvas.getBoundingClientRect();
         const img = state.images.find(i => i.id === _textAnnot.imageId);
         if (img) {
-          _textAnnot.x = (wr.left - canvasRect.left) / sf - img.x;
-          _textAnnot.y = (wr.top - canvasRect.top) / sf - img.y;
+          const lx = (wr.left - canvasRect.left) / sf - img.x;
+          const ly = (wr.top - canvasRect.top) / sf - img.y;
+          const pix = layoutToAnnotationCoords(lx, ly, img);
+          _textAnnot.x = pix.x;
+          _textAnnot.y = pix.y;
         }
       }
     };
@@ -2163,7 +2167,7 @@ function commitTextInput(save) {
         }, ea.imageId);
         state.annotations.get(ea.imageId).push(annot);
         const img = state.images.find(i => i.id === ea.imageId);
-        if (img) recordAnnotationDims(ea.imageId, img.renderWidth, img.renderHeight);
+        if (img) recordAnnotationDims(ea.imageId, img.editState ? img.originalWidth : img.renderWidth, img.editState ? img.originalHeight : img.renderHeight);
       }
     } else {
       // 文字被删光 → 删除标注
@@ -2204,7 +2208,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
   const { x: ax, y: ay } = layoutToAnnotationCoords(lx, ly, editedImg);
 
   // Record image dims at annotation time for future rescaling
-  recordAnnotationDims(editedImg.id, editedImg.renderWidth, editedImg.renderHeight);
+  recordAnnotationDims(editedImg.id, editedImg.editState ? editedImg.originalWidth : editedImg.renderWidth, editedImg.editState ? editedImg.originalHeight : editedImg.renderHeight);
 
   if (!state.annotations.has(editedImg.id)) {
     state.annotations.set(editedImg.id, []);
@@ -2403,21 +2407,48 @@ function layoutToAnnotationCoords(lx, ly, img) {
   const effectiveScale = baseFit * Math.max(1.0, es.zoom);
   const centerX = displayW / 2;
   const centerY = displayH / 2;
-  const invEdit = 1 / editScale;
 
-  // 构建正向变换矩阵（与 drawImageAnnotations 中的标注变换一致）
+  // 正向变换矩阵，与 drawImageAnnotations / drawEditedImage 一致
   const m = new DOMMatrix();
   m.translateSelf(centerX, centerY);
   m.scaleSelf(editScale, editScale);
   m.translateSelf(es.panX, es.panY);
   m.scaleSelf(effectiveScale, effectiveScale);
   m.rotateSelf(es.rotation * 180 / Math.PI);
-  m.translateSelf(-centerX * invEdit, -centerY * invEdit);
-  m.scaleSelf(invEdit, invEdit);
+  m.translateSelf(-img.originalWidth / 2, -img.originalHeight / 2);
 
-  // 逆变换：布局坐标 → 标注坐标
   const inv = m.inverse();
   const pt = new DOMPoint(lx, ly).matrixTransform(inv);
+  return { x: pt.x, y: pt.y };
+}
+
+// 正向变换：标注坐标（原始像素空间）→ 布局空间（相对图片左上角）
+function pixelToLayoutCoords(px, py, img) {
+  if (!img.editState) return { x: px, y: py };
+
+  const es = img.editState;
+  const displayW = img.renderWidth;
+  const displayH = img.renderHeight;
+  const editScale = Math.max(displayW / es.cropWidth, displayH / es.cropHeight);
+  const absCos = Math.abs(Math.cos(es.rotation));
+  const absSin = Math.abs(Math.sin(es.rotation));
+  const baseFit = Math.max(
+    (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
+    (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
+  );
+  const effectiveScale = baseFit * Math.max(1.0, es.zoom);
+  const centerX = displayW / 2;
+  const centerY = displayH / 2;
+
+  const m = new DOMMatrix();
+  m.translateSelf(centerX, centerY);
+  m.scaleSelf(editScale, editScale);
+  m.translateSelf(es.panX, es.panY);
+  m.scaleSelf(effectiveScale, effectiveScale);
+  m.rotateSelf(es.rotation * 180 / Math.PI);
+  m.translateSelf(-img.originalWidth / 2, -img.originalHeight / 2);
+
+  const pt = new DOMPoint(px, py).matrixTransform(m);
   return { x: pt.x, y: pt.y };
 }
 

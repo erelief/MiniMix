@@ -1244,6 +1244,7 @@ function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgre
     ctx.translate(img.x, img.y);
 
     if (img.editState) {
+      // 使用与 drawEditedImage 完全一致的变换，标注在原始图片像素空间
       const es = img.editState;
       const displayW = img.renderWidth;
       const displayH = img.renderHeight;
@@ -1262,14 +1263,12 @@ function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgre
       ctx.translate(es.panX, es.panY);
       ctx.scale(effectiveScale, effectiveScale);
       ctx.rotate(es.rotation);
-      // 转换标注坐标：布局空间 → 编辑变换空间
-      const invEdit = 1 / editScale;
-      ctx.translate(-centerX * invEdit, -centerY * invEdit);
-      ctx.scale(invEdit, invEdit);
+      // 标注坐标原点 = 原始图片左上角 (0, 0) 对应 (-origW/2, -origH/2)
+      ctx.translate(-img.originalWidth / 2, -img.originalHeight / 2);
     }
 
-    // Rescale annotations if image render dims changed since creation
-    const rescaledAnnots = rescaleAnnotationsIfNeeded(annotations, img);
+    // Rescale annotations if image render dims changed since creation (only for non-edited images)
+    const rescaledAnnots = img.editState ? annotations : rescaleAnnotationsIfNeeded(annotations, img);
     for (const a of rescaledAnnots) renderAnnotation(ctx, a);
     if (inProgressDrawing) renderInProgressDrawing(ctx, inProgressDrawing, inProgressTool);
   } catch (e) {
