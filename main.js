@@ -2200,6 +2200,9 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
   const lx = (mx - sf * editedImg.x) / sf;
   const ly = (my - sf * editedImg.y) / sf;
 
+  // 逆编辑变换：布局坐标 → 标注空间坐标
+  const { x: ax, y: ay } = layoutToAnnotationCoords(lx, ly, editedImg);
+
   // Record image dims at annotation time for future rescaling
   recordAnnotationDims(editedImg.id, editedImg.renderWidth, editedImg.renderHeight);
 
@@ -2212,23 +2215,23 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
     case 'geometry': {
       pushUndo();
       state._annotationDrawing = {
-        startX: lx, startY: ly,
-        currentX: lx, currentY: ly,
+        startX: ax, startY: ay,
+        currentX: ax, currentY: ay,
       };
       break;
     }
     case 'pencil': {
       pushUndo();
       state._annotationDrawing = {
-        points: [{ x: lx, y: ly }],
+        points: [{ x: ax, y: ay }],
       };
       break;
     }
     case 'arrow': {
       pushUndo();
       state._annotationDrawing = {
-        startX: lx, startY: ly,
-        currentX: lx, currentY: ly,
+        startX: ax, startY: ay,
+        currentX: ax, currentY: ay,
       };
       break;
     }
@@ -2236,7 +2239,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
       pushUndo();
       const s = settings;
       const annot = createAnnotation('sequence', {
-        x: lx, y: ly,
+        x: ax, y: ay,
         number: s.nextNumber,
         numberStyle: s.numberStyle,
         fontSize: s.fontSize,
@@ -2261,7 +2264,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
         for (const a of imgAnnots) {
           if (a.type === 'text') {
             const bbox = getAnnotationBBox(a);
-            if (bbox && lx >= bbox.x && lx <= bbox.x + bbox.width && ly >= bbox.y && ly <= bbox.y + bbox.height) {
+            if (bbox && ax >= bbox.x && ax <= bbox.x + bbox.width && ay >= bbox.y && ay <= bbox.y + bbox.height) {
               hitExisting = a; break;
             }
           }
@@ -2270,13 +2273,13 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
       if (hitExisting) {
         createTextInput(hitExisting.params.x, hitExisting.params.y, editedImg.id, hitExisting);
       } else {
-        createTextInput(lx, ly, editedImg.id, null);
+        createTextInput(ax, ay, editedImg.id, null);
       }
       break;
     }
     case 'eraser': {
       pushUndo();
-      eraseAt(lx, ly, editedImg.id);
+      eraseAt(ax, ay, editedImg.id);
       break;
     }
   }
@@ -2284,7 +2287,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
 }
 
 function updateAnnotationDrawing(mx, my, editedImg) {
-  if (!state._annotationDrawing && !state._erasing) return;
+  if (!state._annotationDrawing) return;
   const canvasRect = canvas.getBoundingClientRect();
   const sf = getLayoutScale();
   // mx, my are window coords → convert to canvas-relative
@@ -2293,12 +2296,15 @@ function updateAnnotationDrawing(mx, my, editedImg) {
   const lx = (cx - sf * editedImg.x) / sf;
   const ly = (cy - sf * editedImg.y) / sf;
 
+  // 逆编辑变换
+  const { x: ax, y: ay } = layoutToAnnotationCoords(lx, ly, editedImg);
+
   const tool = state.activeAnnotationTool;
   if (tool === 'geometry' || tool === 'arrow') {
-    state._annotationDrawing.currentX = lx;
-    state._annotationDrawing.currentY = ly;
+    state._annotationDrawing.currentX = ax;
+    state._annotationDrawing.currentY = ay;
   } else if (tool === 'pencil') {
-    state._annotationDrawing.points.push({ x: lx, y: ly });
+    state._annotationDrawing.points.push({ x: ax, y: ay });
   }
   recomputeAndRender();
 }
@@ -2378,6 +2384,41 @@ function eraseAt(lx, ly, imageId) {
       break;
     }
   }
+}
+
+// 将布局空间坐标转换为标注空间坐标（逆编辑变换）
+function layoutToAnnotationCoords(lx, ly, img) {
+  if (!img.editState) return { x: lx, y: ly };
+
+  const es = img.editState;
+  const displayW = img.renderWidth;
+  const displayH = img.renderHeight;
+  const editScale = Math.max(displayW / es.cropWidth, displayH / es.cropHeight);
+  const absCos = Math.abs(Math.cos(es.rotation));
+  const absSin = Math.abs(Math.sin(es.rotation));
+  const baseFit = Math.max(
+    (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
+    (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
+  );
+  const effectiveScale = baseFit * Math.max(1.0, es.zoom);
+  const centerX = displayW / 2;
+  const centerY = displayH / 2;
+  const invEdit = 1 / editScale;
+
+  // 构建正向变换矩阵（与 drawImageAnnotations 中的标注变换一致）
+  const m = new DOMMatrix();
+  m.translateSelf(centerX, centerY);
+  m.scaleSelf(editScale, editScale);
+  m.translateSelf(es.panX, es.panY);
+  m.scaleSelf(effectiveScale, effectiveScale);
+  m.rotateSelf(es.rotation * 180 / Math.PI);
+  m.translateSelf(-centerX * invEdit, -centerY * invEdit);
+  m.scaleSelf(invEdit, invEdit);
+
+  // 逆变换：布局坐标 → 标注坐标
+  const inv = m.inverse();
+  const pt = new DOMPoint(lx, ly).matrixTransform(inv);
+  return { x: pt.x, y: pt.y };
 }
 
 function annotationIntersectsPoint(annot, px, py) {
