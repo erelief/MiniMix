@@ -48,19 +48,19 @@ export function createDefaultToolSettings() {
       shape: 'rounded-rect', // 'rounded-rect' | 'rect' | 'ellipse'
       fill: false,
       lineStyle: 'solid',
-      lineWidth: 3,
+      lineWidth: 10,
       cornerRadius: 8,
       color: '#FF0000',
     },
     pencil: {
       lineStyle: 'solid',
-      lineWidth: 3,
+      lineWidth: 10,
       color: '#FF0000',
     },
     arrow: {
       arrowStyle: 'single',
       lineStyle: 'solid',
-      lineWidth: 3,
+      lineWidth: 10,
       color: '#FF0000',
     },
     sequence: {
@@ -76,9 +76,7 @@ export function createDefaultToolSettings() {
       fontSize: 24,
       color: '#FF0000',
     },
-    eraser: {
-      lineWidth: 20,
-    },
+    eraser: {},
   };
 }
 
