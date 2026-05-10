@@ -5,7 +5,7 @@ import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, COLOR_PRESETS } from '
 import { createSlider } from './slider-widget.js';
 
 const TOOL_LABELS = {
-  scaling: '缩放',
+  scaling: '编辑画布',
   geometry: '几何图形',
   pencil: '铅笔',
   arrow: '箭头',
