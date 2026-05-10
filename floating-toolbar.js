@@ -155,8 +155,10 @@ function onGripMouseDown(e) {
 
 function onGripMouseMove(e) {
   if (!isDragging) return;
-  const x = e.clientX - dragOffsetX;
-  const y = e.clientY - dragOffsetY;
+  // 转换为 workspace 相对坐标（toolbar 是 workspace 内的 absolute 元素）
+  const parentRect = toolbarEl.parentElement.getBoundingClientRect();
+  const x = e.clientX - dragOffsetX - parentRect.left;
+  const y = e.clientY - dragOffsetY - parentRect.top;
   toolbarEl.style.left = x + 'px';
   toolbarEl.style.top = y + 'px';
 }
