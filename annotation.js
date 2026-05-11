@@ -230,7 +230,7 @@ function drawRectangleAnnotation(ctx, p) {
   ctx.strokeStyle = p.color;
   ctx.lineWidth = p.lineWidth;
   if (p.fill) {
-    ctx.fillStyle = hexToRgba(p.color, 0.2);
+    ctx.fillStyle = p.color;
   }
   const r = p.cornerRadius || 0;
   const { x, y, width, height } = p;
@@ -251,7 +251,7 @@ function drawEllipseAnnotation(ctx, p) {
   ctx.strokeStyle = p.color;
   ctx.lineWidth = p.lineWidth;
   if (p.fill) {
-    ctx.fillStyle = hexToRgba(p.color, 0.2);
+    ctx.fillStyle = p.color;
   }
   const { x, y, width, height } = p;
   ctx.beginPath();
