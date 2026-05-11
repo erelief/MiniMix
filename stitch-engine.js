@@ -1244,7 +1244,6 @@ function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgre
     ctx.translate(img.x, img.y);
 
     if (img.editState) {
-      // 使用与 drawEditedImage 完全一致的变换，标注在原始图片像素空间
       const es = img.editState;
       const displayW = img.renderWidth;
       const displayH = img.renderHeight;
@@ -1258,19 +1257,44 @@ function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgre
       const effectiveScale = baseFit * Math.max(1.0, es.zoom);
       const centerX = displayW / 2;
       const centerY = displayH / 2;
-      ctx.translate(centerX, centerY);
-      ctx.scale(editScale, editScale);
-      ctx.translate(es.panX, es.panY);
-      ctx.scale(effectiveScale, effectiveScale);
-      ctx.rotate(es.rotation);
-      // 标注坐标原点 = 原始图片左上角 (0, 0) 对应 (-origW/2, -origH/2)
-      ctx.translate(-img.originalWidth / 2, -img.originalHeight / 2);
-    }
+      const currentRotation = es.rotation;
 
-    // Rescale annotations if image render dims changed since creation (only for non-edited images)
-    const rescaledAnnots = img.editState ? annotations : rescaleAnnotationsIfNeeded(annotations, img);
-    for (const a of rescaledAnnots) renderAnnotation(ctx, a);
-    if (inProgressDrawing) renderInProgressDrawing(ctx, inProgressDrawing, inProgressTool);
+      // 按 rotation delta 分组：delta=0 → 正立，delta≠0 → 跟随画面旋转
+      const deltaGroups = new Map();
+      for (const a of annotations) {
+        const aRot = a.rotation != null ? a.rotation : 0;
+        const delta = currentRotation - aRot;
+        const key = Math.abs(delta) < 1e-8 ? 0 : delta;
+        if (!deltaGroups.has(key)) deltaGroups.set(key, []);
+        deltaGroups.get(key).push(a);
+      }
+
+      for (const [delta, group] of deltaGroups) {
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(editScale, editScale);
+        ctx.translate(es.panX, es.panY);
+        ctx.scale(effectiveScale, effectiveScale);
+        if (delta !== 0) ctx.rotate(delta);
+        ctx.translate(-img.originalWidth / 2, -img.originalHeight / 2);
+        for (const a of group) renderAnnotation(ctx, a);
+        ctx.restore();
+      }
+      if (inProgressDrawing) {
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(editScale, editScale);
+        ctx.translate(es.panX, es.panY);
+        ctx.scale(effectiveScale, effectiveScale);
+        ctx.translate(-img.originalWidth / 2, -img.originalHeight / 2);
+        renderInProgressDrawing(ctx, inProgressDrawing, inProgressTool);
+        ctx.restore();
+      }
+    } else {
+      const rescaledAnnots = rescaleAnnotationsIfNeeded(annotations, img);
+      for (const a of rescaledAnnots) renderAnnotation(ctx, a);
+      if (inProgressDrawing) renderInProgressDrawing(ctx, inProgressDrawing, inProgressTool);
+    }
   } catch (e) {
     console.warn('drawImageAnnotations error:', e);
   }

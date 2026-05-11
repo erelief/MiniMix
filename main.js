@@ -2008,7 +2008,10 @@ function createTextInput(x, y, imageId, existingAnnot) {
   const canvasOffX = canvasRect.left - workspaceRect.left;
   const canvasOffY = canvasRect.top - workspaceRect.top;
 
-  const rel = pixelToLayoutCoords(x, y, img);
+  const currentRotation = img.editState ? img.editState.rotation : 0;
+  const aRot = existingAnnot ? (existingAnnot.rotation != null ? existingAnnot.rotation : 0) : currentRotation;
+  const delta = currentRotation - aRot;
+  const rel = pixelToLayoutCoords(x, y, img, delta);
   const sx = canvasOffX + sf * (img.x + rel.x);
   const sy = canvasOffY + sf * (img.y + rel.y);
 
@@ -2052,7 +2055,9 @@ function createTextInput(x, y, imageId, existingAnnot) {
         if (img) {
           const lx = (wr.left - canvasRect.left) / sf - img.x;
           const ly = (wr.top - canvasRect.top) / sf - img.y;
-          const pix = layoutToAnnotationCoords(lx, ly, img);
+          const curRot = img.editState ? img.editState.rotation : 0;
+          const delta = curRot - (_textAnnot.rotation != null ? _textAnnot.rotation : 0);
+          const pix = layoutToAnnotationCoords(lx, ly, img, delta);
           _textAnnot.x = pix.x;
           _textAnnot.y = pix.y;
         }
@@ -2094,6 +2099,7 @@ function createTextInput(x, y, imageId, existingAnnot) {
   _textAnnot = {
     x, y, imageId,
     annotId: existingAnnot ? existingAnnot.id : null,
+    rotation: existingAnnot ? (existingAnnot.rotation != null ? existingAnnot.rotation : (img.editState ? img.editState.rotation : 0)) : (img.editState ? img.editState.rotation : 0),
     bold: s.bold, italic: s.italic, fontSize: s.fontSize,
     color: s.color, fontFamily: s.fontFamily,
   };
@@ -2156,6 +2162,7 @@ function commitTextInput(save) {
       } else {
         pushUndo();
         if (!state.annotations.has(ea.imageId)) state.annotations.set(ea.imageId, []);
+        const img = state.images.find(i => i.id === ea.imageId);
         const annot = createAnnotation('text', {
           x: ea.x, y: ea.y,
           text,
@@ -2164,9 +2171,8 @@ function commitTextInput(save) {
           fontFamily: s.fontFamily,
           fontSize: s.fontSize,
           color: s.color,
-        }, ea.imageId);
+        }, ea.imageId, img ? (img.editState ? img.editState.rotation : 0) : 0);
         state.annotations.get(ea.imageId).push(annot);
-        const img = state.images.find(i => i.id === ea.imageId);
         if (img) recordAnnotationDims(ea.imageId, img.editState ? img.originalWidth : img.renderWidth, img.editState ? img.originalHeight : img.renderHeight);
       }
     } else {
@@ -2248,7 +2254,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
         numberStyle: s.numberStyle,
         fontSize: s.fontSize,
         color: s.color,
-      }, editedImg.id);
+      }, editedImg.id, editedImg.editState.rotation);
       annots.push(annot);
       s.nextNumber++;
       updateSliderValue('sequence_nextNumber', s.nextNumber);
@@ -2283,7 +2289,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
     }
     case 'eraser': {
       pushUndo();
-      eraseAt(ax, ay, editedImg.id);
+      eraseAt(lx, ly, editedImg);
       break;
     }
   }
@@ -2338,7 +2344,7 @@ function finishAnnotationDrawing(editedImg) {
           color: settings.color,
           fill: settings.fill,
           cornerRadius: settings.shape !== 'ellipse' ? settings.cornerRadius : 0,
-        }, editedImg.id);
+        }, editedImg.id, editedImg.editState.rotation);
         annots.push(annot);
       }
       break;
@@ -2351,7 +2357,7 @@ function finishAnnotationDrawing(editedImg) {
           lineStyle: settings.lineStyle,
           lineWidth: settings.lineWidth,
           color: settings.color,
-        }, editedImg.id);
+        }, editedImg.id, editedImg.editState.rotation);
         annots.push(annot);
       }
       break;
@@ -2366,7 +2372,7 @@ function finishAnnotationDrawing(editedImg) {
           lineStyle: settings.lineStyle,
           lineWidth: settings.lineWidth,
           color: settings.color,
-        }, editedImg.id);
+        }, editedImg.id, editedImg.editState.rotation);
         annots.push(annot);
       }
       break;
@@ -2377,21 +2383,24 @@ function finishAnnotationDrawing(editedImg) {
   recomputeAndRender();
 }
 
-function eraseAt(lx, ly, imageId) {
-  const annots = state.annotations.get(imageId);
+function eraseAt(lx, ly, img) {
+  const annots = state.annotations.get(img.id);
   if (!annots) return;
+  const currentRotation = img.editState ? img.editState.rotation : 0;
 
-  // 删除最上层的一个标注（从后往前找，第一个即是最上层）
   for (let i = annots.length - 1; i >= 0; i--) {
-    if (annotationIntersectsPoint(annots[i], lx, ly)) {
+    const a = annots[i];
+    const aRot = a.rotation != null ? a.rotation : 0;
+    const delta = currentRotation - aRot;
+    const pt = layoutToAnnotationCoords(lx, ly, img, delta);
+    if (annotationIntersectsPoint(a, pt.x, pt.y)) {
       annots.splice(i, 1);
       break;
     }
   }
 }
 
-// 将布局空间坐标转换为标注空间坐标（逆编辑变换）
-function layoutToAnnotationCoords(lx, ly, img) {
+function layoutToAnnotationCoords(lx, ly, img, rotationDelta = 0) {
   if (!img.editState) return { x: lx, y: ly };
 
   const es = img.editState;
@@ -2408,13 +2417,12 @@ function layoutToAnnotationCoords(lx, ly, img) {
   const centerX = displayW / 2;
   const centerY = displayH / 2;
 
-  // 正向变换矩阵，与 drawImageAnnotations / drawEditedImage 一致
   const m = new DOMMatrix();
   m.translateSelf(centerX, centerY);
   m.scaleSelf(editScale, editScale);
   m.translateSelf(es.panX, es.panY);
   m.scaleSelf(effectiveScale, effectiveScale);
-  m.rotateSelf(es.rotation * 180 / Math.PI);
+  if (Math.abs(rotationDelta) > 1e-8) m.rotateSelf(rotationDelta * 180 / Math.PI);
   m.translateSelf(-img.originalWidth / 2, -img.originalHeight / 2);
 
   const inv = m.inverse();
@@ -2422,8 +2430,7 @@ function layoutToAnnotationCoords(lx, ly, img) {
   return { x: pt.x, y: pt.y };
 }
 
-// 正向变换：标注坐标（原始像素空间）→ 布局空间（相对图片左上角）
-function pixelToLayoutCoords(px, py, img) {
+function pixelToLayoutCoords(px, py, img, rotationDelta = 0) {
   if (!img.editState) return { x: px, y: py };
 
   const es = img.editState;
@@ -2445,7 +2452,7 @@ function pixelToLayoutCoords(px, py, img) {
   m.scaleSelf(editScale, editScale);
   m.translateSelf(es.panX, es.panY);
   m.scaleSelf(effectiveScale, effectiveScale);
-  m.rotateSelf(es.rotation * 180 / Math.PI);
+  if (Math.abs(rotationDelta) > 1e-8) m.rotateSelf(rotationDelta * 180 / Math.PI);
   m.translateSelf(-img.originalWidth / 2, -img.originalHeight / 2);
 
   const pt = new DOMPoint(px, py).matrixTransform(m);

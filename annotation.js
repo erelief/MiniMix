@@ -93,11 +93,12 @@ export function createDefaultToolSettings() {
  * Create a new annotation object.
  * `imageId` references which pool image this annotation belongs to.
  */
-export function createAnnotation(type, params, imageId) {
+export function createAnnotation(type, params, imageId, rotation = 0) {
   return {
     id: nextAnnotationId++,
     type,
     imageId,
+    rotation,
     params,
   };
 }
