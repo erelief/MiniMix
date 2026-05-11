@@ -1671,12 +1671,17 @@ function renderInProgressDrawing(ctx, drawing, tool) {
   switch (tool) {
     case 'geometry': {
       const { startX, startY, currentX, currentY } = drawing;
-      ctx.strokeRect(
-        Math.min(startX, currentX),
-        Math.min(startY, currentY),
-        Math.abs(currentX - startX),
-        Math.abs(currentY - startY)
-      );
+      const x = Math.min(startX, currentX);
+      const y = Math.min(startY, currentY);
+      const w = Math.abs(currentX - startX);
+      const h = Math.abs(currentY - startY);
+      if (drawing.shape === 'ellipse') {
+        ctx.beginPath();
+        ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(x, y, w, h);
+      }
       break;
     }
     case 'arrow': {

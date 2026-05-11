@@ -2227,6 +2227,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
       state._annotationDrawing = {
         startX: ax, startY: ay,
         currentX: ax, currentY: ay,
+        shape: settings.shape,
       };
       break;
     }
