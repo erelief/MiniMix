@@ -229,10 +229,6 @@ export function renderAnnotation(ctx, annotation) {
   ctx.restore();
 }
 
-function colorWithOpacity(p) {
-  return hexToRgba(p.color, (p.opacity ?? 100) / 100);
-}
-
 function applyOpacity(ctx, p, fn) {
   const alpha = (p.opacity ?? 100) / 100;
   ctx.save();
@@ -241,45 +237,86 @@ function applyOpacity(ctx, p, fn) {
   ctx.restore();
 }
 
+// Render filled shape to offscreen canvas at full opacity,
+// then blit with alpha — avoids stroke/fill overlap double-blending.
+function drawFilledShape(ctx, p, buildPath) {
+  const alpha = (p.opacity ?? 100) / 100;
+  const pad = Math.ceil(p.lineWidth * 3); // room for round cap + stroke
+  const offW = Math.ceil(p.width + pad);
+  const offH = Math.ceil(p.height + pad);
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = offW;
+  offCanvas.height = offH;
+  const octx = offCanvas.getContext('2d');
+  octx.translate(-p.x + pad / 2, -p.y + pad / 2);
+
+  octx.lineCap = 'round';
+  applyLineStyle(octx, p.lineStyle, p.lineWidth);
+  octx.strokeStyle = p.color;
+  octx.fillStyle = p.color;
+  octx.lineWidth = p.lineWidth;
+  buildPath(octx);
+  octx.fill();
+  octx.stroke();
+  octx.setLineDash([]);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(offCanvas, p.x - pad / 2, p.y - pad / 2);
+  ctx.restore();
+}
+
 function drawRectangleAnnotation(ctx, p) {
-  applyOpacity(ctx, p, () => {
-  ctx.lineCap = 'round';
-  applyLineStyle(ctx, p.lineStyle, p.lineWidth);
-  ctx.strokeStyle = p.color;
-  ctx.lineWidth = p.lineWidth;
-  if (p.fill) {
-    ctx.fillStyle = p.color;
-  }
+  const alpha = (p.opacity ?? 100) / 100;
   const r = p.cornerRadius || 0;
   const { x, y, width, height } = p;
-  if (r > 0) {
-    roundRectPath(ctx, x, y, width, height, r);
-  } else {
-    ctx.beginPath();
-    ctx.rect(x, y, width, height);
+  const buildPath = (c) => {
+    if (r > 0) roundRectPath(c, x, y, width, height, r);
+    else { c.beginPath(); c.rect(x, y, width, height); }
+  };
+
+  if (p.fill && alpha < 1) {
+    drawFilledShape(ctx, p, buildPath);
+    return;
   }
-  ctx.stroke();
-  if (p.fill) ctx.fill();
-  ctx.setLineDash([]);
-  }); // applyOpacity
+
+  applyOpacity(ctx, p, () => {
+    ctx.lineCap = 'round';
+    applyLineStyle(ctx, p.lineStyle, p.lineWidth);
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = p.lineWidth;
+    if (p.fill) ctx.fillStyle = p.color;
+    buildPath(ctx);
+    ctx.stroke();
+    if (p.fill) ctx.fill();
+    ctx.setLineDash([]);
+  });
 }
 
 function drawEllipseAnnotation(ctx, p) {
-  applyOpacity(ctx, p, () => {
-  ctx.lineCap = 'round';
-  applyLineStyle(ctx, p.lineStyle, p.lineWidth);
-  ctx.strokeStyle = p.color;
-  ctx.lineWidth = p.lineWidth;
-  if (p.fill) {
-    ctx.fillStyle = p.color;
-  }
+  const alpha = (p.opacity ?? 100) / 100;
   const { x, y, width, height } = p;
-  ctx.beginPath();
-  ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  if (p.fill) ctx.fill();
-  ctx.setLineDash([]);
-  }); // applyOpacity
+  const buildPath = (c) => {
+    c.beginPath();
+    c.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+  };
+
+  if (p.fill && alpha < 1) {
+    drawFilledShape(ctx, p, buildPath);
+    return;
+  }
+
+  applyOpacity(ctx, p, () => {
+    ctx.lineCap = 'round';
+    applyLineStyle(ctx, p.lineStyle, p.lineWidth);
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = p.lineWidth;
+    if (p.fill) ctx.fillStyle = p.color;
+    buildPath(ctx);
+    ctx.stroke();
+    if (p.fill) ctx.fill();
+    ctx.setLineDash([]);
+  });
 }
 
 function drawPencilAnnotation(ctx, p) {
