@@ -1567,11 +1567,12 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
       }, { once: true });
 
     } catch (e) {
+      console.error('Update check error:', e);
       if (!silent) {
         btnCheck.classList.remove('btn-checking');
         btnCheck.classList.add('btn-error');
         btnCheck.disabled = false;
-        btnCheck.textContent = '检查失败';
+        btnCheck.textContent = '检查失败: ' + (typeof e === 'string' ? e : (e.message || JSON.stringify(e)));
         setTimeout(resetBtn, 3000);
       } else {
         resetBtn();
