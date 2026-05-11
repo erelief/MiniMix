@@ -59,6 +59,7 @@ jobs:
 
       - name: Generate and upload latest.json
         if: matrix.platform == 'windows-latest'
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
