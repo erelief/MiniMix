@@ -5,7 +5,7 @@
 
 import { ImageItem } from './image-item.js';
 import { UndoManager } from './undo-manager.js';
-import { createDefaultToolSettings, createAnnotation } from './annotation.js';
+import { createDefaultToolSettings, createAnnotation, hexToRgba } from './annotation.js';
 import { createFloatingToolbar, closeSubmenu, updateSliderValue } from './floating-toolbar.js';
 import {
   computeLayout,
@@ -1632,7 +1632,7 @@ function enterEditMode(image) {
           if (s.bold) fs += 'bold ';
           if (s.italic) fs += 'italic ';
           _textInput.style.font = `${fs}${s.fontSize * getLayoutScale()}px ${s.fontFamily}`;
-          _textInput.style.color = s.color;
+          _textInput.style.color = hexToRgba(s.color, s.opacity / 100);
           _textInput.style.caretColor = s.color;
           _textInput.style.minHeight = `${s.fontSize * getLayoutScale() * 1.2}px`;
           // 重新触发自适应尺寸
@@ -2171,6 +2171,7 @@ function commitTextInput(save) {
           fontFamily: s.fontFamily,
           fontSize: s.fontSize,
           color: s.color,
+          opacity: s.opacity,
         }, ea.imageId, img ? (img.editState ? img.editState.rotation : 0) : 0);
         state.annotations.get(ea.imageId).push(annot);
         if (img) recordAnnotationDims(ea.imageId, img.editState ? img.originalWidth : img.renderWidth, img.editState ? img.originalHeight : img.renderHeight);
@@ -2255,6 +2256,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
         numberStyle: s.numberStyle,
         fontSize: s.fontSize,
         color: s.color,
+        opacity: s.opacity,
       }, editedImg.id, editedImg.editState.rotation);
       annots.push(annot);
       s.nextNumber++;
@@ -2343,6 +2345,7 @@ function finishAnnotationDrawing(editedImg) {
           lineStyle: settings.lineStyle,
           lineWidth: settings.lineWidth,
           color: settings.color,
+          opacity: settings.opacity,
           fill: settings.fill,
           cornerRadius: settings.shape !== 'ellipse' ? settings.cornerRadius : 0,
         }, editedImg.id, editedImg.editState.rotation);
@@ -2358,6 +2361,7 @@ function finishAnnotationDrawing(editedImg) {
           lineStyle: settings.lineStyle,
           lineWidth: settings.lineWidth,
           color: settings.color,
+          opacity: settings.opacity,
         }, editedImg.id, editedImg.editState.rotation);
         annots.push(annot);
       }
@@ -2373,6 +2377,7 @@ function finishAnnotationDrawing(editedImg) {
           lineStyle: settings.lineStyle,
           lineWidth: settings.lineWidth,
           color: settings.color,
+          opacity: settings.opacity,
         }, editedImg.id, editedImg.editState.rotation);
         annots.push(annot);
       }

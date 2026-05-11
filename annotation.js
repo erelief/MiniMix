@@ -51,23 +51,27 @@ export function createDefaultToolSettings() {
       lineWidth: 10,
       cornerRadius: 8,
       color: '#FF0000',
+      opacity: 100,
     },
     pencil: {
       lineStyle: 'solid',
       lineWidth: 10,
       color: '#FF0000',
+      opacity: 100,
     },
     arrow: {
       arrowStyle: 'single',
       lineStyle: 'solid',
       lineWidth: 10,
       color: '#FF0000',
+      opacity: 100,
     },
     sequence: {
       nextNumber: 1,
       numberStyle: 'arabic',
       fontSize: 40,
       color: '#FF0000',
+      opacity: 100,
     },
     text: {
       bold: false,
@@ -75,6 +79,7 @@ export function createDefaultToolSettings() {
       fontFamily: 'sans-serif',
       fontSize: 48,
       color: '#FF0000',
+      opacity: 100,
     },
     eraser: {},
   };
@@ -224,7 +229,20 @@ export function renderAnnotation(ctx, annotation) {
   ctx.restore();
 }
 
+function colorWithOpacity(p) {
+  return hexToRgba(p.color, (p.opacity ?? 100) / 100);
+}
+
+function applyOpacity(ctx, p, fn) {
+  const alpha = (p.opacity ?? 100) / 100;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  fn();
+  ctx.restore();
+}
+
 function drawRectangleAnnotation(ctx, p) {
+  applyOpacity(ctx, p, () => {
   ctx.lineCap = 'round';
   applyLineStyle(ctx, p.lineStyle, p.lineWidth);
   ctx.strokeStyle = p.color;
@@ -240,12 +258,14 @@ function drawRectangleAnnotation(ctx, p) {
     ctx.beginPath();
     ctx.rect(x, y, width, height);
   }
-  if (p.fill) ctx.fill();
   ctx.stroke();
+  if (p.fill) ctx.fill();
   ctx.setLineDash([]);
+  }); // applyOpacity
 }
 
 function drawEllipseAnnotation(ctx, p) {
+  applyOpacity(ctx, p, () => {
   ctx.lineCap = 'round';
   applyLineStyle(ctx, p.lineStyle, p.lineWidth);
   ctx.strokeStyle = p.color;
@@ -256,13 +276,15 @@ function drawEllipseAnnotation(ctx, p) {
   const { x, y, width, height } = p;
   ctx.beginPath();
   ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
-  if (p.fill) ctx.fill();
   ctx.stroke();
+  if (p.fill) ctx.fill();
   ctx.setLineDash([]);
+  }); // applyOpacity
 }
 
 function drawPencilAnnotation(ctx, p) {
   if (!p.points || p.points.length < 2) return;
+  applyOpacity(ctx, p, () => {
   applyLineStyle(ctx, p.lineStyle, p.lineWidth);
   ctx.strokeStyle = p.color;
   ctx.lineWidth = p.lineWidth;
@@ -275,9 +297,11 @@ function drawPencilAnnotation(ctx, p) {
   }
   ctx.stroke();
   ctx.setLineDash([]);
+  }); // applyOpacity
 }
 
 function drawArrowAnnotation(ctx, p) {
+  applyOpacity(ctx, p, () => {
   applyLineStyle(ctx, p.lineStyle, p.lineWidth);
   ctx.strokeStyle = p.color;
   ctx.fillStyle = p.color;
@@ -319,6 +343,7 @@ function drawArrowAnnotation(ctx, p) {
   }
 
   ctx.setLineDash([]);
+  }); // applyOpacity
 }
 
 function drawArrowHead(ctx, x, y, angle, headLen) {
@@ -342,7 +367,8 @@ function drawArrowHead(ctx, x, y, angle, headLen) {
 }
 
 function drawSequenceAnnotation(ctx, p) {
-  const { x, y, number, numberStyle, fontSize, color } = p;
+  applyOpacity(ctx, p, () => {
+  const { x, y, number, numberStyle, fontSize } = p;
   const label = formatNumber(number, numberStyle);
 
   // Draw hollow circle
@@ -351,28 +377,31 @@ function drawSequenceAnnotation(ctx, p) {
   const cy = y + radius;
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.strokeStyle = color;
+  ctx.strokeStyle = p.color;
   ctx.lineWidth = Math.max(fontSize * 0.1, 2);
   ctx.stroke();
 
   // Draw number inside
-  ctx.fillStyle = color;
+  ctx.fillStyle = p.color;
   ctx.font = `bold ${fontSize}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, cx, cy);
+  }); // applyOpacity
 }
 
 function drawTextAnnotation(ctx, p) {
-  const { x, y, text, bold, italic, fontFamily, fontSize, color } = p;
+  applyOpacity(ctx, p, () => {
+  const { x, y, text, bold, italic, fontFamily, fontSize } = p;
   let fontStyle = '';
   if (bold) fontStyle += 'bold ';
   if (italic) fontStyle += 'italic ';
   ctx.font = `${fontStyle}${fontSize}px ${fontFamily}`;
-  ctx.fillStyle = color;
+  ctx.fillStyle = p.color;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillText(text, x, y);
+  }); // applyOpacity
 }
 
 function roundRectPath(ctx, x, y, w, h, r) {
@@ -389,7 +418,7 @@ function roundRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function hexToRgba(hex, alpha) {
+export function hexToRgba(hex, alpha) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);

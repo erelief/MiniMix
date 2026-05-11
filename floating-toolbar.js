@@ -1,7 +1,7 @@
 // floating-toolbar.js
 
 import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2, Circle, Bold, Italic, ChevronUp, ChevronDown } from 'lucide';
-import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, COLOR_PRESETS } from './annotation.js';
+import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, COLOR_PRESETS, hexToRgba } from './annotation.js';
 import { createSlider } from './slider-widget.js';
 
 const TOOL_LABELS = {
@@ -669,15 +669,11 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
   return valEl;
 }
 
-function addInlineColorTrigger(container, currentColor, onChange) {
+function addInlineColorTrigger(container, currentColor, currentOpacity, onChange) {
   const dot = document.createElement('span');
   dot.className = 'annotation-inline-color';
-  dot.style.backgroundColor = currentColor;
+  dot.style.setProperty('--dot-color', hexToRgba(currentColor, currentOpacity / 100));
   dot.title = '颜色';
-
-  if (currentColor === '#FFFFFF') {
-    dot.style.border = '2px solid var(--border-color)';
-  }
 
   dot.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -692,6 +688,11 @@ function addInlineColorTrigger(container, currentColor, onChange) {
     popup.className = 'annotation-popup annotation-popup-color';
     popup._trigger = dot;
 
+    // Track live state inside popup
+    let liveColor = currentColor;
+    let liveOpacity = currentOpacity;
+
+    // --- Color swatches row ---
     const swatches = document.createElement('div');
     swatches.className = 'annotation-color-swatches';
 
@@ -703,19 +704,65 @@ function addInlineColorTrigger(container, currentColor, onChange) {
       if (c === currentColor) swatch.classList.add('active');
       swatch.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        dot.style.backgroundColor = c;
-        if (c === '#FFFFFF') {
-          dot.style.border = '2px solid var(--border-color)';
-        } else {
-          dot.style.border = '2px solid var(--border-color)';
-        }
+        liveColor = c;
+        swatches.querySelectorAll('.active').forEach(s => s.classList.remove('active'));
+        swatch.classList.add('active');
+        dot.style.setProperty('--dot-color', hexToRgba(liveColor, liveOpacity / 100));
         onChange(activeSubmenuTool, 'color', c);
-        closeActivePopup();
       });
       swatches.appendChild(swatch);
     });
 
     popup.appendChild(swatches);
+
+    // --- Opacity slider row ---
+    const opRow = document.createElement('div');
+    opRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:6px;';
+
+    const opLabel = document.createElement('span');
+    opLabel.textContent = '透明度';
+    opLabel.style.cssText = 'font-size:11px;color:var(--text-muted);flex-shrink:0;';
+
+    const opSliderContainer = document.createElement('div');
+    opSliderContainer.className = 'annotation-slider-container';
+    opSliderContainer.style.flex = '1';
+
+    const opInput = document.createElement('input');
+    opInput.type = 'number';
+    opInput.className = 'annotation-popup-input';
+    opInput.value = liveOpacity;
+    opInput.min = 5;
+    opInput.max = 100;
+    opInput.step = 1;
+    opInput.style.flexShrink = '0';
+
+    function updateOpacity(v) {
+      v = Math.max(5, Math.min(100, Math.round(v)));
+      liveOpacity = v;
+      opInput.value = v;
+      dot.style.setProperty('--dot-color', hexToRgba(liveColor, v / 100));
+      onChange(activeSubmenuTool, 'opacity', v);
+    }
+
+    _activePopupSlider = createSlider({
+      container: opSliderContainer,
+      min: 5, max: 100, step: 1,
+      value: liveOpacity,
+      onChange: (v) => updateOpacity(v),
+    });
+
+    opInput.addEventListener('change', () => {
+      updateOpacity(parseFloat(opInput.value) || 100);
+      _activePopupSlider.setValue(liveOpacity);
+    });
+    opInput.addEventListener('click', (ev) => ev.stopPropagation());
+    opInput.addEventListener('mousedown', (ev) => ev.stopPropagation());
+
+    opRow.appendChild(opLabel);
+    opRow.appendChild(opSliderContainer);
+    opRow.appendChild(opInput);
+    popup.appendChild(opRow);
+
     document.body.appendChild(popup);
     _activePopup = popup;
     positionPopup(popup, dot);
@@ -956,7 +1003,7 @@ function buildGeometryMenu(panel, settings, onChange) {
   addInlineSeparator(panel);
 
   // Color
-  addInlineColorTrigger(panel, s.color, onChange);
+  addInlineColorTrigger(panel, s.color, s.opacity, onChange);
 }
 
 function buildPencilMenu(panel, settings, onChange) {
@@ -979,7 +1026,7 @@ function buildPencilMenu(panel, settings, onChange) {
 
   addInlineSeparator(panel);
 
-  addInlineColorTrigger(panel, s.color, onChange);
+  addInlineColorTrigger(panel, s.color, s.opacity, onChange);
 }
 
 function buildArrowMenu(panel, settings, onChange) {
@@ -1012,7 +1059,7 @@ function buildArrowMenu(panel, settings, onChange) {
 
   addInlineSeparator(panel);
 
-  addInlineColorTrigger(panel, s.color, onChange);
+  addInlineColorTrigger(panel, s.color, s.opacity, onChange);
 }
 
 function buildSequenceMenu(panel, settings, onChange) {
@@ -1038,7 +1085,7 @@ function buildSequenceMenu(panel, settings, onChange) {
 
   addInlineSeparator(panel);
 
-  addInlineColorTrigger(panel, s.color, onChange);
+  addInlineColorTrigger(panel, s.color, s.opacity, onChange);
 }
 
 function buildTextMenu(panel, settings, onChange) {
@@ -1095,7 +1142,7 @@ function buildTextMenu(panel, settings, onChange) {
 
   addInlineSeparator(panel);
 
-  addInlineColorTrigger(panel, s.color, onChange);
+  addInlineColorTrigger(panel, s.color, s.opacity, onChange);
 }
 
 function buildEraserMenu(panel, settings, onChange) {
