@@ -1998,14 +1998,18 @@ function createTextInput(x, y, imageId, existingAnnot) {
   const img = state.images.find(i => i.id === imageId);
   if (!img) return;
 
+  const imgScale = getImageLocalScale(img);
   const initialText = existingAnnot ? existingAnnot.params.text : '';
   if (existingAnnot) {
     s.bold = existingAnnot.params.bold;
     s.italic = existingAnnot.params.italic;
-    s.fontSize = existingAnnot.params.fontSize;
+    s.fontSize = Math.round(existingAnnot.params.fontSize * imgScale);
     s.color = existingAnnot.params.color;
     existingAnnot._originalText = existingAnnot.params.text;
     existingAnnot.params.text = '';
+    if (typeof updateSliderValue === 'function') {
+      updateSliderValue('text_fontSize', s.fontSize);
+    }
   }
 
   const canvasRect = canvas.getBoundingClientRect();
@@ -2128,6 +2132,19 @@ function createTextInput(x, y, imageId, existingAnnot) {
   autoSize();
 
   ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        ta.value = ta.value.slice(0, start) + '\n' + ta.value.slice(end);
+        ta.selectionStart = ta.selectionEnd = start + 1;
+        ta.dispatchEvent(new Event('input'));
+        return;
+      }
+      e.preventDefault();
+      commitTextInput(true);
+    }
     if (e.key === 'Escape') {
       e.preventDefault();
       commitTextInput(false);
@@ -2145,6 +2162,8 @@ function commitTextInput(save) {
   const ea = _textAnnot;
   const s = state.toolSettings.text;
   const annots = state.annotations.get(ea.imageId) || [];
+  const img = state.images.find(i => i.id === ea.imageId);
+  const imgScale = getImageLocalScale(img);
 
   if (save) {
     if (text.trim().length > 0) {
@@ -2155,7 +2174,7 @@ function commitTextInput(save) {
           existing.params.text = text;
           existing.params.bold = s.bold;
           existing.params.italic = s.italic;
-          existing.params.fontSize = s.fontSize;
+          existing.params.fontSize = s.fontSize / imgScale;
           existing.params.color = s.color;
           existing.params.fontFamily = s.fontFamily;
           delete existing._originalText;
@@ -2163,14 +2182,13 @@ function commitTextInput(save) {
       } else {
         pushUndo();
         if (!state.annotations.has(ea.imageId)) state.annotations.set(ea.imageId, []);
-        const img = state.images.find(i => i.id === ea.imageId);
         const annot = createAnnotation('text', {
           x: ea.x, y: ea.y,
           text,
           bold: s.bold,
           italic: s.italic,
           fontFamily: s.fontFamily,
-          fontSize: s.fontSize,
+          fontSize: s.fontSize / imgScale,
           color: s.color,
           opacity: s.opacity,
         }, ea.imageId, img ? (img.editState ? img.editState.rotation : 0) : 0);
@@ -2251,11 +2269,12 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
     case 'sequence': {
       pushUndo();
       const s = settings;
+      const imgScale = getImageLocalScale(editedImg);
       const annot = createAnnotation('sequence', {
         x: ax, y: ay,
         number: s.nextNumber,
         numberStyle: s.numberStyle,
-        fontSize: s.fontSize,
+        fontSize: s.fontSize / imgScale,
         color: s.color,
         opacity: s.opacity,
       }, editedImg.id, editedImg.editState.rotation);
@@ -2331,6 +2350,8 @@ function finishAnnotationDrawing(editedImg) {
   const annots = state.annotations.get(editedImg.id);
   if (!annots) { state._annotationDrawing = null; return; }
 
+  const imgScale = getImageLocalScale(editedImg);
+
   switch (tool) {
     case 'geometry': {
       const { startX, startY, currentX, currentY } = state._annotationDrawing;
@@ -2344,11 +2365,11 @@ function finishAnnotationDrawing(editedImg) {
           width: Math.abs(w),
           height: Math.abs(h),
           lineStyle: settings.lineStyle,
-          lineWidth: settings.lineWidth,
+          lineWidth: settings.lineWidth / imgScale,
           color: settings.color,
           opacity: settings.opacity,
           fill: settings.fill,
-          cornerRadius: settings.shape !== 'ellipse' ? settings.cornerRadius : 0,
+          cornerRadius: settings.shape !== 'ellipse' ? settings.cornerRadius / imgScale : 0,
         }, editedImg.id, editedImg.editState.rotation);
         annots.push(annot);
       }
@@ -2360,7 +2381,7 @@ function finishAnnotationDrawing(editedImg) {
         const annot = createAnnotation('pencil', {
           points,
           lineStyle: settings.lineStyle,
-          lineWidth: settings.lineWidth,
+          lineWidth: settings.lineWidth / imgScale,
           color: settings.color,
           opacity: settings.opacity,
         }, editedImg.id, editedImg.editState.rotation);
@@ -2376,7 +2397,7 @@ function finishAnnotationDrawing(editedImg) {
           endPoint: { x: currentX, y: currentY },
           arrowStyle: settings.arrowStyle,
           lineStyle: settings.lineStyle,
-          lineWidth: settings.lineWidth,
+          lineWidth: settings.lineWidth / imgScale,
           color: settings.color,
           opacity: settings.opacity,
         }, editedImg.id, editedImg.editState.rotation);
@@ -2464,6 +2485,24 @@ function pixelToLayoutCoords(px, py, img, rotationDelta = 0) {
 
   const pt = new DOMPoint(px, py).matrixTransform(m);
   return { x: pt.x, y: pt.y };
+}
+
+// 计算图片当前的本地到全局布局的综合缩放率
+function getImageLocalScale(img) {
+  if (!img) return 1;
+  if (!img.editState) return img.renderWidth / img.originalWidth;
+  const es = img.editState;
+  const displayW = img.renderWidth;
+  const displayH = img.renderHeight;
+  const editScale = Math.max(displayW / es.cropWidth, displayH / es.cropHeight);
+  const absCos = Math.abs(Math.cos(es.rotation));
+  const absSin = Math.abs(Math.sin(es.rotation));
+  const baseFit = Math.max(
+    (es.cropWidth * absCos + es.cropHeight * absSin) / img.originalWidth,
+    (es.cropWidth * absSin + es.cropHeight * absCos) / img.originalHeight
+  );
+  const effectiveScale = baseFit * Math.max(1.0, es.zoom);
+  return editScale * effectiveScale;
 }
 
 function annotationIntersectsPoint(annot, px, py) {
