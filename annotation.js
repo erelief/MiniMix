@@ -437,7 +437,11 @@ function drawTextAnnotation(ctx, p) {
   ctx.fillStyle = p.color;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillText(text, x, y);
+  const lines = text.split('\n');
+  const lineHeight = fontSize * 1.2;
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], x, y + i * lineHeight);
+  }
   }); // applyOpacity
 }
 

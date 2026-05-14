@@ -1864,6 +1864,10 @@ function handleEditModeMouseDown(mx, my) {
 
   // 非 scaling 工具：标注绘制模式
   if (state.activeAnnotationTool !== 'scaling') {
+    if (state.activeAnnotationTool === 'text' && !hit.isImageBody) {
+      commitTextInput(true);
+      return;
+    }
     handleAnnotationMouseDown(mx, my, img);
     return;
   }
@@ -2124,10 +2128,6 @@ function createTextInput(x, y, imageId, existingAnnot) {
   autoSize();
 
   ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      commitTextInput(true);
-    }
     if (e.key === 'Escape') {
       e.preventDefault();
       commitTextInput(false);
@@ -2959,24 +2959,28 @@ canvas.addEventListener('mousemove', (e) => {
       else if (hit.isImageBody && img && isPanAvailable(img)) { canvas.style.cursor = 'grab'; canvas.title = '平移'; }
       else { canvas.style.cursor = 'default'; canvas.title = ''; }
     } else if (state.activeAnnotationTool === 'text') {
-      // 检测是否悬停在已有文本上 → pointer；否则 I-beam
-      const sf = getLayoutScale();
-      const lx = (mx - sf * img.x) / sf;
-      const ly = (my - sf * img.y) / sf;
-      let overText = false;
-      const imgAnnots = state.annotations.get(img.id);
-      if (imgAnnots) {
-        for (const a of imgAnnots) {
-          if (a.type === 'text') {
-            const bbox = getAnnotationBBox(a);
-            if (bbox && lx >= bbox.x && lx <= bbox.x + bbox.width && ly >= bbox.y && ly <= bbox.y + bbox.height) {
-              overText = true; break;
+      if (!hit.isImageBody) {
+        canvas.style.cursor = 'default'; canvas.title = '';
+      } else {
+        // 检测是否悬停在已有文本上 → pointer；否则 I-beam
+        const sf = getLayoutScale();
+        const lx = (mx - sf * img.x) / sf;
+        const ly = (my - sf * img.y) / sf;
+        let overText = false;
+        const imgAnnots = state.annotations.get(img.id);
+        if (imgAnnots) {
+          for (const a of imgAnnots) {
+            if (a.type === 'text') {
+              const bbox = getAnnotationBBox(a);
+              if (bbox && lx >= bbox.x && lx <= bbox.x + bbox.width && ly >= bbox.y && ly <= bbox.y + bbox.height) {
+                overText = true; break;
+              }
             }
           }
         }
+        canvas.style.cursor = overText ? 'pointer' : 'text';
+        canvas.title = overText ? '点击编辑文字' : '';
       }
-      canvas.style.cursor = overText ? 'pointer' : 'text';
-      canvas.title = overText ? '点击编辑文字' : '';
     } else {
       canvas.style.cursor = 'default'; canvas.title = '';
     }
@@ -3069,7 +3073,7 @@ document.addEventListener('keydown', (e) => {
     }
     return;
   }
-  if (e.key === 'Enter' && _textInput) { commitTextInput(true); return; }
+  if (_textInput && e.key === 'Enter') { return; } // 文本编辑中让 Enter 插入换行
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
     if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
     e.preventDefault(); doUndo(); return;
