@@ -57,32 +57,3 @@ jobs:
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
 
-      - name: Generate and upload latest.json
-        if: matrix.platform == 'windows-latest'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ github.ref_name }}"
-          REPO="erelief/MiniMix"
-
-          SIGS=$(gh api "repos/$REPO/releases/tags/$TAG" --jq '.assets[] | select(.name | endswith(".sig")) | "\(.name)|\(.url)"')
-
-          PLATFORMS="{"
-          FIRST=true
-          while IFS='|' read -r SIG_NAME SIG_URL; do
-            SIG_DATA=$(gh api "$SIG_URL" --jq '.content' | tr -d '"')
-            INSTALLER="${SIG_NAME%.sig}"
-            INSTALLER_URL="https://github.com/$REPO/releases/download/$TAG/$INSTALLER"
-            if [[ "$INSTALLER" == *".exe" ]]; then PKG="windows-x86_64"
-            elif [[ "$INSTALLER" == *".msi" ]]; then continue
-            elif [[ "$INSTALLER" == *".dmg" || "$INSTALLER" == *".tar.gz" ]]; then PKG="darwin-aarch64"
-            else continue; fi
-            if [ "$FIRST" = true ]; then FIRST=false; else PLATFORMS+=","; fi
-            PLATFORMS+="\"$PKG\":{\"url\":\"$INSTALLER_URL\",\"signature\":\"$SIG_DATA\"}"
-          done <<< "$SIGS"
-          PLATFORMS+="}"
-
-          PUB_DATE=$(gh api "repos/$REPO/releases/tags/$TAG" --jq '.published_at')
-          echo "{\"version\":\"${TAG#v}\",\"notes\":\"See the assets to download and install this version.\",\"pub_date\":$PUB_DATE,\"platforms\":$PLATFORMS}" > /tmp/latest.json
-          gh release upload "$TAG" /tmp/latest.json --repo "$REPO"

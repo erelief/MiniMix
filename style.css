@@ -887,6 +887,7 @@ body {
 }
 
 .btn-update-check {
+  width: auto;
   height: 28px;
   padding: 0 12px;
   font-size: 12px;
@@ -910,22 +911,13 @@ body {
 
 /* --- Update Button States (inline, no extra status row) --- */
 .btn-checking {
-  position: relative;
   pointer-events: none;
-  padding-right: 28px !important;
 }
-.btn-checking::after {
-  content: '';
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border: 2px solid #fff3;
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: btn-spin 0.6s linear infinite;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+.spin-icon {
+  animation: spin-icon-rotate 0.6s linear infinite;
+}
+@keyframes spin-icon-rotate {
+  to { transform: rotate(360deg); }
 }
 
 .btn-up-to-date {

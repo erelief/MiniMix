@@ -1484,7 +1484,7 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
   async function checkForUpdate({ silent = false } = {}) {
     btnCheck.classList.add('btn-checking');
     btnCheck.disabled = true;
-    btnCheck.textContent = '检查中...';
+    btnCheck.innerHTML = '<svg class="spin-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> 检查中...';
 
     try {
       const update = await check();
@@ -1567,13 +1567,14 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
       }, { once: true });
 
     } catch (e) {
-      console.error('Update check error:', e);
+      console.error('[Updater] check failed:', e);
       if (!silent) {
         btnCheck.classList.remove('btn-checking');
         btnCheck.classList.add('btn-error');
         btnCheck.disabled = false;
-        btnCheck.textContent = '检查失败: ' + (typeof e === 'string' ? e : (e.message || JSON.stringify(e)));
-        setTimeout(resetBtn, 3000);
+        const msg = e instanceof Error ? e.message : String(e);
+        btnCheck.textContent = msg ? '失败: ' + msg.slice(0, 30) : '检查失败';
+        setTimeout(resetBtn, 4000);
       } else {
         resetBtn();
       }
