@@ -601,9 +601,15 @@ function recomputeAndRender() {
     dragGroupStartMX: state.dragGroupStartMX,
     dragGroupStartMY: state.dragGroupStartMY,
     dragGroupDropIndex: state.dragGroupDropIndex,
+    forceDisplayScale: (state.editAction === 'crop' && state.editActionStart._frozenDisplayScale) ? state.editActionStart._frozenDisplayScale : 0,
   });
   if (result) {
-    state.lastLayoutResult._displayScale = result.displayScale;
+    // Freeze displayScale during crop drag so edge follows mouse 1:1
+    if (state.editAction === 'crop' && state.editActionStart._frozenDisplayScale) {
+      state.lastLayoutResult._displayScale = state.editActionStart._frozenDisplayScale;
+    } else {
+      state.lastLayoutResult._displayScale = result.displayScale;
+    }
     state.lastLayoutResult._gripOffX = result.gripOffX || 0;
     state.lastLayoutResult._gripOffY = result.gripOffY || 0;
   }
@@ -1922,6 +1928,7 @@ function handleEditModeMouseDown(mx, my) {
       startEditScale: startEditScale,
       startBaseFit,
       startEffScale: startBaseFit * Math.max(1.0, img.editState.zoom),
+      _frozenDisplayScale: state.lastLayoutResult._displayScale || 1,
     };
     if (state.canvasRatioLocked) {
       state._canvasRatioDragging = true;
@@ -2776,7 +2783,7 @@ function onEditModeMouseMove(e) {
   if (state.editAction === 'crop') {
     const start = state.editActionStart;
     const axis = start.cropEdgeAxis;
-    const lockedScale = start.startSf * start.startEditScale;
+    const lockedScale = getLayoutScale() * start.startEditScale;
     const absCos = Math.abs(Math.cos(es.rotation));
     const absSin = Math.abs(Math.sin(es.rotation));
     // Use fixed initial effective scale for extent — prevents crop from growing beyond image bounds
@@ -2789,7 +2796,18 @@ function onEditModeMouseMove(e) {
       const side = start.cropEdgeSide;
       const delta = side === 'right' ? dx : -dx;
 
-      es.cropWidth = Math.min(extentW, Math.max(50, start.cropWidth + delta));
+      // Pre-compute max based on pan constraint (prevents edge expanding beyond image)
+      let maxCropW = extentW;
+      if (!e.altKey) {
+        const startDrawW = img.originalWidth * initEff * absCos + img.originalHeight * initEff * absSin;
+        if (side === 'right') {
+          maxCropW = Math.min(extentW, (startDrawW + start.cropWidth) / 2 + start.panX);
+        } else {
+          maxCropW = Math.min(extentW, (startDrawW + start.cropWidth) / 2 - start.panX);
+        }
+      }
+
+      es.cropWidth = Math.min(maxCropW, Math.max(50, start.cropWidth + delta));
 
       if (!e.altKey) {
         const appliedDelta = es.cropWidth - start.cropWidth;
@@ -2802,7 +2820,17 @@ function onEditModeMouseMove(e) {
       const side = start.cropEdgeSide;
       const delta = side === 'bottom' ? dy : -dy;
 
-      es.cropHeight = Math.min(extentH, Math.max(50, start.cropHeight + delta));
+      let maxCropH = extentH;
+      if (!e.altKey) {
+        const startDrawH = img.originalWidth * initEff * absSin + img.originalHeight * initEff * absCos;
+        if (side === 'bottom') {
+          maxCropH = Math.min(extentH, (startDrawH + start.cropHeight) / 2 + start.panY);
+        } else {
+          maxCropH = Math.min(extentH, (startDrawH + start.cropHeight) / 2 - start.panY);
+        }
+      }
+
+      es.cropHeight = Math.min(maxCropH, Math.max(50, start.cropHeight + delta));
 
       if (!e.altKey) {
         const appliedDelta = es.cropHeight - start.cropHeight;
@@ -2848,7 +2876,7 @@ function onEditModeMouseMove(e) {
 
   if (state.editAction === 'pan') {
     const start = state.editActionStart;
-    const lockedScale = start.startSf * start.startEditScale;
+    const lockedScale = getLayoutScale() * start.startEditScale;
     es.panX = start.panX + (mx - start.mouseX) / lockedScale;
     es.panY = start.panY + (my - start.mouseY) / lockedScale;
     clampPan(img);

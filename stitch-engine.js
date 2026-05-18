@@ -293,6 +293,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     dragGroupStartMX = 0,
     dragGroupStartMY = 0,
     dragGroupDropIndex = -1,
+    forceDisplayScale = 0,
   } = options;
   const { width, height, scaleFactor } = layoutResult;
 
@@ -311,7 +312,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
 
   const scaledW = width * scaleFactor;
   const scaledH = height * scaleFactor;
-  const displayScale = Math.min(containerW / scaledW, containerH / scaledH, 1);
+  const displayScale = forceDisplayScale > 0 ? forceDisplayScale : Math.min(containerW / scaledW, containerH / scaledH, 1);
 
   // 把手在画布外侧（DOM 元素），画布不扩展
   const gOx = 0, gOy = 0;
@@ -812,7 +813,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   if (editModeImageId !== -1) {
     const eImg = images.find(i => i.id === editModeImageId);
     if (eImg) {
-      drawEditModeButtons(ctx, eImg, hoveredSaveBtn, scaleFactor, displayScale, gOx, gOy);
       if (!window.__activeAnnotationTool || window.__activeAnnotationTool === 'scaling') {
         drawResetButton(ctx, eImg, hoveredResetBtn, scaleFactor, displayScale, gOx, gOy);
         drawRatioButton(ctx, eImg, hoveredRatioBtn, scaleFactor, displayScale, gOx, gOy);
@@ -821,6 +821,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
           drawRatioMenu(ctx, eImg, hoveredRatioIndex, displayScale);
         }
       }
+      drawEditModeButtons(ctx, eImg, hoveredSaveBtn, scaleFactor, displayScale, gOx, gOy);
     }
   } else {
     // 普通模式：编辑按钮和关闭按钮
@@ -960,23 +961,28 @@ function drawResetButton(ctx, img, resetHovered, scaleFactor, displayScale, gOx 
 
 function drawRatioButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
   const sf = scaleFactor * displayScale;
-  const screenY = img.y * sf + gOy * displayScale + EDIT_BTN_PADDING;
+  const topY = img.y * sf + gOy * displayScale + EDIT_BTN_PADDING;
   const canvasSize = EDIT_BTN_SIZE / displayScale;
-  const canvasY = screenY / displayScale;
 
-  const ratioScreenX = img.resetBtnX + EDIT_BTN_SIZE + EDIT_BTN_PADDING;
+  const hScreenX = img.resetBtnX + EDIT_BTN_SIZE + EDIT_BTN_PADDING;
+  const saveScreenX = (img.x + img.renderWidth) * sf + gOx * displayScale - EDIT_BTN_SIZE - CLOSE_BTN_PADDING;
+  const wouldOverlap = hScreenX + EDIT_BTN_SIZE > saveScreenX;
+
+  const ratioScreenX = wouldOverlap ? img.resetBtnX : hScreenX;
+  const ratioScreenY = wouldOverlap ? topY + EDIT_BTN_SIZE + EDIT_BTN_PADDING : topY;
   img.ratioBtnX = ratioScreenX;
-  img.ratioBtnY = screenY;
+  img.ratioBtnY = ratioScreenY;
   img.ratioBtnSize = EDIT_BTN_SIZE;
 
   const ratioCanvasX = ratioScreenX / displayScale;
+  const ratioCanvasY = ratioScreenY / displayScale;
 
   ctx.save();
   ctx.fillStyle = hovered ? 'rgba(66, 133, 244, 0.9)' : 'rgba(0, 0, 0, 0.45)';
   ctx.beginPath();
-  ctx.roundRect(ratioCanvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
+  ctx.roundRect(ratioCanvasX, ratioCanvasY, canvasSize, canvasSize, 3 / displayScale);
   ctx.fill();
-  drawSvgIcon(ctx, ratioCanvasX, canvasY, canvasSize, displayScale,
+  drawSvgIcon(ctx, ratioCanvasX, ratioCanvasY, canvasSize, displayScale,
     'M2 4h20v16H2z',
     'M12 9v11',
     'M2 9h13a2 2 0 0 1 2 2v9'
