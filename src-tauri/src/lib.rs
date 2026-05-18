@@ -43,6 +43,21 @@ fn format_bytes(bytes: usize) -> String {
     }
 }
 
+fn read_proxy_url() -> Option<String> {
+    std::env::var("HTTPS_PROXY")
+        .or_else(|_| std::env::var("https_proxy"))
+        .or_else(|_| std::env::var("HTTP_PROXY"))
+        .or_else(|_| std::env::var("http_proxy"))
+        .or_else(|_| std::env::var("ALL_PROXY"))
+        .or_else(|_| std::env::var("all_proxy"))
+        .ok()
+}
+
+#[tauri::command]
+fn get_proxy_url() -> Option<String> {
+    read_proxy_url()
+}
+
 #[tauri::command]
 fn compress_and_save_png(data: Vec<u8>, path: String) -> Result<String, String> {
     let original_size = data.len();
@@ -120,6 +135,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_opened_files,
             get_pending_files,
+            get_proxy_url,
             compress_and_save_png,
         ])
         .run(tauri::generate_context!())
