@@ -1802,7 +1802,7 @@ canvas.addEventListener('mousedown', (e) => {
     // 检查点击是否在标注工具栏/子菜单上，如果是则跳过画布交互
     const tbEl = document.getElementById('annotation-toolbar');
     if (tbEl && tbEl.contains(e.target)) return;
-    handleEditModeMouseDown(mx, my);
+    handleEditModeMouseDown(e, mx, my);
     return;
   }
 
@@ -1852,7 +1852,7 @@ canvas.addEventListener('mousedown', (e) => {
   }
 });
 
-function handleEditModeMouseDown(mx, my) {
+function handleEditModeMouseDown(e, mx, my) {
   const img = state.images.find(i => i.id === state.editModeImageId);
   if (!img || !img.editState) return;
 
@@ -1917,9 +1917,19 @@ function handleEditModeMouseDown(mx, my) {
       (img.editState.cropWidth * absCos + img.editState.cropHeight * absSin) / img.originalWidth,
       (img.editState.cropWidth * absSin + img.editState.cropHeight * absCos) / img.originalHeight
     );
+    // 计算对立边（不应移动的那条边）的初始绝对屏幕坐标，用于视觉锚定
+    const canvasRect = canvas.getBoundingClientRect();
+    let anchorLayoutX = img.x;
+    let anchorLayoutY = img.y;
+    if (hit.cropEdgeSide === 'left') anchorLayoutX = img.x + img.renderWidth;
+    if (hit.cropEdgeSide === 'top') anchorLayoutY = img.y + img.renderHeight;
+
     state.editAction = 'crop';
     state.editActionStart = {
       mouseX: mx, mouseY: my,
+      globalX: e.clientX, globalY: e.clientY,
+      anchorScreenX: canvasRect.left + anchorLayoutX * sf,
+      anchorScreenY: canvasRect.top + anchorLayoutY * sf,
       cropWidth: img.editState.cropWidth,
       cropHeight: img.editState.cropHeight,
       panX: img.editState.panX,
@@ -1975,6 +1985,7 @@ function handleEditModeMouseDown(mx, my) {
       panY: img.editState.panY,
       startSf: sf,
       startEditScale: startEditScale,
+      globalX: e.clientX, globalY: e.clientY,
     };
     return;
   }
@@ -2780,6 +2791,10 @@ function onRowDragMouseUp() {
 function onEditModeMouseMove(e) {
   const img = state.images.find(i => i.id === state.editModeImageId);
   if (!img || !img.editState) return;
+
+  // 读取坐标前先清空视觉锚定位移，保证 getCanvasMousePos 准确
+  canvas.style.transform = '';
+
   const { mx, my } = getCanvasMousePos(e);
   const es = img.editState;
 
@@ -2795,9 +2810,10 @@ function onEditModeMouseMove(e) {
     const extentH = img.originalWidth * initEff * absSin + img.originalHeight * initEff * absCos;
 
     if (axis === 'width') {
-      const dx = (mx - start.mouseX) / lockedScale;
+      // 使用全局物理鼠标增量，断绝画布居中产生的反馈循环
+      const globalDx = e.clientX - start.globalX;
       const side = start.cropEdgeSide;
-      const delta = side === 'right' ? dx : -dx;
+      const delta = side === 'right' ? globalDx / lockedScale : -globalDx / lockedScale;
 
       // Pre-compute max based on pan constraint (prevents edge expanding beyond image)
       let maxCropW = extentW;
@@ -2819,9 +2835,9 @@ function onEditModeMouseMove(e) {
       }
 
     } else { // axis === 'height'
-      const dy = (my - start.mouseY) / lockedScale;
+      const globalDy = e.clientY - start.globalY;
       const side = start.cropEdgeSide;
-      const delta = side === 'bottom' ? dy : -dy;
+      const delta = side === 'bottom' ? globalDy / lockedScale : -globalDy / lockedScale;
 
       let maxCropH = extentH;
       if (!e.altKey) {
@@ -2873,15 +2889,31 @@ function onEditModeMouseMove(e) {
     }
 
     clampPan(img);
-    recomputeAndRender();
+    recomputeAndRender(); // 画布尺寸变化，浏览器已重排
+
+    // 视觉锚定：算出对立锚定边漂移了多少，用 CSS Transform 拉回原位
+    const newCanvasRect = canvas.getBoundingClientRect();
+    const sf = getLayoutScale();
+    let newAnchorLayoutX = img.x;
+    let newAnchorLayoutY = img.y;
+    if (start.cropEdgeSide === 'left') newAnchorLayoutX = img.x + img.renderWidth;
+    if (start.cropEdgeSide === 'top') newAnchorLayoutY = img.y + img.renderHeight;
+
+    const newAnchorScreenX = newCanvasRect.left + newAnchorLayoutX * sf;
+    const newAnchorScreenY = newCanvasRect.top + newAnchorLayoutY * sf;
+
+    const tx = start.anchorScreenX - newAnchorScreenX;
+    const ty = start.anchorScreenY - newAnchorScreenY;
+
+    canvas.style.transform = `translate(${tx}px, ${ty}px)`;
     return;
   }
 
   if (state.editAction === 'pan') {
     const start = state.editActionStart;
     const lockedScale = getLayoutScale() * start.startEditScale;
-    es.panX = start.panX + (mx - start.mouseX) / lockedScale;
-    es.panY = start.panY + (my - start.mouseY) / lockedScale;
+    es.panX = start.panX + (e.clientX - start.globalX) / lockedScale;
+    es.panY = start.panY + (e.clientY - start.globalY) / lockedScale;
     clampPan(img);
     recomputeAndRender();
     return;
@@ -2945,13 +2977,13 @@ function clampPan(img) {
 
 function onEditModeMouseUp() {
   state._canvasRatioDragging = false;
-  // 清理临时属性
   for (const img of state.images) {
     delete img._canvasRatioOldWidth;
   }
   if (state.editAction) {
     state.editAction = null;
     state.editActionStart = null;
+    canvas.style.transform = ''; // 释放视觉锚定，画布回归自然居中
     recomputeAndRender();
   }
 }
