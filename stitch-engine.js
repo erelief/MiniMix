@@ -790,15 +790,21 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     }
   }
 
-  // 编辑模式：绘制编辑图片的画布边界虚线
+  // 编辑模式：绘制编辑图片的画布边界
+  // 默认工具（scaling）：白色虚线；标注工具：蓝色实线（与悬停效果一致）
   if (editModeImageId !== -1) {
     const eImg = images.find(i => i.id === editModeImageId);
     if (eImg && eImg.editState) {
-      const es = eImg.editState;
+      const isScaling = !window.__activeAnnotationTool || window.__activeAnnotationTool === 'scaling';
       ctx.save();
-      ctx.setLineDash([6 / displayScale, 4 / displayScale]);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 1.5 / displayScale;
+      if (isScaling) {
+        ctx.setLineDash([6 / displayScale, 4 / displayScale]);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = 1.5 / displayScale;
+      } else {
+        ctx.strokeStyle = 'rgba(66, 133, 244, 0.5)';
+        ctx.lineWidth = 2 / displayScale;
+      }
       ctx.strokeRect(
         eImg.x * scaleFactor + gOx, eImg.y * scaleFactor + gOy,
         eImg.renderWidth * scaleFactor, eImg.renderHeight * scaleFactor
