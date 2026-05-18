@@ -244,11 +244,15 @@ function updateCanvasMargin() {
   if (state.images.length === 0 || !state.lastLayoutResult || state.lastLayoutResult.width === 0) {
     ws.style.paddingLeft = '';
     ws.style.paddingTop = '';
+    ws.style.paddingRight = '';
+    ws.style.paddingBottom = '';
     return;
   }
   const isHorizontal = state.layoutMode === 'horizontal';
   ws.style.paddingLeft = isHorizontal ? GRIP_STRIP + 'px' : '';
   ws.style.paddingTop = isHorizontal ? '' : GRIP_STRIP + 'px';
+  ws.style.paddingRight = isHorizontal ? GRIP_STRIP + 'px' : '';
+  ws.style.paddingBottom = isHorizontal ? '' : GRIP_STRIP + 'px';
 }
 
 function loadImageFromDataURL(dataUrl) {
