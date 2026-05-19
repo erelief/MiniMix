@@ -646,6 +646,7 @@ function pushUndo() {
     canvasRatioIndex: state.canvasRatioIndex,
     annotations: structuredClone(Array.from(state.annotations.entries())),
     annotationDims: structuredClone(Array.from(state._annotationDims.entries())),
+    sequenceNextNumber: state.toolSettings.sequence.nextNumber,
   });
 }
 
@@ -1002,6 +1003,7 @@ function makeCurrentSnapshot() {
     canvasRatioIndex: state.canvasRatioIndex,
     annotations: structuredClone(Array.from(state.annotations.entries())),
     annotationDims: structuredClone(Array.from(state._annotationDims.entries())),
+    sequenceNextNumber: state.toolSettings.sequence.nextNumber,
   };
 }
 
@@ -1052,6 +1054,11 @@ function restoreSnapshot(snapshot) {
   // 恢复标注
   state.annotations = new Map(snapshot.annotations || []);
   state._annotationDims = new Map(snapshot.annotationDims || []);
+  // 恢复序列号起始数字（仅随工具使用绑定，手动修改不影响）
+  if (snapshot.sequenceNextNumber != null) {
+    state.toolSettings.sequence.nextNumber = snapshot.sequenceNextNumber;
+    updateSliderValue('sequence_nextNumber', snapshot.sequenceNextNumber);
+  }
   // 仅在当前处于编辑模式时才恢复编辑模式状态
   if (state.editModeImageId !== -1) {
     state.editModeImageId = snapshot.editModeImageId ?? -1;

@@ -8,7 +8,7 @@ const TOOL_LABELS = {
   scaling: '编辑画布',
   geometry: '几何图形',
   pencil: '铅笔',
-  arrow: '箭头',
+  arrow: '箭头和线段',
   sequence: '序列号',
   text: '文本',
   eraser: '删除',
@@ -94,7 +94,7 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
 
   const clearAllBtn = document.createElement('button');
   clearAllBtn.className = 'annotation-tool-btn annotation-clear-all-btn';
-  clearAllBtn.title = '一键清除';
+  clearAllBtn.title = '一键清除所有标记';
   clearAllBtn.innerHTML = '<i data-lucide="trash-2"></i>';
   clearAllBtn.addEventListener('click', (e) => {
     e.stopPropagation();
