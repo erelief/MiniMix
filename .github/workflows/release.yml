@@ -51,21 +51,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: '拼好图 v__VERSION__'
-          releaseBody: |
-            # 改进
-
-            - **裁剪四边速度绝对一致**：用 globalDelta × 2 / lockedScale 抵消 flexbox 居中减半效应，左右上下四边拖拽手感完全统一
-            - **松手零跳动**：拖拽结束不做任何额外操作，画布实时保持自然居中，所见即所得
-            - **退出/复位瞬间归位**：点击保存退出或复位按钮，画布瞬间回归居中，干净利落
-
-            # 修复
-
-            - **更新检查网络兼容性提升**
-
-            # 重构
-
-            - 移除 CSS transform 视觉锚定、offset 累加、displayScale 冻结、过渡动画等复杂机制
-            - 代码净减少，回归最纯粹的状态管理
+          releaseBody: 'See the assets to download and install this version.'
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true
