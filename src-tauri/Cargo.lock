@@ -142,6 +142,7 @@ dependencies = [
  "tauri-plugin-shell",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "winreg",
 ]
 
 [[package]]

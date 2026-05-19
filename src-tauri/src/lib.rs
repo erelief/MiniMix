@@ -43,6 +43,56 @@ fn format_bytes(bytes: usize) -> String {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn read_windows_system_proxy() -> Option<String> {
+    use winreg::enums::*;
+    use winreg::RegKey;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let settings = hkcu
+        .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Internet Settings")
+        .ok()?;
+
+    let enabled: u32 = settings.get_value("ProxyEnable").ok()?;
+    if enabled == 0 {
+        return None;
+    }
+
+    let server: String = settings.get_value("ProxyServer").ok()?;
+    if server.is_empty() {
+        return None;
+    }
+
+    // ProxyServer formats:
+    //   "host:port"                          (simple)
+    //   "http=host:port;https=host:port"     (per-protocol)
+    //   "http://host:port"                   (url)
+    if server.contains('=') {
+        for prefix in ["https=", "http="] {
+            for part in server.split(';') {
+                if let Some(addr) = part.strip_prefix(prefix) {
+                    return Some(prefix_url(addr));
+                }
+            }
+        }
+    }
+
+    Some(prefix_url(&server))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn read_windows_system_proxy() -> Option<String> {
+    None
+}
+
+fn prefix_url(addr: &str) -> String {
+    if addr.starts_with("http") {
+        addr.to_string()
+    } else {
+        format!("http://{}", addr)
+    }
+}
+
 fn read_proxy_url() -> Option<String> {
     std::env::var("HTTPS_PROXY")
         .or_else(|_| std::env::var("https_proxy"))
@@ -51,6 +101,7 @@ fn read_proxy_url() -> Option<String> {
         .or_else(|_| std::env::var("ALL_PROXY"))
         .or_else(|_| std::env::var("all_proxy"))
         .ok()
+        .or_else(read_windows_system_proxy)
 }
 
 #[tauri::command]
