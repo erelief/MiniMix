@@ -293,7 +293,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     dragGroupStartMX = 0,
     dragGroupStartMY = 0,
     dragGroupDropIndex = -1,
-    forceDisplayScale = 0,
   } = options;
   const { width, height, scaleFactor } = layoutResult;
 
@@ -312,7 +311,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
 
   const scaledW = width * scaleFactor;
   const scaledH = height * scaleFactor;
-  const displayScale = forceDisplayScale > 0 ? forceDisplayScale : Math.min(containerW / scaledW, containerH / scaledH, 1);
+  const displayScale = Math.min(containerW / scaledW, containerH / scaledH, 1);
 
   // 把手在画布外侧（DOM 元素），画布不扩展
   const gOx = 0, gOy = 0;
