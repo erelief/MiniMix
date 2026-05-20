@@ -58,12 +58,14 @@ export function createDefaultToolSettings() {
       cornerRadius: 8,
       color: '#FF0000',
       opacity: 100,
+      shadow: true,
     },
     pencil: {
       lineStyle: 'solid',
       lineWidth: 10,
       color: '#FF0000',
       opacity: 100,
+      shadow: true,
     },
     arrow: {
       arrowStyle: 'single',
@@ -71,12 +73,14 @@ export function createDefaultToolSettings() {
       lineWidth: 10,
       color: '#FF0000',
       opacity: 100,
+      shadow: true,
     },
     stamp: {
       shape: 'check',
       size: 256,
       color: '#FF0000',
       opacity: 100,
+      shadow: true,
     },
     sequence: {
       nextNumber: 1,
@@ -84,6 +88,7 @@ export function createDefaultToolSettings() {
       size: 64,
       color: '#FF0000',
       opacity: 100,
+      shadow: true,
     },
     text: {
       bold: false,
@@ -92,6 +97,7 @@ export function createDefaultToolSettings() {
       fontSize: 48,
       color: '#FF0000',
       opacity: 100,
+      shadow: true,
     },
     eraser: {},
   };
@@ -252,11 +258,41 @@ function applyOpacity(ctx, p, fn) {
   ctx.restore();
 }
 
+// Compute shadow params: dark, desaturated, low-alpha version of the color
+function getShadowColor(hexColor) {
+  const r = parseInt(hexColor.slice(1, 3), 16);
+  const g = parseInt(hexColor.slice(3, 5), 16);
+  const b = parseInt(hexColor.slice(5, 7), 16);
+  // Desaturate by averaging channels, then lerp 70% toward dark gray
+  const gray = (r + g + b) / 3;
+  const sr = Math.round(gray * 0.2 + r * 0.1);
+  const sg = Math.round(gray * 0.2 + g * 0.1);
+  const sb = Math.round(gray * 0.2 + b * 0.1);
+  return `rgba(${sr},${sg},${sb},0.35)`;
+}
+
+function applyShadow(ctx, p, sizeMetric) {
+  if (!p.shadow) return;
+  const s = Math.max(sizeMetric, 1);
+  ctx.shadowColor = getShadowColor(p.color);
+  ctx.shadowBlur = Math.min(s * 0.6, 20);
+  ctx.shadowOffsetX = s * 0.12;
+  ctx.shadowOffsetY = s * 0.12;
+}
+
+function clearShadow(ctx) {
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+}
+
 // Render filled shape to offscreen canvas at full opacity,
 // then blit with alpha — avoids stroke/fill overlap double-blending.
 function drawFilledShape(ctx, p, buildPath) {
   const alpha = (p.opacity ?? 100) / 100;
-  const pad = Math.ceil(p.lineWidth * 3); // room for round cap + stroke
+  const shadowPad = p.shadow ? Math.ceil(Math.min(Math.max(p.lineWidth, 1) * 0.6, 20) + Math.max(p.lineWidth, 1) * 0.12) * 2 : 0;
+  const pad = Math.ceil(p.lineWidth * 3) + shadowPad;
   const offW = Math.ceil(p.width + pad);
   const offH = Math.ceil(p.height + pad);
   const offCanvas = document.createElement('canvas');
@@ -270,9 +306,11 @@ function drawFilledShape(ctx, p, buildPath) {
   octx.strokeStyle = p.color;
   octx.fillStyle = p.color;
   octx.lineWidth = p.lineWidth;
+  applyShadow(octx, p, p.lineWidth);
   buildPath(octx);
   octx.fill();
   octx.stroke();
+  clearShadow(octx);
   octx.setLineDash([]);
 
   ctx.save();
@@ -301,9 +339,11 @@ function drawRectangleAnnotation(ctx, p) {
     ctx.strokeStyle = p.color;
     ctx.lineWidth = p.lineWidth;
     if (p.fill) ctx.fillStyle = p.color;
+    applyShadow(ctx, p, p.lineWidth);
     buildPath(ctx);
     ctx.stroke();
     if (p.fill) ctx.fill();
+    clearShadow(ctx);
     ctx.setLineDash([]);
   });
 }
@@ -327,9 +367,11 @@ function drawEllipseAnnotation(ctx, p) {
     ctx.strokeStyle = p.color;
     ctx.lineWidth = p.lineWidth;
     if (p.fill) ctx.fillStyle = p.color;
+    applyShadow(ctx, p, p.lineWidth);
     buildPath(ctx);
     ctx.stroke();
     if (p.fill) ctx.fill();
+    clearShadow(ctx);
     ctx.setLineDash([]);
   });
 }
@@ -342,12 +384,14 @@ function drawPencilAnnotation(ctx, p) {
   ctx.lineWidth = p.lineWidth;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+  applyShadow(ctx, p, p.lineWidth);
   ctx.beginPath();
   ctx.moveTo(p.points[0].x, p.points[0].y);
   for (let i = 1; i < p.points.length; i++) {
     ctx.lineTo(p.points[i].x, p.points[i].y);
   }
   ctx.stroke();
+  clearShadow(ctx);
   ctx.setLineDash([]);
   }); // applyOpacity
 }
@@ -363,6 +407,8 @@ function drawArrowAnnotation(ctx, p) {
   const { startPoint, endPoint, arrowStyle, lineWidth: lw } = p;
   const sx = startPoint.x, sy = startPoint.y;
   const ex = endPoint.x, ey = endPoint.y;
+
+  applyShadow(ctx, p, lw);
 
   // Draw line（round cap 在非箭头端正常显示，箭头端被三角底边覆盖）
   ctx.beginPath();
@@ -394,6 +440,7 @@ function drawArrowAnnotation(ctx, p) {
     }
   }
 
+  clearShadow(ctx);
   ctx.setLineDash([]);
   }); // applyOpacity
 }
@@ -428,10 +475,12 @@ function drawSequenceAnnotation(ctx, p) {
   const fontSize = radius / 0.8;
   const cx = x + radius;
   const cy = y + radius;
+  const lineW = Math.max(fontSize * 0.1, 2);
+  applyShadow(ctx, p, size * 0.15);
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.strokeStyle = p.color;
-  ctx.lineWidth = Math.max(fontSize * 0.1, 2);
+  ctx.lineWidth = lineW;
   ctx.stroke();
 
   // Draw number inside
@@ -440,6 +489,7 @@ function drawSequenceAnnotation(ctx, p) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, cx, cy);
+  clearShadow(ctx);
   }); // applyOpacity
 }
 
@@ -453,11 +503,13 @@ function drawTextAnnotation(ctx, p) {
   ctx.fillStyle = p.color;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
+  applyShadow(ctx, p, fontSize * 0.15);
   const lines = text.split('\n');
   const lineHeight = fontSize * 1.2;
   for (let i = 0; i < lines.length; i++) {
     ctx.fillText(lines[i], x, y + i * lineHeight);
   }
+  clearShadow(ctx);
   }); // applyOpacity
 }
 
@@ -469,6 +521,7 @@ function drawStampAnnotation(ctx, p) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.lineWidth = size * 0.12;
+  applyShadow(ctx, p, size * 0.12);
 
   if (shape === 'check') {
     ctx.beginPath();
@@ -485,6 +538,7 @@ function drawStampAnnotation(ctx, p) {
     ctx.lineTo(x + pad, y + size - pad);
     ctx.stroke();
   }
+  clearShadow(ctx);
   }); // applyOpacity
 }
 

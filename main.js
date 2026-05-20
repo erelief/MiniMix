@@ -2171,7 +2171,7 @@ function createTextInput(x, y, imageId, existingAnnot) {
     annotId: existingAnnot ? existingAnnot.id : null,
     rotation: existingAnnot ? (existingAnnot.rotation != null ? existingAnnot.rotation : (img.editState ? img.editState.rotation : 0)) : (img.editState ? img.editState.rotation : 0),
     bold: s.bold, italic: s.italic, fontSize: s.fontSize,
-    color: s.color, fontFamily: s.fontFamily,
+    color: s.color, fontFamily: s.fontFamily, shadow: s.shadow,
   };
 
   setTimeout(() => {
@@ -2252,6 +2252,7 @@ function commitTextInput(save) {
           fontSize: s.fontSize / imgScale,
           color: s.color,
           opacity: s.opacity,
+          shadow: s.shadow,
         }, ea.imageId, img ? (img.editState ? img.editState.rotation : 0) : 0);
         state.annotations.get(ea.imageId).push(annot);
         if (img) recordAnnotationDims(ea.imageId, img.editState ? img.originalWidth : img.renderWidth, img.editState ? img.originalHeight : img.renderHeight);
@@ -2338,6 +2339,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
         size: s.size / imgScale,
         color: s.color,
         opacity: s.opacity,
+        shadow: s.shadow,
       }, editedImg.id, editedImg.editState.rotation);
       annots.push(annot);
       break;
@@ -2354,6 +2356,7 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
         size: s.size / imgScale,
         color: s.color,
         opacity: s.opacity,
+        shadow: s.shadow,
       }, editedImg.id, editedImg.editState.rotation);
       annots.push(annot);
       s.nextNumber++;
@@ -2447,6 +2450,7 @@ function finishAnnotationDrawing(editedImg) {
           opacity: settings.opacity,
           fill: settings.fill,
           cornerRadius: settings.shape !== 'ellipse' ? settings.cornerRadius / imgScale : 0,
+          shadow: settings.shadow,
         }, editedImg.id, editedImg.editState.rotation);
         annots.push(annot);
       }
@@ -2461,6 +2465,7 @@ function finishAnnotationDrawing(editedImg) {
           lineWidth: settings.lineWidth / imgScale,
           color: settings.color,
           opacity: settings.opacity,
+          shadow: settings.shadow,
         }, editedImg.id, editedImg.editState.rotation);
         annots.push(annot);
       }
@@ -2477,6 +2482,7 @@ function finishAnnotationDrawing(editedImg) {
           lineWidth: settings.lineWidth / imgScale,
           color: settings.color,
           opacity: settings.opacity,
+          shadow: settings.shadow,
         }, editedImg.id, editedImg.editState.rotation);
         annots.push(annot);
       }

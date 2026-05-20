@@ -1027,6 +1027,19 @@ function buildGeometryMenu(panel, settings, onChange) {
 
   // Color
   addInlineColorTrigger(panel, s.color, s.opacity, onChange);
+
+  addInlineSeparator(panel);
+
+  // Shadow checkbox
+  const shadowLabel = document.createElement('label');
+  shadowLabel.className = 'annotation-inline-checkbox';
+  const shadowCheckbox = document.createElement('input');
+  shadowCheckbox.type = 'checkbox';
+  shadowCheckbox.checked = s.shadow;
+  shadowCheckbox.addEventListener('change', () => onChange('geometry', 'shadow', shadowCheckbox.checked));
+  shadowLabel.appendChild(shadowCheckbox);
+  shadowLabel.appendChild(document.createTextNode('投影'));
+  panel.appendChild(shadowLabel);
 }
 
 function buildPencilMenu(panel, settings, onChange) {
@@ -1050,6 +1063,19 @@ function buildPencilMenu(panel, settings, onChange) {
   addInlineSeparator(panel);
 
   addInlineColorTrigger(panel, s.color, s.opacity, onChange);
+
+  addInlineSeparator(panel);
+
+  // Shadow checkbox
+  const shadowLabel = document.createElement('label');
+  shadowLabel.className = 'annotation-inline-checkbox';
+  const shadowCheckbox = document.createElement('input');
+  shadowCheckbox.type = 'checkbox';
+  shadowCheckbox.checked = s.shadow;
+  shadowCheckbox.addEventListener('change', () => onChange('pencil', 'shadow', shadowCheckbox.checked));
+  shadowLabel.appendChild(shadowCheckbox);
+  shadowLabel.appendChild(document.createTextNode('投影'));
+  panel.appendChild(shadowLabel);
 }
 
 function buildArrowMenu(panel, settings, onChange) {
@@ -1083,6 +1109,19 @@ function buildArrowMenu(panel, settings, onChange) {
   addInlineSeparator(panel);
 
   addInlineColorTrigger(panel, s.color, s.opacity, onChange);
+
+  addInlineSeparator(panel);
+
+  // Shadow checkbox
+  const shadowLabel = document.createElement('label');
+  shadowLabel.className = 'annotation-inline-checkbox';
+  const shadowCheckbox = document.createElement('input');
+  shadowCheckbox.type = 'checkbox';
+  shadowCheckbox.checked = s.shadow;
+  shadowCheckbox.addEventListener('change', () => onChange('arrow', 'shadow', shadowCheckbox.checked));
+  shadowLabel.appendChild(shadowCheckbox);
+  shadowLabel.appendChild(document.createTextNode('投影'));
+  panel.appendChild(shadowLabel);
 }
 
 function buildSequenceMenu(panel, settings, onChange) {
@@ -1113,6 +1152,19 @@ function buildSequenceMenu(panel, settings, onChange) {
   addInlineSeparator(panel);
 
   addInlineColorTrigger(panel, s.color, s.opacity, onChange);
+
+  addInlineSeparator(panel);
+
+  // Shadow checkbox
+  const shadowLabel = document.createElement('label');
+  shadowLabel.className = 'annotation-inline-checkbox';
+  const shadowCheckbox = document.createElement('input');
+  shadowCheckbox.type = 'checkbox';
+  shadowCheckbox.checked = s.shadow;
+  shadowCheckbox.addEventListener('change', () => onChange('sequence', 'shadow', shadowCheckbox.checked));
+  shadowLabel.appendChild(shadowCheckbox);
+  shadowLabel.appendChild(document.createTextNode('投影'));
+  panel.appendChild(shadowLabel);
 }
 
 function buildStampMenu(panel, settings, onChange) {
@@ -1159,6 +1211,19 @@ function buildStampMenu(panel, settings, onChange) {
   addInlineSeparator(panel);
 
   addInlineColorTrigger(panel, s.color, s.opacity, onChange);
+
+  addInlineSeparator(panel);
+
+  // Shadow checkbox
+  const shadowLabel = document.createElement('label');
+  shadowLabel.className = 'annotation-inline-checkbox';
+  const shadowCheckbox = document.createElement('input');
+  shadowCheckbox.type = 'checkbox';
+  shadowCheckbox.checked = s.shadow;
+  shadowCheckbox.addEventListener('change', () => onChange('stamp', 'shadow', shadowCheckbox.checked));
+  shadowLabel.appendChild(shadowCheckbox);
+  shadowLabel.appendChild(document.createTextNode('投影'));
+  panel.appendChild(shadowLabel);
 }
 
 function buildTextMenu(panel, settings, onChange) {
@@ -1216,6 +1281,19 @@ function buildTextMenu(panel, settings, onChange) {
   addInlineSeparator(panel);
 
   addInlineColorTrigger(panel, s.color, s.opacity, onChange);
+
+  addInlineSeparator(panel);
+
+  // Shadow checkbox
+  const shadowLabel = document.createElement('label');
+  shadowLabel.className = 'annotation-inline-checkbox';
+  const shadowCheckbox = document.createElement('input');
+  shadowCheckbox.type = 'checkbox';
+  shadowCheckbox.checked = s.shadow;
+  shadowCheckbox.addEventListener('change', () => onChange('text', 'shadow', shadowCheckbox.checked));
+  shadowLabel.appendChild(shadowCheckbox);
+  shadowLabel.appendChild(document.createTextNode('投影'));
+  panel.appendChild(shadowLabel);
 }
 
 function buildEraserMenu(panel, settings, onChange) {
