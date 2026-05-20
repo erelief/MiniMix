@@ -1637,6 +1637,16 @@ function getBrushCursor(screenSize) {
   return _brushCursorCache;
 }
 
+function updateBrushCursor() {
+  const tool = state.activeAnnotationTool;
+  const sf = getLayoutScale();
+  let screenD = 0;
+  if (tool === 'stamp') screenD = state.toolSettings.stamp.size * sf;
+  else if (tool === 'pencil') screenD = state.toolSettings.pencil.lineWidth * sf;
+  else if (tool === 'sequence') screenD = state.toolSettings.sequence.size * sf;
+  if (screenD > 0) canvas.style.cursor = getBrushCursor(screenD);
+}
+
 function enterEditMode(image) {
   if (!image.editState) image.initEditState();
   state.editModeImageId = image.id;
@@ -3229,6 +3239,7 @@ canvas.addEventListener('wheel', (e) => {
       s.lineWidth = v;
       updateSliderValue(tool + '_lineWidth', v);
       recomputeAndRender();
+      updateBrushCursor();
     }
     return;
   }
@@ -3270,6 +3281,7 @@ canvas.addEventListener('wheel', (e) => {
       s.size = newPx;
       updateSliderValue(tool + '_size', pct);
       recomputeAndRender();
+      updateBrushCursor();
     }
     return;
   }
