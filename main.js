@@ -2232,6 +2232,8 @@ function commitTextInput(save) {
         const existing = annots.find(a => a.id === ea.annotId);
         if (existing) {
           pushUndo();
+          existing.params.x = ea.x;
+          existing.params.y = ea.y;
           existing.params.text = text;
           existing.params.bold = s.bold;
           existing.params.italic = s.italic;
@@ -2615,8 +2617,14 @@ function getAnnotationBBox(annot) {
     case 'stamp':
       return { x: p.x, y: p.y, width: p.size, height: p.size };
     case 'text': {
-      const w = p.text.length * p.fontSize * 0.6;
-      return { x: p.x, y: p.y, width: w, height: p.fontSize * 1.2 };
+      const lines = p.text.split('\n');
+      const lineH = p.fontSize * 1.2;
+      const pad = p.fontSize * 0.5;
+      let maxChars = 0;
+      for (const l of lines) maxChars = Math.max(maxChars, l.length);
+      const w = maxChars * p.fontSize * 0.85;
+      const h = lines.length * lineH;
+      return { x: p.x - pad, y: p.y - pad, width: w + pad * 2, height: h + pad * 2 };
     }
     case 'pencil': {
       if (!p.points || p.points.length === 0) return null;
