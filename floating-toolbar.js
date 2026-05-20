@@ -24,23 +24,13 @@ const TOOL_ICON_NAMES = {
   eraser: 'eraser',
 };
 
-const LUCIDE_ICONS = {
-  square: Square,
-  circle: Circle,
-  pencil: Pencil,
-  'arrow-right': ArrowRight,
-  hash: Hash,
-  type: Type,
-  eraser: Eraser,
-};
-
-function updateToolIcon(tool, lucideIconName) {
+function updateToolIcon(tool, iconName, iconComponent) {
   if (!toolbarEl) return;
   const btn = toolbarEl.querySelector(`[data-tool="${tool}"]`);
   if (btn) {
-    btn.innerHTML = `<i data-lucide="${lucideIconName}"></i>`;
-    const icon = LUCIDE_ICONS[lucideIconName];
-    if (icon) createIcons({ icons: { [lucideIconName]: icon }, root: btn });
+    btn.innerHTML = `<i data-lucide="${iconName}"></i>`;
+    const pascal = iconName.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+    createIcons({ icons: { [pascal]: iconComponent }, root: btn });
   }
 }
 
@@ -960,7 +950,7 @@ function buildGeometryMenu(panel, settings, onChange) {
   panel.classList.add('annotation-submenu-inline');
 
   // 同步一级工具栏图标
-  updateToolIcon('geometry', s.shape === 'ellipse' ? 'circle' : 'square');
+  updateToolIcon('geometry', s.shape === 'ellipse' ? 'circle' : 'square', s.shape === 'ellipse' ? Circle : Square);
 
   // Shape toggle: rect / ellipse
   const rectBtn = document.createElement('button');
@@ -976,14 +966,14 @@ function buildGeometryMenu(panel, settings, onChange) {
     rectBtn.classList.add('active');
     ellipseBtn.classList.remove('active');
     onChange('geometry', 'shape', 'rounded-rect');
-    updateToolIcon('geometry', 'square');
+    updateToolIcon('geometry', 'square', Square);
   });
   ellipseBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     ellipseBtn.classList.add('active');
     rectBtn.classList.remove('active');
     onChange('geometry', 'shape', 'ellipse');
-    updateToolIcon('geometry', 'circle');
+    updateToolIcon('geometry', 'circle', Circle);
   });
   panel.appendChild(rectBtn);
   panel.appendChild(ellipseBtn);
