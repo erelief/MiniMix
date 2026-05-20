@@ -3125,24 +3125,64 @@ canvas.addEventListener('mousemove', (e) => {
   else { canvas.style.cursor = 'default'; canvas.title = ''; }
 });
 
-// 滚轮缩放（编辑模式）
+// 滚轮（编辑模式：缩放 / 线条粗细 / 字号）
 canvas.addEventListener('wheel', (e) => {
   if (state.editModeImageId === -1) return;
-  if (state.activeAnnotationTool !== 'scaling') return;
-  const img = state.images.find(i => i.id === state.editModeImageId);
-  if (!img || !img.editState) return;
-  e.preventDefault();
+  const tool = state.activeAnnotationTool;
 
-  if (state.showRatioMenu) {
-    state.showRatioMenu = false;
-    state.hoveredRatioIndex = -1;
+  // 缩放工具：原有缩放逻辑
+  if (tool === 'scaling') {
+    const img = state.images.find(i => i.id === state.editModeImageId);
+    if (!img || !img.editState) return;
+    e.preventDefault();
+    if (state.showRatioMenu) { state.showRatioMenu = false; state.hoveredRatioIndex = -1; }
+    pushUndo();
+    const d = e.deltaY > 0 ? 0.9 : 1.1;
+    img.editState.zoom = Math.max(1.0, img.editState.zoom * d);
+    clampPan(img);
+    recomputeAndRender();
+    return;
   }
 
-  pushUndo();
-  const delta = e.deltaY > 0 ? 0.9 : 1.1;
-  img.editState.zoom = Math.max(1.0, img.editState.zoom * delta);
-  clampPan(img);
-  recomputeAndRender();
+  // 几何图形/画笔/箭头：调节线条粗细
+  if (tool === 'geometry' || tool === 'pencil' || tool === 'arrow') {
+    e.preventDefault();
+    const s = state.toolSettings[tool];
+    const d = e.deltaY > 0 ? -1 : 1;
+    const v = Math.max(1, Math.min(75, s.lineWidth + d));
+    if (v !== s.lineWidth) {
+      s.lineWidth = v;
+      updateSliderValue(tool + '_lineWidth', v);
+      recomputeAndRender();
+    }
+    return;
+  }
+
+  // 序列号/文字：调节字号
+  if (tool === 'sequence' || tool === 'text') {
+    e.preventDefault();
+    const s = state.toolSettings[tool];
+    const d = e.deltaY > 0 ? -1 : 1;
+    const v = Math.max(5, Math.min(72, s.fontSize + d));
+    if (v !== s.fontSize) {
+      s.fontSize = v;
+      updateSliderValue(tool + '_fontSize', v);
+      if (tool === 'text' && _textInput) {
+        const ts = state.toolSettings.text;
+        let fs = '';
+        if (ts.bold) fs += 'bold ';
+        if (ts.italic) fs += 'italic ';
+        _textInput.style.font = `${fs}${ts.fontSize * getLayoutScale()}px ${ts.fontFamily}`;
+        _textInput.style.minHeight = `${ts.fontSize * getLayoutScale() * 1.2}px`;
+        _textInput.style.width = '1px';
+        _textInput.style.height = '1px';
+        _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
+        _textInput.style.height = (_textInput.scrollHeight + 4) + 'px';
+      }
+      recomputeAndRender();
+    }
+    return;
+  }
 }, { passive: false });
 
 canvas.addEventListener('mouseleave', () => {
