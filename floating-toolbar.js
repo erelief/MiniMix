@@ -359,10 +359,16 @@ function addLineStyleRow(panel, currentStyle, onChange) {
     const ctx = cvs.getContext('2d');
     switch (value) {
       case 'solid': ctx.setLineDash([]); break;
-      case 'dashed': ctx.setLineDash([10, 4]); break;
-      case 'dotted': ctx.setLineDash([2, 3]); break;
-      case 'dash-dot': ctx.setLineDash([8, 3, 2, 3]); break;
-      case 'dash-dot-dot': ctx.setLineDash([8, 3, 2, 3, 2, 3]); break;
+      case 'dashed': ctx.setLineDash([10, 5]); break;
+      case 'dotted': ctx.setLineDash([0.5, 5]); break;
+      case 'dash-dot': ctx.setLineDash([10, 5, 0.5, 5]); break;
+      case 'double': {
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(48, 4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(48, 10); ctx.stroke();
+        return cvs;
+      }
     }
     ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(0, 7); ctx.lineTo(48, 7); ctx.stroke();
@@ -852,10 +858,16 @@ function makeLineStylePreview(value) {
   const ctx = cvs.getContext('2d');
   switch (value) {
     case 'solid': ctx.setLineDash([]); break;
-    case 'dashed': ctx.setLineDash([8, 3]); break;
-    case 'dotted': ctx.setLineDash([2, 2]); break;
-    case 'dash-dot': ctx.setLineDash([6, 3, 2, 3]); break;
-    case 'dash-dot-dot': ctx.setLineDash([6, 3, 2, 3, 2, 3]); break;
+    case 'dashed': ctx.setLineDash([8, 4]); break;
+    case 'dotted': ctx.setLineDash([0.5, 4]); break;
+    case 'dash-dot': ctx.setLineDash([8, 4, 0.5, 4]); break;
+    case 'double': {
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(40, 3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 9); ctx.lineTo(40, 9); ctx.stroke();
+      return cvs;
+    }
   }
   ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(40, 6); ctx.stroke();

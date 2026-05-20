@@ -15,7 +15,7 @@ export const LINE_STYLES = [
   { value: 'dashed', label: '虚线' },
   { value: 'dotted', label: '点线' },
   { value: 'dash-dot', label: '点划线' },
-  { value: 'dash-dot-dot', label: '双点划线' },
+  { value: 'double', label: '双实线' },
 ];
 
 // Arrow style options
@@ -133,25 +133,22 @@ export function createAnnotation(type, params, imageId, rotation = 0) {
  */
 export function applyLineStyle(ctx, lineStyle, lineWidth) {
   const lw = lineWidth || 1;
-  // 用 sqrt 缩放：lw=1→1, lw=10→~3.2, lw=30→~5.5，不会过度放大
   const s = Math.sqrt(lw);
-  // 点线的 dot 长度不超过 lineWidth，配合 round cap 保持圆形
-  const dotLen = Math.min(3 * s, lw);
   switch (lineStyle) {
     case 'solid':
+    case 'double':
       ctx.setLineDash([]);
       break;
     case 'dashed':
-      ctx.setLineDash([12 * s, 6 * s]);
+      ctx.setLineDash([14 * s, 10 * s]);
       break;
-    case 'dotted':
-      ctx.setLineDash([dotLen, 6 * s]);
+    case 'dotted': {
+      // 极短 dash + round cap = 正圆点
+      ctx.setLineDash([0.5, 10 * s]);
       break;
+    }
     case 'dash-dot':
-      ctx.setLineDash([12 * s, 4 * s, Math.min(3 * s, lw), 4 * s]);
-      break;
-    case 'dash-dot-dot':
-      ctx.setLineDash([12 * s, 4 * s, Math.min(3 * s, lw), 4 * s, Math.min(3 * s, lw), 4 * s]);
+      ctx.setLineDash([14 * s, 10 * s, 0.5, 10 * s]);
       break;
     default:
       ctx.setLineDash([]);
@@ -287,6 +284,43 @@ function clearShadow(ctx) {
   ctx.shadowOffsetY = 0;
 }
 
+// Double-line stroke: full-width stroke with middle erased,
+// producing two parallel lines via offscreen canvas compositing.
+function drawDoubleStroke(ctx, p, bounds, buildPathFn) {
+  const alpha = (p.opacity ?? 100) / 100;
+  const lw = p.lineWidth || 1;
+  const gap = Math.max(2, lw * 0.3);
+  const shadowPad = p.shadow ? Math.ceil(Math.min(Math.max(lw, 1) * 0.6, 20) + Math.max(lw, 1) * 0.12) * 2 : 0;
+  const pad = Math.ceil(lw * 3) + shadowPad;
+  const offW = Math.ceil(bounds.width + pad);
+  const offH = Math.ceil(bounds.height + pad);
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = offW;
+  offCanvas.height = offH;
+  const octx = offCanvas.getContext('2d');
+  octx.translate(-bounds.x + pad / 2, -bounds.y + pad / 2);
+
+  octx.lineCap = 'butt';
+  octx.lineJoin = 'round';
+  octx.strokeStyle = p.color;
+  octx.lineWidth = lw;
+  applyShadow(octx, p, lw);
+  buildPathFn(octx);
+  octx.stroke();
+  clearShadow(octx);
+
+  octx.globalCompositeOperation = 'destination-out';
+  octx.lineWidth = gap;
+  octx.strokeStyle = 'rgba(0,0,0,1)';
+  buildPathFn(octx);
+  octx.stroke();
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(offCanvas, bounds.x - pad / 2, bounds.y - pad / 2);
+  ctx.restore();
+}
+
 // Render filled shape to offscreen canvas at full opacity,
 // then blit with alpha — avoids stroke/fill overlap double-blending.
 function drawFilledShape(ctx, p, buildPath) {
@@ -328,6 +362,20 @@ function drawRectangleAnnotation(ctx, p) {
     else { c.beginPath(); c.rect(x, y, width, height); }
   };
 
+  if (p.lineStyle === 'double') {
+    if (p.fill) {
+      applyOpacity(ctx, p, () => {
+        ctx.fillStyle = p.color;
+        applyShadow(ctx, p, p.lineWidth);
+        buildPath(ctx);
+        ctx.fill();
+        clearShadow(ctx);
+      });
+    }
+    drawDoubleStroke(ctx, p, p, buildPath);
+    return;
+  }
+
   if (p.fill && alpha < 1) {
     drawFilledShape(ctx, p, buildPath);
     return;
@@ -356,6 +404,20 @@ function drawEllipseAnnotation(ctx, p) {
     c.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
   };
 
+  if (p.lineStyle === 'double') {
+    if (p.fill) {
+      applyOpacity(ctx, p, () => {
+        ctx.fillStyle = p.color;
+        applyShadow(ctx, p, p.lineWidth);
+        buildPath(ctx);
+        ctx.fill();
+        clearShadow(ctx);
+      });
+    }
+    drawDoubleStroke(ctx, p, p, buildPath);
+    return;
+  }
+
   if (p.fill && alpha < 1) {
     drawFilledShape(ctx, p, buildPath);
     return;
@@ -378,6 +440,24 @@ function drawEllipseAnnotation(ctx, p) {
 
 function drawPencilAnnotation(ctx, p) {
   if (!p.points || p.points.length < 2) return;
+
+  if (p.lineStyle === 'double') {
+    const pts = p.points;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const pt of pts) {
+      if (pt.x < minX) minX = pt.x; if (pt.y < minY) minY = pt.y;
+      if (pt.x > maxX) maxX = pt.x; if (pt.y > maxY) maxY = pt.y;
+    }
+    const bounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    const buildPath = (c) => {
+      c.beginPath();
+      c.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
+    };
+    drawDoubleStroke(ctx, p, bounds, buildPath);
+    return;
+  }
+
   applyOpacity(ctx, p, () => {
   applyLineStyle(ctx, p.lineStyle, p.lineWidth);
   ctx.strokeStyle = p.color;
@@ -397,16 +477,53 @@ function drawPencilAnnotation(ctx, p) {
 }
 
 function drawArrowAnnotation(ctx, p) {
+  const { startPoint, endPoint, arrowStyle, lineWidth: lw } = p;
+  const sx = startPoint.x, sy = startPoint.y;
+  const ex = endPoint.x, ey = endPoint.y;
+  const angle = Math.atan2(ey - sy, ex - sx);
+  const headLen = 12 + lw * 2;
+
+  if (p.lineStyle === 'double') {
+    const minX = Math.min(sx, ex), minY = Math.min(sy, ey);
+    const bounds = { x: minX, y: minY, width: Math.abs(ex - sx) || 1, height: Math.abs(ey - sy) || 1 };
+    const buildShaft = (c) => { c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); };
+    drawDoubleStroke(ctx, p, bounds, buildShaft);
+    applyOpacity(ctx, p, () => {
+      ctx.strokeStyle = p.color;
+      ctx.fillStyle = p.color;
+      ctx.lineWidth = lw;
+      ctx.lineCap = 'round';
+      applyShadow(ctx, p, lw);
+      if (arrowStyle === 'line') {
+        const perpX = Math.cos(angle + Math.PI / 2), perpY = Math.sin(angle + Math.PI / 2);
+        const barH = lw * 2.5;
+        ctx.beginPath();
+        ctx.moveTo(sx + perpX * barH / 2, sy + perpY * barH / 2);
+        ctx.lineTo(sx - perpX * barH / 2, sy - perpY * barH / 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ex + perpX * barH / 2, ey + perpY * barH / 2);
+        ctx.lineTo(ex - perpX * barH / 2, ey - perpY * barH / 2);
+        ctx.stroke();
+      } else {
+        if (arrowStyle === 'single' || arrowStyle === 'double') {
+          drawArrowHead(ctx, ex, ey, angle, headLen);
+        }
+        if (arrowStyle === 'double') {
+          drawArrowHead(ctx, sx, sy, angle + Math.PI, headLen);
+        }
+      }
+      clearShadow(ctx);
+    });
+    return;
+  }
+
   applyOpacity(ctx, p, () => {
   applyLineStyle(ctx, p.lineStyle, p.lineWidth);
   ctx.strokeStyle = p.color;
   ctx.fillStyle = p.color;
   ctx.lineWidth = p.lineWidth;
   ctx.lineCap = 'round';
-
-  const { startPoint, endPoint, arrowStyle, lineWidth: lw } = p;
-  const sx = startPoint.x, sy = startPoint.y;
-  const ex = endPoint.x, ey = endPoint.y;
 
   applyShadow(ctx, p, lw);
 
@@ -415,9 +532,6 @@ function drawArrowAnnotation(ctx, p) {
   ctx.moveTo(sx, sy);
   ctx.lineTo(ex, ey);
   ctx.stroke();
-
-  const angle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x);
-  const headLen = 12 + lw * 2;
 
   if (arrowStyle === 'line') {
     // 线段头 |——|：两端画短竖线，用原始端点
