@@ -3154,6 +3154,15 @@ canvas.addEventListener('mousemove', (e) => {
         canvas.style.cursor = getBrushCursor(screenD);
         canvas.title = '';
       }
+    } else if (state.activeAnnotationTool === 'sequence') {
+      if (!hit.isImageBody) {
+        canvas.style.cursor = 'default'; canvas.title = '';
+      } else {
+        const sf = getLayoutScale();
+        const r = Math.max(state.toolSettings.sequence.fontSize * 0.8, 16);
+        canvas.style.cursor = getBrushCursor(r * 2 * sf);
+        canvas.title = '点击放置序号';
+      }
     } else if (state.activeAnnotationTool === 'geometry' || state.activeAnnotationTool === 'arrow') {
       canvas.style.cursor = hit.isImageBody ? 'crosshair' : 'default';
       canvas.title = '';
