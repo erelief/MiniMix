@@ -74,7 +74,7 @@ export function createDefaultToolSettings() {
     },
     stamp: {
       shape: 'check',
-      size: 60,
+      size: 256,
       color: '#FF0000',
       opacity: 100,
     },
