@@ -2290,6 +2290,21 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
       };
       break;
     }
+    case 'stamp': {
+      pushUndo();
+      const s = settings;
+      const imgScale = getImageLocalScale(editedImg);
+      const annot = createAnnotation('stamp', {
+        x: ax - s.size / imgScale / 2,
+        y: ay - s.size / imgScale / 2,
+        shape: s.shape,
+        size: s.size / imgScale,
+        color: s.color,
+        opacity: s.opacity,
+      }, editedImg.id, editedImg.editState.rotation);
+      annots.push(annot);
+      break;
+    }
     case 'sequence': {
       pushUndo();
       const s = settings;
@@ -2555,6 +2570,8 @@ function getAnnotationBBox(annot) {
       const r = Math.max(p.fontSize * 0.8, 16);
       return { x: p.x, y: p.y, width: r * 2, height: r * 2 };
     }
+    case 'stamp':
+      return { x: p.x, y: p.y, width: p.size, height: p.size };
     case 'text': {
       const w = p.text.length * p.fontSize * 0.6;
       return { x: p.x, y: p.y, width: w, height: p.fontSize * 1.2 };
@@ -3092,6 +3109,9 @@ canvas.addEventListener('mousemove', (e) => {
         canvas.style.cursor = overText ? 'pointer' : 'text';
         canvas.title = overText ? '点击编辑文字' : '';
       }
+    } else if (state.activeAnnotationTool === 'stamp') {
+      canvas.style.cursor = hit.isImageBody ? 'crosshair' : 'default';
+      canvas.title = hit.isImageBody ? '点击放置图章' : '';
     } else {
       canvas.style.cursor = 'default'; canvas.title = '';
     }
@@ -3179,6 +3199,22 @@ canvas.addEventListener('wheel', (e) => {
         _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
         _textInput.style.height = (_textInput.scrollHeight + 4) + 'px';
       }
+      recomputeAndRender();
+    }
+    return;
+  }
+
+  // 图章：调节大小（百分比 1-100）
+  if (tool === 'stamp') {
+    e.preventDefault();
+    const s = state.toolSettings.stamp;
+    let pct = Math.round(((s.size - 4) / (512 - 4)) * 99) + 1; // pixels → pct (1-100)
+    const d = e.deltaY > 0 ? -1 : 1;
+    pct = Math.max(1, Math.min(100, pct + d));
+    const newPx = Math.round(4 + (pct - 1) * (512 - 4) / (100 - 1));
+    if (newPx !== s.size) {
+      s.size = newPx;
+      updateSliderValue('stamp_size', pct);
       recomputeAndRender();
     }
     return;

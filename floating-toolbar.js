@@ -1,7 +1,7 @@
 // floating-toolbar.js
 
-import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2, Circle, Bold, Italic, ChevronUp, ChevronDown } from 'lucide';
-import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, COLOR_PRESETS, hexToRgba } from './annotation.js';
+import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2, Circle, Bold, Italic, ChevronUp, ChevronDown, Stamp, Check, X } from 'lucide';
+import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, STAMP_SHAPES, COLOR_PRESETS, hexToRgba } from './annotation.js';
 import { createSlider } from './slider-widget.js';
 
 const TOOL_LABELS = {
@@ -9,6 +9,7 @@ const TOOL_LABELS = {
   geometry: '几何图形',
   pencil: '铅笔',
   arrow: '箭头和线段',
+  stamp: '图章',
   sequence: '序列号',
   text: '文本',
   eraser: '删除',
@@ -19,6 +20,7 @@ const TOOL_ICON_NAMES = {
   geometry: 'square',
   pencil: 'pencil',
   arrow: 'arrow-right',
+  stamp: 'stamp',
   sequence: 'hash',
   text: 'type',
   eraser: 'eraser',
@@ -117,7 +119,7 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
 
   // Initialize Lucide icons inside toolbar
   createIcons({
-    icons: { GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2 },
+    icons: { GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2, Stamp },
     root: toolbarEl,
   });
 
@@ -275,6 +277,9 @@ function buildSubmenu(tool, settings) {
       break;
     case 'arrow':
       buildArrowMenu(panel, settings, onChange);
+      break;
+    case 'stamp':
+      buildStampMenu(panel, settings, onChange);
       break;
     case 'sequence':
       buildSequenceMenu(panel, settings, onChange);
@@ -1097,6 +1102,52 @@ function buildSequenceMenu(panel, settings, onChange) {
   addInlineSeparator(panel);
 
   addInlineSliderValue(panel, s.fontSize, '字号', 5, 72, 1, 'sequence', 'fontSize', onChange);
+
+  addInlineSeparator(panel);
+
+  addInlineColorTrigger(panel, s.color, s.opacity, onChange);
+}
+
+function buildStampMenu(panel, settings, onChange) {
+  const s = settings.stamp;
+  if (!s) return;
+
+  panel.classList.add('annotation-submenu-inline');
+
+  // Shape toggle: check / x
+  const checkBtn = document.createElement('button');
+  checkBtn.className = 'annotation-shape-btn' + (s.shape === 'check' ? ' active' : '');
+  checkBtn.innerHTML = '<i data-lucide="check"></i>';
+  checkBtn.title = '勾号';
+  const xBtn = document.createElement('button');
+  xBtn.className = 'annotation-shape-btn' + (s.shape === 'x' ? ' active' : '');
+  xBtn.innerHTML = '<i data-lucide="x"></i>';
+  xBtn.title = '叉号';
+  checkBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    checkBtn.classList.add('active');
+    xBtn.classList.remove('active');
+    onChange('stamp', 'shape', 'check');
+  });
+  xBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    xBtn.classList.add('active');
+    checkBtn.classList.remove('active');
+    onChange('stamp', 'shape', 'x');
+  });
+  panel.appendChild(checkBtn);
+  panel.appendChild(xBtn);
+
+  createIcons({ icons: { Check, X }, root: panel });
+
+  addInlineSeparator(panel);
+
+  // Size: 4–512, displayed as percentage (4=1%, 512=100%)
+  const pct = Math.round(((s.size - 4) / (512 - 4)) * 100);
+  addInlineSliderValue(panel, pct, '大小', 1, 100, 1, 'stamp', 'size', (toolKey, key, val) => {
+    const pixelSize = Math.round(4 + (val - 1) * (512 - 4) / (100 - 1));
+    onChange(toolKey, 'size', pixelSize);
+  });
 
   addInlineSeparator(panel);
 

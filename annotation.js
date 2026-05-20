@@ -7,7 +7,7 @@ export function resetAnnotationIdCounter() {
 }
 
 // --- Tool definitions ---
-export const TOOLS = ['scaling', 'geometry', 'pencil', 'arrow', 'sequence', 'text', 'eraser'];
+export const TOOLS = ['scaling', 'geometry', 'pencil', 'arrow', 'stamp', 'sequence', 'text', 'eraser'];
 
 // Line style options (5 common styles)
 export const LINE_STYLES = [
@@ -33,6 +33,12 @@ export const NUMBER_STYLES = [
   { value: 'alpha-upper', label: 'A, B, C …' },
   { value: 'alpha-lower', label: 'a, b, c …' },
   { value: 'chinese', label: '一, 二, 三 …' },
+];
+
+// Stamp shape options
+export const STAMP_SHAPES = [
+  { value: 'check', label: '勾号' },
+  { value: 'x', label: '叉号' },
 ];
 
 // 9 color presets: 7 rainbow + black + white
@@ -63,6 +69,12 @@ export function createDefaultToolSettings() {
       arrowStyle: 'single',
       lineStyle: 'solid',
       lineWidth: 10,
+      color: '#FF0000',
+      opacity: 100,
+    },
+    stamp: {
+      shape: 'check',
+      size: 40,
       color: '#FF0000',
       opacity: 100,
     },
@@ -217,6 +229,9 @@ export function renderAnnotation(ctx, annotation) {
       break;
     case 'arrow':
       drawArrowAnnotation(ctx, params);
+      break;
+    case 'stamp':
+      drawStampAnnotation(ctx, params);
       break;
     case 'sequence':
       drawSequenceAnnotation(ctx, params);
@@ -441,6 +456,33 @@ function drawTextAnnotation(ctx, p) {
   const lineHeight = fontSize * 1.2;
   for (let i = 0; i < lines.length; i++) {
     ctx.fillText(lines[i], x, y + i * lineHeight);
+  }
+  }); // applyOpacity
+}
+
+function drawStampAnnotation(ctx, p) {
+  applyOpacity(ctx, p, () => {
+  const { x, y, shape, size } = p;
+  ctx.strokeStyle = p.color;
+  ctx.fillStyle = p.color;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = size * 0.12;
+
+  if (shape === 'check') {
+    ctx.beginPath();
+    ctx.moveTo(x + size * 0.15, y + size * 0.5);
+    ctx.lineTo(x + size * 0.4, y + size * 0.75);
+    ctx.lineTo(x + size * 0.85, y + size * 0.2);
+    ctx.stroke();
+  } else if (shape === 'x') {
+    const pad = size * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(x + pad, y + pad);
+    ctx.lineTo(x + size - pad, y + size - pad);
+    ctx.moveTo(x + size - pad, y + pad);
+    ctx.lineTo(x + pad, y + size - pad);
+    ctx.stroke();
   }
   }); // applyOpacity
 }
