@@ -609,10 +609,10 @@ function positionPopup(popup, trigger) {
   popup.style.top = top + 'px';
 }
 
-function addInlineSliderValue(container, value, label, min, max, step, toolKey, settingKey, onChange) {
+function addInlineSliderValue(container, value, label, min, max, step, toolKey, settingKey, onChange, suffix) {
   const valEl = document.createElement('span');
   valEl.className = 'annotation-inline-value';
-  valEl.textContent = label + ' ' + value;
+  valEl.textContent = label + ' ' + value + (suffix || '');
 
   valEl.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -654,7 +654,7 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
 
     function updateAll(v) {
       headerValue.value = v;
-      valEl.textContent = label + ' ' + v;
+      valEl.textContent = label + ' ' + v + (suffix || '');
       onChange(toolKey, settingKey, v);
     }
 
@@ -680,7 +680,7 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
   });
 
   container.appendChild(valEl);
-  _inlineValueEls[toolKey + '_' + settingKey] = { el: valEl, label };
+  _inlineValueEls[toolKey + '_' + settingKey] = { el: valEl, label, suffix };
   return valEl;
 }
 
@@ -1147,7 +1147,7 @@ function buildStampMenu(panel, settings, onChange) {
   addInlineSliderValue(panel, pct, '大小', 1, 100, 1, 'stamp', 'size', (toolKey, key, val) => {
     const pixelSize = Math.round(4 + (val - 1) * (512 - 4) / (100 - 1));
     onChange(toolKey, 'size', pixelSize);
-  });
+  }, '%');
 
   addInlineSeparator(panel);
 
@@ -1236,5 +1236,5 @@ export function updateSliderValue(key, value) {
   const slider = sliderWidgets[key];
   if (slider) slider.setValue(value);
   const inline = _inlineValueEls[key];
-  if (inline) inline.el.textContent = inline.label ? (inline.label + ' ' + value) : value;
+  if (inline) inline.el.textContent = inline.label ? (inline.label + ' ' + value + (inline.suffix || '')) : value;
 }
