@@ -43,6 +43,7 @@ let sliderWidgets = {};
 let _inlineValueEls = {};
 let _activePopup = null;
 let _activePopupSlider = null;
+let _activePopupInput = null;
 let isDragging = false;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
@@ -243,6 +244,7 @@ function closeActivePopup() {
     _activePopupSlider.destroy();
     _activePopupSlider = null;
   }
+  _activePopupInput = null;
   if (_activePopup) {
     _activePopup.remove();
     _activePopup = null;
@@ -676,6 +678,7 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
     headerValue.addEventListener('mousedown', (e) => e.stopPropagation());
 
     _activePopup = popup;
+    _activePopupInput = headerValue;
     positionPopup(popup, valEl);
   });
 
@@ -1241,4 +1244,7 @@ export function updateSliderValue(key, value) {
   if (slider) slider.setValue(value);
   const inline = _inlineValueEls[key];
   if (inline) inline.el.textContent = inline.label ? (inline.label + ' ' + value + (inline.suffix || '')) : value;
+  // 同步三级弹窗的滑块和输入框
+  if (_activePopupSlider) _activePopupSlider.setValue(value);
+  if (_activePopupInput) _activePopupInput.value = value;
 }
