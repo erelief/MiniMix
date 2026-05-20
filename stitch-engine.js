@@ -749,7 +749,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
               text: et.text,
               bold: et.bold || false, italic: et.italic || false,
               fontFamily: et.fontFamily || 'sans-serif',
-              fontSize: et.fontSize || 24, color: et.color || '#FF0000',
+              fontSize: et.fontSize || 24, color: et.color || '#E61919',
               shadow: et.shadow !== false,
             },
           }]);

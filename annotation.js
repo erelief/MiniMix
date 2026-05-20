@@ -41,10 +41,10 @@ export const STAMP_SHAPES = [
   { value: 'x', label: '叉号' },
 ];
 
-// 9 color presets: 7 rainbow + black + white
+// 9 color presets: 7 rainbow + black + white (desaturated to 80%)
 export const COLOR_PRESETS = [
-  '#FF0000', '#FF7F00', '#FFFF00', '#00FF00',
-  '#0000FF', '#4B0082', '#9400D3', '#000000', '#FFFFFF',
+  '#E61919', '#E67F19', '#E6E619', '#19E619',
+  '#1919E6', '#490D75', '#8C15BE', '#1A1A1A', '#E6E6E6',
 ];
 
 // --- Default tool settings (独立存储 per tool) ---
@@ -56,14 +56,14 @@ export function createDefaultToolSettings() {
       lineStyle: 'solid',
       lineWidth: 10,
       cornerRadius: 8,
-      color: '#FF0000',
+      color: '#E61919',
       opacity: 100,
       shadow: true,
     },
     pencil: {
       lineStyle: 'solid',
       lineWidth: 10,
-      color: '#FF0000',
+      color: '#E61919',
       opacity: 100,
       shadow: true,
     },
@@ -71,14 +71,14 @@ export function createDefaultToolSettings() {
       arrowStyle: 'single',
       lineStyle: 'solid',
       lineWidth: 10,
-      color: '#FF0000',
+      color: '#E61919',
       opacity: 100,
       shadow: true,
     },
     stamp: {
       shape: 'check',
       size: 256,
-      color: '#FF0000',
+      color: '#E61919',
       opacity: 100,
       shadow: true,
     },
@@ -86,7 +86,7 @@ export function createDefaultToolSettings() {
       nextNumber: 1,
       numberStyle: 'arabic',
       size: 64,
-      color: '#FF0000',
+      color: '#E61919',
       opacity: 100,
       shadow: true,
     },
@@ -95,7 +95,7 @@ export function createDefaultToolSettings() {
       italic: false,
       fontFamily: 'sans-serif',
       fontSize: 48,
-      color: '#FF0000',
+      color: '#E61919',
       opacity: 100,
       shadow: true,
     },
