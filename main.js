@@ -2337,10 +2337,11 @@ function handleAnnotationMouseDown(mx, my, editedImg) {
       const s = settings;
       const imgScale = getImageLocalScale(editedImg);
       const annot = createAnnotation('sequence', {
-        x: ax, y: ay,
+        x: ax - s.size / imgScale / 2,
+        y: ay - s.size / imgScale / 2,
         number: s.nextNumber,
         numberStyle: s.numberStyle,
-        fontSize: s.fontSize / imgScale,
+        size: s.size / imgScale,
         color: s.color,
         opacity: s.opacity,
       }, editedImg.id, editedImg.editState.rotation);
@@ -2593,10 +2594,8 @@ function getAnnotationBBox(annot) {
         width: Math.abs(p.endPoint.x - p.startPoint.x) + 40,
         height: Math.abs(p.endPoint.y - p.startPoint.y) + 40,
       };
-    case 'sequence': {
-      const r = Math.max(p.fontSize * 0.8, 16);
-      return { x: p.x, y: p.y, width: r * 2, height: r * 2 };
-    }
+    case 'sequence':
+      return { x: p.x, y: p.y, width: p.size, height: p.size };
     case 'stamp':
       return { x: p.x, y: p.y, width: p.size, height: p.size };
     case 'text': {
@@ -3159,8 +3158,7 @@ canvas.addEventListener('mousemove', (e) => {
         canvas.style.cursor = 'default'; canvas.title = '';
       } else {
         const sf = getLayoutScale();
-        const r = Math.max(state.toolSettings.sequence.fontSize * 0.8, 16);
-        canvas.style.cursor = getBrushCursor(r * 2 * sf);
+        canvas.style.cursor = getBrushCursor(state.toolSettings.sequence.size * sf);
         canvas.title = '点击放置序号';
       }
     } else if (state.activeAnnotationTool === 'geometry' || state.activeAnnotationTool === 'arrow') {
@@ -3235,22 +3233,21 @@ canvas.addEventListener('wheel', (e) => {
     return;
   }
 
-  // 序列号/文字：调节字号
-  if (tool === 'sequence' || tool === 'text') {
+  // 文字：调节字号
+  if (tool === 'text') {
     e.preventDefault();
-    const s = state.toolSettings[tool];
+    const s = state.toolSettings.text;
     const d = e.deltaY > 0 ? -1 : 1;
     const v = Math.max(5, Math.min(72, s.fontSize + d));
     if (v !== s.fontSize) {
       s.fontSize = v;
-      updateSliderValue(tool + '_fontSize', v);
-      if (tool === 'text' && _textInput) {
-        const ts = state.toolSettings.text;
+      updateSliderValue('text_fontSize', v);
+      if (_textInput) {
         let fs = '';
-        if (ts.bold) fs += 'bold ';
-        if (ts.italic) fs += 'italic ';
-        _textInput.style.font = `${fs}${ts.fontSize * getLayoutScale()}px ${ts.fontFamily}`;
-        _textInput.style.minHeight = `${ts.fontSize * getLayoutScale() * 1.2}px`;
+        if (s.bold) fs += 'bold ';
+        if (s.italic) fs += 'italic ';
+        _textInput.style.font = `${fs}${s.fontSize * getLayoutScale()}px ${s.fontFamily}`;
+        _textInput.style.minHeight = `${s.fontSize * getLayoutScale() * 1.2}px`;
         _textInput.style.width = '1px';
         _textInput.style.height = '1px';
         _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
@@ -3261,17 +3258,17 @@ canvas.addEventListener('wheel', (e) => {
     return;
   }
 
-  // 图章：调节大小（百分比 1-100）
-  if (tool === 'stamp') {
+  // 序列号/图章：调节大小（百分比 1-100）
+  if (tool === 'sequence' || tool === 'stamp') {
     e.preventDefault();
-    const s = state.toolSettings.stamp;
-    let pct = Math.round(((s.size - 4) / (512 - 4)) * 99) + 1; // pixels → pct (1-100)
+    const s = state.toolSettings[tool];
+    let pct = Math.round(((s.size - 4) / (512 - 4)) * 99) + 1;
     const d = e.deltaY > 0 ? -1 : 1;
     pct = Math.max(1, Math.min(100, pct + d));
     const newPx = Math.round(4 + (pct - 1) * (512 - 4) / (100 - 1));
     if (newPx !== s.size) {
       s.size = newPx;
-      updateSliderValue('stamp_size', pct);
+      updateSliderValue(tool + '_size', pct);
       recomputeAndRender();
     }
     return;

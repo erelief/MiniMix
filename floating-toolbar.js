@@ -1101,7 +1101,11 @@ function buildSequenceMenu(panel, settings, onChange) {
 
   addInlineSeparator(panel);
 
-  addInlineSliderValue(panel, s.fontSize, '字号', 5, 72, 1, 'sequence', 'fontSize', onChange);
+  const pct = Math.round(((s.size - 4) / (512 - 4)) * 100) + 1;
+  addInlineSliderValue(panel, pct, '大小', 1, 100, 1, 'sequence', 'size', (toolKey, key, val) => {
+    const pixelSize = Math.round(4 + (val - 1) * (512 - 4) / (100 - 1));
+    onChange(toolKey, 'size', pixelSize);
+  }, '%');
 
   addInlineSeparator(panel);
 

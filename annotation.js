@@ -81,7 +81,7 @@ export function createDefaultToolSettings() {
     sequence: {
       nextNumber: 1,
       numberStyle: 'arabic',
-      fontSize: 40,
+      size: 64,
       color: '#FF0000',
       opacity: 100,
     },
@@ -420,11 +420,12 @@ function drawArrowHead(ctx, x, y, angle, headLen) {
 
 function drawSequenceAnnotation(ctx, p) {
   applyOpacity(ctx, p, () => {
-  const { x, y, number, numberStyle, fontSize } = p;
+  const { x, y, number, numberStyle, size } = p;
   const label = formatNumber(number, numberStyle);
 
   // Draw hollow circle
-  const radius = Math.max(fontSize * 0.8, 16);
+  const radius = Math.max(size / 2, 16);
+  const fontSize = radius / 0.8;
   const cx = x + radius;
   const cy = y + radius;
   ctx.beginPath();
