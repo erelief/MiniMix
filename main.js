@@ -1610,6 +1610,33 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
 // 旋转光标（自定义 SVG）
 const ROTATE_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/%3E%3Cpath d='M3 3v5h5'/%3E%3C/svg%3E") 12 12, crosshair`;
 
+// 画笔大小圆形光标
+let _brushCursorCache = null;
+let _brushCursorSize = -1;
+function getBrushCursor(screenSize) {
+  const d = Math.max(4, Math.round(screenSize));
+  if (_brushCursorCache && _brushCursorSize === d) return _brushCursorCache;
+  const pad = 2;
+  const size = d + pad * 2;
+  const cvs = document.createElement('canvas');
+  cvs.width = size; cvs.height = size;
+  const ctx = cvs.getContext('2d');
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, d / 2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, d / 2, 0, Math.PI * 2);
+  ctx.stroke();
+  const hotspot = Math.floor(size / 2);
+  _brushCursorCache = `url("${cvs.toDataURL()}") ${hotspot} ${hotspot}, crosshair`;
+  _brushCursorSize = d;
+  return _brushCursorCache;
+}
+
 function enterEditMode(image) {
   if (!image.editState) image.initEditState();
   state.editModeImageId = image.id;
@@ -3110,10 +3137,31 @@ canvas.addEventListener('mousemove', (e) => {
         canvas.title = overText ? '点击编辑文字' : '';
       }
     } else if (state.activeAnnotationTool === 'stamp') {
+      if (!hit.isImageBody) {
+        canvas.style.cursor = 'default'; canvas.title = '';
+      } else {
+        const sf = getLayoutScale();
+        const screenD = state.toolSettings.stamp.size * sf;
+        canvas.style.cursor = getBrushCursor(screenD);
+        canvas.title = '点击放置图章';
+      }
+    } else if (state.activeAnnotationTool === 'pencil') {
+      if (!hit.isImageBody) {
+        canvas.style.cursor = 'default'; canvas.title = '';
+      } else {
+        const sf = getLayoutScale();
+        const screenD = state.toolSettings.pencil.lineWidth * sf;
+        canvas.style.cursor = getBrushCursor(screenD);
+        canvas.title = '';
+      }
+    } else if (state.activeAnnotationTool === 'geometry' || state.activeAnnotationTool === 'arrow') {
       canvas.style.cursor = hit.isImageBody ? 'crosshair' : 'default';
-      canvas.title = hit.isImageBody ? '点击放置图章' : '';
-    } else {
+      canvas.title = '';
+    } else if (state.activeAnnotationTool === 'eraser') {
       canvas.style.cursor = 'default'; canvas.title = '';
+    } else {
+      canvas.style.cursor = hit.isImageBody ? 'crosshair' : 'default';
+      canvas.title = '';
     }
     return;
   }
