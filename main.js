@@ -1687,11 +1687,12 @@ function enterEditMode(image) {
           let fs = '';
           if (s.bold) fs += 'bold ';
           if (s.italic) fs += 'italic ';
-          _textInput.style.font = `${fs}${s.fontSize * getLayoutScale()}px ${s.fontFamily}`;
+          const visualFs = s.fontSize * getLayoutScale();
+          _textInput.style.font = `${fs}${visualFs}px ${s.fontFamily}`;
           _textInput.style.color = hexToRgba(s.color, s.opacity / 100);
           _textInput.style.caretColor = s.color;
-          _textInput.style.minHeight = `${s.fontSize * getLayoutScale() * 1.2}px`;
-          // 重新触发自适应尺寸
+          _textInput.style.minHeight = `${visualFs * 1.2}px`;
+          _textInput.style.margin = `${-(1.5 + 4 + visualFs * 0.1)}px 0 0 -5.5px`;
           _textInput.style.width = '1px';
           _textInput.style.height = '1px';
           _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
@@ -2065,7 +2066,7 @@ function createTextInput(x, y, imageId, existingAnnot) {
   if (existingAnnot) {
     s.bold = existingAnnot.params.bold;
     s.italic = existingAnnot.params.italic;
-    s.fontSize = Math.round(existingAnnot.params.fontSize * imgScale);
+    s.fontSize = Math.round(existingAnnot.params.fontSize * imgScale * 100) / 100;
     s.color = existingAnnot.params.color;
     existingAnnot._originalText = existingAnnot.params.text;
     existingAnnot.params.text = '';
@@ -2161,11 +2162,13 @@ function createTextInput(x, y, imageId, existingAnnot) {
       if (_textInput) {
         const sf2 = getLayoutScale();
         const s2 = state.toolSettings.text;
+        const visualFs = s2.fontSize * sf2;
         let fs = '';
         if (s2.bold) fs += 'bold ';
         if (s2.italic) fs += 'italic ';
-        _textInput.style.font = `${fs}${s2.fontSize * sf2}px ${s2.fontFamily}`;
-        _textInput.style.minHeight = `${s2.fontSize * sf2 * 1.2}px`;
+        _textInput.style.font = `${fs}${visualFs}px ${s2.fontFamily}`;
+        _textInput.style.minHeight = `${visualFs * 1.2}px`;
+        _textInput.style.margin = `${-(1.5 + 4 + visualFs * 0.1)}px 0 0 -5.5px`;
         _textInput.style.width = '1px';
         _textInput.style.height = '1px';
         _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
@@ -2186,15 +2189,21 @@ function createTextInput(x, y, imageId, existingAnnot) {
   // Textarea
   const ta = document.createElement('textarea');
   ta.className = 'annotation-text-box';
+  const visualFontSize = s.fontSize * sf;
+  const pad = 4;
+  const bdr = 1.5;
+  const mt = -(bdr + pad + visualFontSize * 0.1);
+  const ml = -(bdr + pad);
+
   ta.value = initialText;
   ta.style.background = 'rgba(255, 255, 255, 0.08)';
-  ta.style.border = '1.5px dashed rgba(255, 255, 255, 0.6)';
+  ta.style.border = `${bdr}px dashed rgba(255, 255, 255, 0.6)`;
   ta.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.5)';
   ta.style.outline = 'none';
-  ta.style.padding = '4px';
-  ta.style.margin = '-6px 0 0 0';
+  ta.style.padding = `${pad}px`;
+  ta.style.margin = `${mt}px 0 0 ${ml}px`;
   ta.style.minWidth = '80px';
-  ta.style.minHeight = `${s.fontSize * sf * 1.2}px`;
+  ta.style.minHeight = `${visualFontSize * 1.2}px`;
   ta.style.overflow = 'hidden';
   ta.style.resize = 'none';
   ta.style.whiteSpace = 'pre';
@@ -3316,8 +3325,10 @@ canvas.addEventListener('wheel', (e) => {
         let fs = '';
         if (s.bold) fs += 'bold ';
         if (s.italic) fs += 'italic ';
-        _textInput.style.font = `${fs}${s.fontSize * getLayoutScale()}px ${s.fontFamily}`;
-        _textInput.style.minHeight = `${s.fontSize * getLayoutScale() * 1.2}px`;
+        const visualFs = s.fontSize * getLayoutScale();
+        _textInput.style.font = `${fs}${visualFs}px ${s.fontFamily}`;
+        _textInput.style.minHeight = `${visualFs * 1.2}px`;
+        _textInput.style.margin = `${-(1.5 + 4 + visualFs * 0.1)}px 0 0 -5.5px`;
         _textInput.style.width = '1px';
         _textInput.style.height = '1px';
         _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
