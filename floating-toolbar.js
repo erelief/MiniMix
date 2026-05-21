@@ -627,6 +627,8 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
   valEl.className = 'annotation-inline-value';
   valEl.textContent = label ? (label + ' ' + value + (suffix || '')) : (value + (suffix || ''));
 
+  valEl.addEventListener('mousedown', (e) => e.stopPropagation());
+  valEl.addEventListener('click', (e) => e.stopPropagation());
   valEl.addEventListener('mouseenter', () => {
     closeActivePopup();
     closeAllCustomDropdowns();
@@ -694,8 +696,33 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
 
     popup.addEventListener('mouseenter', () => clearTimeout(_activePopup._hideTimer));
     popup.addEventListener('mouseleave', () => { _activePopup._hideTimer = setTimeout(closeActivePopup, 150); });
+    popup.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const cur = _activePopupSlider.getValue();
+      const d = e.deltaY > 0 ? -step : step;
+      const v = Math.max(min, Math.min(max, Math.round((cur + d) / step) * step));
+      if (v !== cur) {
+        _activePopupSlider.setValue(v);
+        headerValue.value = v;
+        valEl.textContent = label ? (label + ' ' + v + (suffix || '')) : (v + (suffix || ''));
+        onChange(toolKey, settingKey, v);
+      }
+    }, { passive: false });
   });
   valEl.addEventListener('mouseleave', () => { if (_activePopup && !_activePopup._hideTimer) _activePopup._hideTimer = setTimeout(closeActivePopup, 150); });
+
+  valEl.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const cur = _activePopupSlider ? _activePopupSlider.getValue() : parseFloat(valEl.textContent.match(/\d+$/)?.[0]) || value;
+    const d = e.deltaY > 0 ? -step : step;
+    const v = Math.max(min, Math.min(max, Math.round((cur + d) / step) * step));
+    if (v !== cur) {
+      if (_activePopupSlider) _activePopupSlider.setValue(v);
+      if (_activePopupInput) _activePopupInput.value = v;
+      valEl.textContent = label ? (label + ' ' + v + (suffix || '')) : (v + (suffix || ''));
+      onChange(toolKey, settingKey, v);
+    }
+  }, { passive: false });
 
   container.appendChild(valEl);
   _inlineValueEls[toolKey + '_' + settingKey] = { el: valEl, label, suffix };
@@ -703,6 +730,7 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
 }
 
 function addInlineShadowControl(panel, value, toolName, onChange) {
+  let currentVal = value;
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.checked = value > 0;
@@ -710,6 +738,7 @@ function addInlineShadowControl(panel, value, toolName, onChange) {
   lbl.className = 'annotation-inline-checkbox';
   cb.addEventListener('change', () => {
     const v = cb.checked ? 35 : 0;
+    currentVal = v;
     onChange(toolName, 'shadow', v);
     if (_activePopupSlider) _activePopupSlider.setValue(v);
     if (_activePopupInput) _activePopupInput.value = v;
@@ -742,7 +771,7 @@ function addInlineShadowControl(panel, value, toolName, onChange) {
     const numInput = document.createElement('input');
     numInput.type = 'number';
     numInput.className = 'annotation-popup-input';
-    numInput.value = value;
+    numInput.value = currentVal;
     numInput.min = 0;
     numInput.max = 100;
     numInput.step = 1;
@@ -761,6 +790,7 @@ function addInlineShadowControl(panel, value, toolName, onChange) {
 
     function updateAll(v) {
       v = Math.max(0, Math.min(100, Math.round(v)));
+      currentVal = v;
       numInput.value = v;
       cb.checked = v > 0;
       onChange(toolName, 'shadow', v);
@@ -769,7 +799,7 @@ function addInlineShadowControl(panel, value, toolName, onChange) {
     _activePopupSlider = createSlider({
       container: sliderContainer,
       min: 0, max: 100, step: 1,
-      value: value,
+      value: currentVal,
       onChange: (v) => updateAll(v),
     });
 
@@ -789,6 +819,18 @@ function addInlineShadowControl(panel, value, toolName, onChange) {
 
     popup.addEventListener('mouseenter', () => clearTimeout(hideTimer));
     popup.addEventListener('mouseleave', () => { hideTimer = setTimeout(hidePopup, 150); });
+    popup.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const cur = _activePopupSlider.getValue();
+      const d = e.deltaY > 0 ? -1 : 1;
+      const v = Math.max(0, Math.min(100, cur + d));
+      if (v !== cur) {
+        _activePopupSlider.setValue(v);
+        if (_activePopupInput) _activePopupInput.value = v;
+        cb.checked = v > 0;
+        onChange(toolName, 'shadow', v);
+      }
+    }, { passive: false });
   }
 
   function hidePopup() {
@@ -798,6 +840,8 @@ function addInlineShadowControl(panel, value, toolName, onChange) {
     hoverPopup = null;
   }
 
+  lbl.addEventListener('mousedown', (e) => e.stopPropagation());
+  lbl.addEventListener('click', (e) => e.stopPropagation());
   lbl.addEventListener('mouseenter', showPopup);
   lbl.addEventListener('mouseleave', () => { hideTimer = setTimeout(hidePopup, 150); });
 
@@ -814,6 +858,8 @@ function addInlineColorTrigger(container, currentColor, currentOpacity, onChange
   dot.style.setProperty('--dot-color', hexToRgba(currentColor, currentOpacity / 100));
   dot.title = '颜色';
 
+  dot.addEventListener('mousedown', (e) => e.stopPropagation());
+  dot.addEventListener('click', (e) => e.stopPropagation());
   dot.addEventListener('mouseenter', () => {
     closeActivePopup();
     closeAllCustomDropdowns();
