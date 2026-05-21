@@ -750,7 +750,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
               bold: et.bold || false, italic: et.italic || false,
               fontFamily: et.fontFamily || 'sans-serif',
               fontSize: et.fontSize || 24, color: et.color || '#E61919',
-              shadow: et.shadow !== false,
+              shadow: et.shadow !== false ? (typeof et.shadow === 'number' ? et.shadow : 35) : 0,
             },
           }]);
         }

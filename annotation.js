@@ -58,14 +58,14 @@ export function createDefaultToolSettings() {
       cornerRadius: 8,
       color: '#E61919',
       opacity: 100,
-      shadow: true,
+      shadow: 35,
     },
     pencil: {
       lineStyle: 'solid',
       lineWidth: 10,
       color: '#E61919',
       opacity: 100,
-      shadow: true,
+      shadow: 35,
     },
     arrow: {
       arrowStyle: 'single',
@@ -73,14 +73,14 @@ export function createDefaultToolSettings() {
       lineWidth: 10,
       color: '#E61919',
       opacity: 100,
-      shadow: true,
+      shadow: 35,
     },
     stamp: {
       shape: 'check',
       size: 256,
       color: '#E61919',
       opacity: 100,
-      shadow: true,
+      shadow: 35,
     },
     sequence: {
       nextNumber: 1,
@@ -88,7 +88,7 @@ export function createDefaultToolSettings() {
       size: 64,
       color: '#E61919',
       opacity: 100,
-      shadow: true,
+      shadow: 35,
     },
     text: {
       bold: false,
@@ -97,7 +97,7 @@ export function createDefaultToolSettings() {
       fontSize: 48,
       color: '#E61919',
       opacity: 100,
-      shadow: true,
+      shadow: 35,
     },
     eraser: {},
   };
@@ -256,22 +256,22 @@ function applyOpacity(ctx, p, fn) {
 }
 
 // Compute shadow params: dark, desaturated, low-alpha version of the color
-function getShadowColor(hexColor) {
+function getShadowColor(hexColor, alpha) {
   const r = parseInt(hexColor.slice(1, 3), 16);
   const g = parseInt(hexColor.slice(3, 5), 16);
   const b = parseInt(hexColor.slice(5, 7), 16);
-  // Desaturate by averaging channels, then lerp 70% toward dark gray
   const gray = (r + g + b) / 3;
   const sr = Math.round(gray * 0.2 + r * 0.1);
   const sg = Math.round(gray * 0.2 + g * 0.1);
   const sb = Math.round(gray * 0.2 + b * 0.1);
-  return `rgba(${sr},${sg},${sb},0.35)`;
+  return `rgba(${sr},${sg},${sb},${alpha})`;
 }
 
 function applyShadow(ctx, p, sizeMetric) {
   if (!p.shadow) return;
   const s = Math.max(sizeMetric, 1);
-  ctx.shadowColor = getShadowColor(p.color);
+  const alpha = typeof p.shadow === 'number' ? p.shadow / 100 : 0.35;
+  ctx.shadowColor = getShadowColor(p.color, alpha);
   ctx.shadowBlur = Math.min(s * 0.6, 20);
   ctx.shadowOffsetX = s * 0.12;
   ctx.shadowOffsetY = s * 0.12;
