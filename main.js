@@ -3263,7 +3263,7 @@ canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const s = state.toolSettings.text;
     const d = e.deltaY > 0 ? -1 : 1;
-    const v = Math.max(5, Math.min(72, s.fontSize + d));
+    const v = Math.max(1, Math.round((s.fontSize + d) * 100) / 100);
     if (v !== s.fontSize) {
       s.fontSize = v;
       updateSliderValue('text_fontSize', v);

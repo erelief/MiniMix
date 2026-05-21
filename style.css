@@ -1254,6 +1254,39 @@ body {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+.annotation-fontsize-select {
+  position: relative;
+}
+
+.annotation-fontsize-input {
+  width: 48px;
+  height: 24px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  outline: none;
+  -moz-appearance: textfield;
+  transition: border-color 0.15s;
+}
+
+.annotation-fontsize-input::-webkit-outer-spin-button,
+.annotation-fontsize-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.annotation-fontsize-input:hover {
+  border-color: var(--text-muted);
+}
+
+.annotation-fontsize-input:focus {
+  border-color: var(--accent);
+}
+
 .annotation-submenu-divider {
   height: 1px;
   background: var(--border-color);

@@ -4,6 +4,10 @@ import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eras
 import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, STAMP_SHAPES, COLOR_PRESETS, hexToRgba } from './annotation.js';
 import { createSlider } from './slider-widget.js';
 
+const FONT_SIZE_PRESETS = [
+  5, 6, 7, 8, 9, 10, 11, 12, 14, 18, 20, 22, 24, 26, 28, 36, 48, 56, 60, 72,
+];
+
 const TOOL_LABELS = {
   scaling: '编辑画布',
   geometry: '几何图形',
@@ -961,6 +965,75 @@ function addInlineDropdown(container, { options, currentValue, makePreview, sett
   container.appendChild(wrapper);
 }
 
+function addFontSizeControl(container, currentValue, onChange) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'annotation-fontsize-select';
+
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.className = 'annotation-fontsize-input';
+  input.value = currentValue;
+  input.step = 0.01;
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'annotation-linestyle-dropdown';
+
+  FONT_SIZE_PRESETS.forEach(size => {
+    const item = document.createElement('div');
+    item.className = 'annotation-linestyle-option' + (size === currentValue ? ' active' : '');
+    item.textContent = size;
+    item.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      input.value = size;
+      onChange('text', 'fontSize', size);
+      dropdown.querySelectorAll('.annotation-linestyle-option').forEach(o => o.classList.remove('active'));
+      item.classList.add('active');
+      closeAllCustomDropdowns();
+    });
+    dropdown.appendChild(item);
+  });
+
+  function applyValue() {
+    let v = parseFloat(input.value);
+    if (isNaN(v) || v <= 0) v = 12;
+    v = Math.round(v * 100) / 100;
+    input.value = v;
+    onChange('text', 'fontSize', v);
+  }
+
+  input.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    closeAllCustomDropdowns();
+    closeActivePopup();
+    const submenu = input.closest('.annotation-submenu');
+    dropdown.classList.toggle('pop-up', submenu && submenu.classList.contains('pop-up'));
+    dropdown.style.display = 'block';
+    dropdown.style.animation = dropdown.classList.contains('pop-up')
+      ? 'popupFadeInUp 0.1s ease-out'
+      : 'popupFadeIn 0.1s ease-out';
+    _openCustomDropdowns.push(dropdown);
+    input.select();
+  });
+
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      applyValue();
+      input.blur();
+    }
+  });
+
+  input.addEventListener('change', applyValue);
+  input.addEventListener('mousedown', (ev) => ev.stopPropagation());
+
+  wrapper.appendChild(input);
+  wrapper.appendChild(dropdown);
+  wrapper.addEventListener('mousedown', (ev) => ev.stopPropagation());
+  container.appendChild(wrapper);
+
+  _inlineValueEls['text_fontSize'] = { el: input };
+}
+
 // --- Tool-specific submenu builders ---
 
 function buildGeometryMenu(panel, settings, onChange) {
@@ -1288,7 +1361,7 @@ function buildTextMenu(panel, settings, onChange) {
 
   addInlineSeparator(panel);
 
-  addInlineSliderValue(panel, s.fontSize, '字号', 5, 72, 1, 'text', 'fontSize', onChange);
+  addFontSizeControl(panel, s.fontSize, onChange);
 
   addInlineSeparator(panel);
 
@@ -1333,7 +1406,13 @@ export function updateSliderValue(key, value) {
   const slider = sliderWidgets[key];
   if (slider) slider.setValue(value);
   const inline = _inlineValueEls[key];
-  if (inline) inline.el.textContent = inline.label ? (inline.label + ' ' + value + (inline.suffix || '')) : value;
+  if (inline) {
+    if (inline.el.tagName === 'INPUT') {
+      inline.el.value = value;
+    } else {
+      inline.el.textContent = inline.label ? (inline.label + ' ' + value + (inline.suffix || '')) : value;
+    }
+  }
   // 同步三级弹窗的滑块和输入框
   if (_activePopupSlider) _activePopupSlider.setValue(value);
   if (_activePopupInput) _activePopupInput.value = value;
