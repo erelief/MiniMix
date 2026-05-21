@@ -2294,6 +2294,8 @@ function commitTextInput(save) {
           existing.params.fontSize = s.fontSize / imgScale;
           existing.params.color = s.color;
           existing.params.fontFamily = s.fontFamily;
+          existing.params.shadow = s.shadow;
+          existing.params.opacity = s.opacity;
           delete existing._originalText;
         }
       } else {
