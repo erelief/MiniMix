@@ -2050,6 +2050,7 @@ let _textDragging = false;
 let _textDragOffX = 0, _textDragOffY = 0;
 
 const GRIP_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>';
+const SCALE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M14.4 14.4 21 7"/><path d="M16.5 7H21v4.5"/></svg>';
 
 function createTextInput(x, y, imageId, existingAnnot) {
   commitTextInput(true);
@@ -2137,6 +2138,50 @@ function createTextInput(x, y, imageId, existingAnnot) {
     document.addEventListener('mouseup', onUp);
   });
   wrapper.appendChild(grip);
+
+  // Scale handle (bottom-right corner — drag to adjust font size)
+  const scaleHandle = document.createElement('div');
+  scaleHandle.className = 'annotation-text-scale';
+  scaleHandle.innerHTML = SCALE_ICON;
+  scaleHandle.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startY = e.clientY;
+    const startSize = s.fontSize;
+
+    const onMove = (ev) => {
+      const sf = getLayoutScale();
+      const d = (ev.clientY - startY) / (sf * 1.2);
+      const newV = Math.max(1, Math.round((startSize + d) * 100) / 100);
+      if (newV === state.toolSettings.text.fontSize) return;
+      state.toolSettings.text.fontSize = newV;
+      updateSliderValue('text_fontSize', newV);
+      if (_textInput) {
+        const sf2 = getLayoutScale();
+        const s2 = state.toolSettings.text;
+        let fs = '';
+        if (s2.bold) fs += 'bold ';
+        if (s2.italic) fs += 'italic ';
+        _textInput.style.font = `${fs}${s2.fontSize * sf2}px ${s2.fontFamily}`;
+        _textInput.style.minHeight = `${s2.fontSize * sf2 * 1.2}px`;
+        _textInput.style.width = '1px';
+        _textInput.style.height = '1px';
+        _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
+        _textInput.style.height = (_textInput.scrollHeight + 4) + 'px';
+        grip.style.height = _textInput.scrollHeight + 'px';
+      }
+      recomputeAndRender();
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  wrapper.appendChild(scaleHandle);
 
   // Textarea
   const ta = document.createElement('textarea');

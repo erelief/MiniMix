@@ -1708,6 +1708,32 @@ body {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
 }
 
+.annotation-text-scale {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: nwse-resize;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  opacity: 0.6;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.annotation-text-scale:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.annotation-text-scale svg {
+  stroke: #fff;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
 .annotation-text-box {
   border: none;
   outline: 1px dashed rgba(255, 255, 255, 0.4);
