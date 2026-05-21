@@ -584,20 +584,24 @@ function drawSequenceAnnotation(ctx, p) {
   const { x, y, number, numberStyle, size } = p;
   const label = formatNumber(number, numberStyle);
 
-  // Draw hollow circle
   const radius = Math.max(size / 2, 16);
-  const fontSize = radius / 0.8;
   const cx = x + radius;
   const cy = y + radius;
-  const lineW = Math.max(fontSize * 0.1, 2);
+  const lineW = Math.max(radius * 0.1, 2);
   applyShadow(ctx, p, size * 0.15);
   ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.arc(cx, cy, radius - lineW / 2, 0, Math.PI * 2);
   ctx.strokeStyle = p.color;
   ctx.lineWidth = lineW;
   ctx.stroke();
 
-  // Draw number inside
+  const maxW = (radius - lineW) * 1.7;
+  let fontSize = radius / 0.8;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  const measured = ctx.measureText(label).width;
+  if (measured > maxW) {
+    fontSize = fontSize * maxW / measured;
+  }
   ctx.fillStyle = p.color;
   ctx.font = `bold ${fontSize}px sans-serif`;
   ctx.textAlign = 'center';
