@@ -1262,16 +1262,25 @@ body {
   max-height: calc(26px * 5 + 6px);
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--text-muted) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.15) rgba(255, 255, 255, 0.04);
 }
 
 .annotation-fontsize-dropdown::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
+}
+
+.annotation-fontsize-dropdown::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
 }
 
 .annotation-fontsize-dropdown::-webkit-scrollbar-thumb {
-  background: var(--text-muted);
-  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.annotation-fontsize-dropdown::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .annotation-fontsize-input {
