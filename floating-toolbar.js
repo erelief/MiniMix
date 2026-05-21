@@ -706,13 +706,104 @@ function addInlineShadowControl(panel, value, toolName, onChange) {
   cb.addEventListener('change', () => {
     const v = cb.checked ? 35 : 0;
     onChange(toolName, 'shadow', v);
-    updateSliderValue(toolName + '_shadow', v);
+    if (_activePopupSlider) _activePopupSlider.setValue(v);
+    if (_activePopupInput) _activePopupInput.value = v;
   });
   lbl.appendChild(cb);
   lbl.appendChild(document.createTextNode('投影'));
-  panel.appendChild(lbl);
 
-  addInlineSliderValue(panel, value, '', 0, 100, 1, toolName, 'shadow', (t, k, v) => { onChange(t, k, v); cb.checked = v > 0; }, '%');
+  let hoverPopup = null;
+  let hideTimer = null;
+
+  function showPopup() {
+    clearTimeout(hideTimer);
+    if (hoverPopup) return;
+    closeActivePopup();
+    closeAllCustomDropdowns();
+
+    const popup = document.createElement('div');
+    popup.className = 'annotation-popup annotation-popup-slider';
+    hoverPopup = popup;
+
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.gap = '8px';
+
+    const sliderContainer = document.createElement('div');
+    sliderContainer.className = 'annotation-slider-container';
+    sliderContainer.style.flex = '1';
+
+    const numInput = document.createElement('input');
+    numInput.type = 'number';
+    numInput.className = 'annotation-popup-input';
+    numInput.value = value;
+    numInput.min = 0;
+    numInput.max = 100;
+    numInput.step = 1;
+    numInput.style.flexShrink = '0';
+    numInput.style.width = '42px';
+
+    const pctSpan = document.createElement('span');
+    pctSpan.textContent = '%';
+    pctSpan.style.cssText = 'font-size:11px;color:var(--text-muted);flex-shrink:0;';
+
+    row.appendChild(sliderContainer);
+    row.appendChild(numInput);
+    row.appendChild(pctSpan);
+    popup.appendChild(row);
+    document.body.appendChild(popup);
+
+    function updateAll(v) {
+      v = Math.max(0, Math.min(100, Math.round(v)));
+      numInput.value = v;
+      cb.checked = v > 0;
+      onChange(toolName, 'shadow', v);
+    }
+
+    _activePopupSlider = createSlider({
+      container: sliderContainer,
+      min: 0, max: 100, step: 1,
+      value: value,
+      onChange: (v) => updateAll(v),
+    });
+
+    numInput.addEventListener('change', () => {
+      let v = parseInt(numInput.value);
+      if (isNaN(v)) v = 0;
+      v = Math.max(0, Math.min(100, v));
+      updateAll(v);
+      _activePopupSlider.setValue(v);
+    });
+    numInput.addEventListener('click', (e) => e.stopPropagation());
+    numInput.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    _activePopupInput = numInput;
+    _activePopup = popup;
+    positionPopup(popup, lbl);
+
+    popup.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+    popup.addEventListener('mouseleave', () => { hideTimer = setTimeout(hidePopup, 150); });
+  }
+
+  function hidePopup() {
+    clearTimeout(hideTimer);
+    if (!hoverPopup) return;
+    hoverPopup.remove();
+    hoverPopup = null;
+    if (_activePopup === hoverPopup) _activePopup = null;
+    _activePopupSlider = null;
+    _activePopupInput = null;
+  }
+
+  lbl.addEventListener('mouseenter', showPopup);
+  lbl.addEventListener('mouseleave', () => { hideTimer = setTimeout(hidePopup, 150); });
+
+  panel.appendChild(lbl);
+  _inlineValueEls[toolName + '_shadow'] = {
+    el: lbl,
+    update: (v) => { cb.checked = v > 0; if (_activePopupSlider) _activePopupSlider.setValue(v); if (_activePopupInput) _activePopupInput.value = v; },
+  };
 }
 
 function addInlineColorTrigger(container, currentColor, currentOpacity, onChange) {
@@ -1371,7 +1462,9 @@ export function updateSliderValue(key, value) {
   if (slider) slider.setValue(value);
   const inline = _inlineValueEls[key];
   if (inline) {
-    if (inline.el.tagName === 'INPUT') {
+    if (inline.update) {
+      inline.update(value);
+    } else if (inline.el.tagName === 'INPUT') {
       inline.el.value = value;
     } else {
       inline.el.textContent = inline.label ? (inline.label + ' ' + value + (inline.suffix || '')) : (value + (inline.suffix || ''));
