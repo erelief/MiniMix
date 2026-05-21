@@ -1228,7 +1228,7 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 3px;
-  z-index: 1100;
+  z-index: 1300;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
@@ -1623,7 +1623,7 @@ body {
 
 .annotation-popup {
   position: fixed;
-  z-index: 1100;
+  z-index: 1300;
   background: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
