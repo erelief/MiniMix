@@ -1058,8 +1058,7 @@ function addInlineDropdown(container, { options, currentValue, makePreview, sett
   });
   wrapper.appendChild(dropdown);
 
-  trigger.addEventListener('click', (ev) => {
-    ev.stopPropagation();
+  trigger.addEventListener('mouseenter', () => {
     closeAllCustomDropdowns();
     closeActivePopup();
     const submenu = trigger.closest('.annotation-submenu');
@@ -1069,6 +1068,9 @@ function addInlineDropdown(container, { options, currentValue, makePreview, sett
       ? 'popupFadeInUp 0.1s ease-out'
       : 'popupFadeIn 0.1s ease-out';
     _openCustomDropdowns.push(dropdown);
+  });
+  wrapper.addEventListener('mouseleave', () => {
+    closeAllCustomDropdowns();
   });
 
   wrapper.addEventListener('mousedown', (ev) => ev.stopPropagation());
@@ -1086,7 +1088,7 @@ function addFontSizeControl(container, currentValue, onChange) {
   input.step = 0.01;
 
   const dropdown = document.createElement('div');
-  dropdown.className = 'annotation-linestyle-dropdown';
+  dropdown.className = 'annotation-linestyle-dropdown annotation-fontsize-dropdown';
 
   FONT_SIZE_PRESETS.forEach(size => {
     const item = document.createElement('div');
@@ -1111,8 +1113,7 @@ function addFontSizeControl(container, currentValue, onChange) {
     onChange('text', 'fontSize', v);
   }
 
-  input.addEventListener('click', (ev) => {
-    ev.stopPropagation();
+  input.addEventListener('mouseenter', () => {
     closeAllCustomDropdowns();
     closeActivePopup();
     const submenu = input.closest('.annotation-submenu');
@@ -1122,7 +1123,9 @@ function addFontSizeControl(container, currentValue, onChange) {
       ? 'popupFadeInUp 0.1s ease-out'
       : 'popupFadeIn 0.1s ease-out';
     _openCustomDropdowns.push(dropdown);
-    input.select();
+  });
+  wrapper.addEventListener('mouseleave', () => {
+    closeAllCustomDropdowns();
   });
 
   input.addEventListener('keydown', (ev) => {

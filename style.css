@@ -1219,7 +1219,7 @@ body {
 .annotation-linestyle-dropdown {
   display: none;
   position: absolute;
-  top: calc(100% + 4px);
+  top: 100%;
   left: 0;
   min-width: 100%;
   background: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
@@ -1234,7 +1234,7 @@ body {
 
 .annotation-linestyle-dropdown.pop-up {
   top: auto;
-  bottom: calc(100% + 4px);
+  bottom: 100%;
 }
 
 .annotation-linestyle-option {
@@ -1256,6 +1256,22 @@ body {
 
 .annotation-fontsize-select {
   position: relative;
+}
+
+.annotation-fontsize-dropdown {
+  max-height: calc(26px * 5 + 6px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-muted) transparent;
+}
+
+.annotation-fontsize-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+
+.annotation-fontsize-dropdown::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 2px;
 }
 
 .annotation-fontsize-input {
