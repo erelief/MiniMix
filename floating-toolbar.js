@@ -244,6 +244,7 @@ function toggleSubmenu(tool) {
 }
 
 function closeActivePopup() {
+  if (_activePopup) clearTimeout(_activePopup._hideTimer);
   if (_activePopupSlider) {
     _activePopupSlider.destroy();
     _activePopupSlider = null;
@@ -626,18 +627,12 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
   valEl.className = 'annotation-inline-value';
   valEl.textContent = label ? (label + ' ' + value + (suffix || '')) : (value + (suffix || ''));
 
-  valEl.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (_activePopup && _activePopup._trigger === valEl) {
-      closeActivePopup();
-      return;
-    }
+  valEl.addEventListener('mouseenter', () => {
     closeActivePopup();
     closeAllCustomDropdowns();
 
     const popup = document.createElement('div');
     popup.className = 'annotation-popup annotation-popup-slider';
-    popup._trigger = valEl;
 
     // Single row: slider left, number right
     const row = document.createElement('div');
@@ -660,6 +655,12 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
 
     row.appendChild(sliderContainer);
     row.appendChild(headerValue);
+    if (suffix) {
+      const sufSpan = document.createElement('span');
+      sufSpan.textContent = suffix;
+      sufSpan.style.cssText = 'font-size:11px;color:var(--text-muted);flex-shrink:0;';
+      row.appendChild(sufSpan);
+    }
     popup.appendChild(row);
 
     document.body.appendChild(popup);
@@ -690,7 +691,11 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
     _activePopup = popup;
     _activePopupInput = headerValue;
     positionPopup(popup, valEl);
+
+    popup.addEventListener('mouseenter', () => clearTimeout(_activePopup._hideTimer));
+    popup.addEventListener('mouseleave', () => { _activePopup._hideTimer = setTimeout(closeActivePopup, 150); });
   });
+  valEl.addEventListener('mouseleave', () => { if (_activePopup && !_activePopup._hideTimer) _activePopup._hideTimer = setTimeout(closeActivePopup, 150); });
 
   container.appendChild(valEl);
   _inlineValueEls[toolKey + '_' + settingKey] = { el: valEl, label, suffix };
@@ -789,11 +794,8 @@ function addInlineShadowControl(panel, value, toolName, onChange) {
   function hidePopup() {
     clearTimeout(hideTimer);
     if (!hoverPopup) return;
-    hoverPopup.remove();
+    closeActivePopup();
     hoverPopup = null;
-    if (_activePopup === hoverPopup) _activePopup = null;
-    _activePopupSlider = null;
-    _activePopupInput = null;
   }
 
   lbl.addEventListener('mouseenter', showPopup);
@@ -812,12 +814,7 @@ function addInlineColorTrigger(container, currentColor, currentOpacity, onChange
   dot.style.setProperty('--dot-color', hexToRgba(currentColor, currentOpacity / 100));
   dot.title = '颜色';
 
-  dot.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (_activePopup && _activePopup._trigger === dot) {
-      closeActivePopup();
-      return;
-    }
+  dot.addEventListener('mouseenter', () => {
     closeActivePopup();
     closeAllCustomDropdowns();
 
@@ -903,7 +900,11 @@ function addInlineColorTrigger(container, currentColor, currentOpacity, onChange
     document.body.appendChild(popup);
     _activePopup = popup;
     positionPopup(popup, dot);
+
+    popup.addEventListener('mouseenter', () => clearTimeout(_activePopup._hideTimer));
+    popup.addEventListener('mouseleave', () => { _activePopup._hideTimer = setTimeout(closeActivePopup, 150); });
   });
+  dot.addEventListener('mouseleave', () => { if (_activePopup && !_activePopup._hideTimer) _activePopup._hideTimer = setTimeout(closeActivePopup, 150); });
 
   container.appendChild(dot);
   return dot;
