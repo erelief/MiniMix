@@ -1011,14 +1011,14 @@ body {
   align-items: center;
   gap: 0;
   background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
-  padding: 6px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04) inset, 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  padding: 4px 6px;
   user-select: none;
-  transition: box-shadow 0.15s, transform 0.1s;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
 }
 
 .annotation-toolbar.dragging {
@@ -1030,23 +1030,24 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 36px;
+  width: 20px;
+  height: 32px;
   cursor: grab;
   color: var(--text-secondary);
-  opacity: 0.5;
-  transition: opacity 0.15s;
+  opacity: 0.35;
+  transition: opacity 0.15s, color 0.15s;
   flex-shrink: 0;
+  margin-right: 2px;
 }
 
 .annotation-toolbar-grip:hover {
-  opacity: 1;
+  opacity: 0.8;
   color: var(--text-primary);
 }
 
 .annotation-toolbar-grip svg {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }
 
 .annotation-toolbar-btns {
@@ -1061,12 +1062,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.15s ease;
 }
 
 .annotation-tool-btn svg {
@@ -1075,24 +1076,28 @@ body {
 }
 
 .annotation-tool-btn:hover {
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
   color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--border-color) 50%, transparent);
 }
 
 .annotation-tool-btn.active {
   background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(233, 69, 96, 0.3);
 }
 
 .annotation-tool-btn.active:hover {
   background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .annotation-toolbar-separator {
   width: 1px;
-  height: 20px;
+  height: 18px;
   background: var(--border-color);
-  margin: 0 2px;
+  margin: 0 3px;
   flex-shrink: 0;
 }
 
@@ -1101,8 +1106,9 @@ body {
 }
 
 .annotation-clear-all-btn:hover {
-  background: rgba(233, 69, 96, 0.15);
+  background: rgba(233, 69, 96, 0.12) !important;
   color: #ff6b81;
+  border-color: rgba(233, 69, 96, 0.2) !important;
 }
 
 /* --- Annotation Submenu --- */
@@ -1114,15 +1120,15 @@ body {
   background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-  padding: 8px 12px;
+  padding: 6px 10px;
   min-width: 280px;
   z-index: 101;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .annotation-submenu.pop-up {
@@ -1140,7 +1146,7 @@ body {
 }
 
 .annotation-submenu-label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
   white-space: nowrap;
   flex-shrink: 0;
@@ -1148,7 +1154,7 @@ body {
 }
 
 .annotation-submenu-value {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-primary);
   font-weight: 600;
   min-width: 28px;
@@ -1156,12 +1162,12 @@ body {
 }
 
 .annotation-submenu-select {
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--bg-tertiary) 50%, transparent);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 2px 6px;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
 }
 
@@ -1169,9 +1175,9 @@ body {
   background: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -1199,21 +1205,22 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--bg-tertiary) 50%, transparent);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   height: 24px;
-  min-width: 62px;
-  padding: 0 6px;
+  min-width: 56px;
+  padding: 0 8px;
   font-size: 11px;
   color: var(--text-primary);
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
 .annotation-linestyle-trigger:hover {
   border-color: var(--text-muted);
+  background: var(--bg-tertiary);
 }
 
 .annotation-linestyle-dropdown {
@@ -1239,7 +1246,7 @@ body {
 
 .annotation-linestyle-option {
   padding: 4px 8px;
-  border-radius: 3px;
+  border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
   white-space: nowrap;
@@ -1247,7 +1254,7 @@ body {
 }
 
 .annotation-linestyle-option:hover {
-  background: var(--bg-hover);
+  background: color-mix(in srgb, var(--bg-tertiary) 50%, transparent);
 }
 
 .annotation-linestyle-option.active {
@@ -1284,18 +1291,18 @@ body {
 }
 
 .annotation-fontsize-input {
-  width: 48px;
+  width: 44px;
   height: 24px;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-primary);
   text-align: center;
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--bg-tertiary) 50%, transparent);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   outline: none;
   -moz-appearance: textfield;
-  transition: border-color 0.15s;
+  transition: all 0.15s ease;
 }
 
 .annotation-fontsize-input::-webkit-outer-spin-button,
@@ -1310,6 +1317,7 @@ body {
 
 .annotation-fontsize-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.15);
 }
 
 .annotation-submenu-divider {
@@ -1330,18 +1338,19 @@ body {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: none;
+  border: 2px solid transparent;
   cursor: pointer;
   transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
 }
 
 .annotation-color-swatch:hover {
-  transform: scale(1.25);
+  transform: scale(1.2);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .annotation-color-swatch.active {
-  box-shadow: 0 0 0 2px var(--text-primary);
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 1px var(--bg-secondary);
 }
 
 /* Shape toggle */
@@ -1356,12 +1365,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
-  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-secondary);
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.15s ease;
 }
 
 .annotation-shape-btn svg {
@@ -1369,8 +1378,14 @@ body {
   height: 16px;
 }
 
+.annotation-shape-btn:hover {
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
+  color: var(--text-primary);
+}
+
 .annotation-shape-btn.active {
   background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
@@ -1386,12 +1401,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
-  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-secondary);
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.15s ease;
 }
 
 .annotation-style-btn svg {
@@ -1399,8 +1414,14 @@ body {
   height: 16px;
 }
 
+.annotation-style-btn:hover {
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
+  color: var(--text-primary);
+}
+
 .annotation-style-btn.active {
   background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
@@ -1413,32 +1434,28 @@ body {
 .slider-track {
   position: relative;
   width: 100%;
-  height: 6px;
+  height: 4px;
   background: var(--bg-tertiary);
-  border-radius: 3px;
+  border-radius: 2px;
   cursor: pointer;
 }
 
 .slider-thumb {
   position: absolute;
   top: 50%;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   background: var(--accent);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   cursor: grab;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
 }
 
 .slider-thumb:hover {
-  box-shadow: 0 2px 10px rgba(233, 69, 96, 0.4);
-  transform: translate(-50%, -50%) scale(1.15);
-}
-
-.slider-thumb:hover {
   background: var(--accent-hover);
+  box-shadow: 0 1px 8px rgba(233, 69, 96, 0.4);
 }
 
 .slider-thumb:active {
@@ -1484,36 +1501,39 @@ body {
 .annotation-submenu-inline {
   flex-direction: row;
   align-items: center;
-  gap: 3px;
-  padding: 5px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   flex-wrap: nowrap;
   min-width: auto;
 }
 
 .annotation-inline-separator {
   width: 1px;
-  height: 15px;
+  height: 14px;
   background: var(--border-color);
-  margin: 0 3px;
+  margin: 0 2px;
   flex-shrink: 0;
 }
 
 .annotation-inline-value {
   font-size: 11px;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   font-weight: 600;
-  min-width: 48px;
+  min-width: 40px;
   text-align: center;
   cursor: pointer;
   padding: 3px 6px;
-  border-radius: 3px;
-  transition: background 0.12s, color 0.12s;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  transition: all 0.12s ease;
   white-space: nowrap;
   user-select: none;
 }
 
 .annotation-inline-value:hover {
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
+  color: var(--text-primary);
+  border-color: var(--border-color);
 }
 
 .annotation-popup-input {
@@ -1562,7 +1582,7 @@ body {
 }
 
 .annotation-inline-spinner-btn {
-  width: 16px;
+  width: 14px;
   height: 10px;
   display: flex;
   align-items: center;
@@ -1570,25 +1590,25 @@ body {
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  border-radius: 2px;
+  border-radius: 3px;
   cursor: pointer;
   padding: 0;
-  transition: background 0.12s, color 0.12s;
+  transition: all 0.12s;
 }
 
 .annotation-inline-spinner-btn svg {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
 }
 
 .annotation-inline-spinner-btn:hover {
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
   color: var(--text-primary);
 }
 
 .annotation-inline-color {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   border: 2px solid var(--border-color);
   cursor: pointer;
@@ -1615,7 +1635,7 @@ body {
 }
 
 .annotation-inline-color:hover {
-  transform: scale(1.2);
+  transform: scale(1.15);
   border-color: var(--text-muted);
 }
 
@@ -1627,8 +1647,8 @@ body {
   background: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  border-radius: 10px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
   padding: 8px 10px;
   animation: popupFadeIn 0.1s ease-out;
@@ -1670,10 +1690,10 @@ body {
 }
 
 .annotation-popup-color .annotation-color-swatch {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  border: none;
+  border: 2px solid transparent;
   cursor: pointer;
   transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
 }
@@ -1684,19 +1704,27 @@ body {
 }
 
 .annotation-popup-color .annotation-color-swatch.active {
-  box-shadow: 0 0 0 2px var(--text-primary);
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 1px var(--bg-secondary);
 }
 
 /* Compact fill checkbox inside inline submenu */
 .annotation-inline-checkbox {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   font-size: 11px;
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.12s;
+}
+
+.annotation-inline-checkbox:hover {
+  background: color-mix(in srgb, var(--bg-tertiary) 40%, transparent);
 }
 
 .annotation-inline-checkbox input[type="checkbox"] {
