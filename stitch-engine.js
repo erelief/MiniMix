@@ -895,14 +895,14 @@ function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale, gOx =
   ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
   ctx.fill();
 
-  // images icon (Lucide)
+  // images icon (Lucide) — rect x=8 y=2 w=14 h=14 rx=2
+  const s = canvasSize / 24;
   drawSvgIcon(ctx, canvasX, canvasY, canvasSize, displayScale,
     'm22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16',
     'M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2',
-    'M10 2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z'
+    'M8 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2z'
   );
   // Filled dot (circle at 13,7)
-  const s = canvasSize / 24;
   ctx.fillStyle = '#fff';
   ctx.beginPath();
   ctx.arc(canvasX + 13 * s, canvasY + 7 * s, 1 * s, 0, Math.PI * 2);
@@ -988,8 +988,9 @@ function drawRatioButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, 
   ctx.beginPath();
   ctx.roundRect(ratioCanvasX, ratioCanvasY, canvasSize, canvasSize, 3 / displayScale);
   ctx.fill();
+  // proportions icon (Lucide) — rect x=2 y=4 w=20 h=16 rx=2
   drawSvgIcon(ctx, ratioCanvasX, ratioCanvasY, canvasSize, displayScale,
-    'M2 4h20v16H2z',
+    'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
     'M12 9v11',
     'M2 9h13a2 2 0 0 1 2 2v9'
   );
