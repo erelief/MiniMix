@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -12,6 +13,7 @@ desktop.ini
 # IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 
@@ -31,3 +33,8 @@ desktop.ini
 
 # Rust / Tauri build
 src-tauri/target/
+src-tauri/Cargo.lock
+
+
+#Superpower Plans
+docs/superpowers/plans
