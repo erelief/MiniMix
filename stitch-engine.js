@@ -7,6 +7,12 @@ import { renderAnnotation } from './annotation.js';
 
 const MAX_PIXELS = 5120 * 5120;
 
+// --- Drawing constants ---
+const DASH_SEGMENT = 6;
+const DASH_GAP = 4;
+const DASH_BORDER_WIDTH = 1.5;
+const HOVER_BORDER_WIDTH = 2;
+
 export const ASPECT_RATIOS = [
   { label: '恢复原图比例', ratio: null },
   // 左列：横版（宽→窄），右列：对应的竖版
@@ -784,7 +790,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       const bh = hImg.renderHeight * scaleFactor;
       ctx.save();
       ctx.strokeStyle = 'rgba(66, 133, 244, 0.5)';
-      ctx.lineWidth = 2 / displayScale;
+      ctx.lineWidth = HOVER_BORDER_WIDTH / displayScale;
       ctx.strokeRect(bx, by, bw, bh);
       ctx.restore();
     }
@@ -798,12 +804,12 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       const isScaling = !window.__activeAnnotationTool || window.__activeAnnotationTool === 'scaling';
       ctx.save();
       if (isScaling) {
-        ctx.setLineDash([6 / displayScale, 4 / displayScale]);
+        ctx.setLineDash([DASH_SEGMENT / displayScale, DASH_GAP / displayScale]);
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.lineWidth = 1.5 / displayScale;
+        ctx.lineWidth = DASH_BORDER_WIDTH / displayScale;
       } else {
         ctx.strokeStyle = 'rgba(66, 133, 244, 0.5)';
-        ctx.lineWidth = 2 / displayScale;
+        ctx.lineWidth = HOVER_BORDER_WIDTH / displayScale;
       }
       ctx.strokeRect(
         eImg.x * scaleFactor + gOx, eImg.y * scaleFactor + gOy,
@@ -1110,7 +1116,7 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
     const py = iy + gridItemH * 0.12;
 
     ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.6)';
-    ctx.lineWidth = 1.5 / displayScale;
+    ctx.lineWidth = DASH_BORDER_WIDTH / displayScale;
     ctx.beginPath();
     ctx.roundRect(px, py, pw, ph, cornerR);
     ctx.stroke();
@@ -1161,7 +1167,7 @@ function drawSvgIcon(ctx, x, y, size, displayScale, ...pathStrings) {
   const s = size / 24;
   ctx.save();
   ctx.strokeStyle = '#fff';
-  ctx.lineWidth = Math.max(1.5, 2 / displayScale / s);
+  ctx.lineWidth = Math.max(DASH_BORDER_WIDTH, HOVER_BORDER_WIDTH / displayScale / s);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.translate(x, y);
@@ -1381,9 +1387,9 @@ const CORNER_ZONE = 30;
 
 function drawPlaceholder(ctx, x, y, w, h, displayScale) {
   ctx.save();
-  ctx.setLineDash([6 / displayScale, 4 / displayScale]);
+  ctx.setLineDash([DASH_SEGMENT / displayScale, DASH_GAP / displayScale]);
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-  ctx.lineWidth = 1.5 / displayScale;
+  ctx.lineWidth = DASH_BORDER_WIDTH / displayScale;
   ctx.strokeRect(x, y, w, h);
   ctx.setLineDash([]);
   ctx.restore();

@@ -611,7 +611,7 @@ function recomputeAndRender() {
   // 确保没有被强加偏移和残留动画
   canvas.style.transform = '';
   canvas.style.transition = 'none';
-  // 强制浏览器完成 layout
+  // 强制同步重排，确保清除残留 transform 后后续帧从零开始
   canvas.getBoundingClientRect();
   updateGripHandles();
   updateStatusBar();
@@ -1684,19 +1684,9 @@ function enterEditMode(image) {
         // 编辑时实时更新 textarea 样式
         if (_textInput && tool === 'text') {
           const s = state.toolSettings.text;
-          let fs = '';
-          if (s.bold) fs += 'bold ';
-          if (s.italic) fs += 'italic ';
-          const visualFs = s.fontSize * getLayoutScale();
-          _textInput.style.font = `${fs}${visualFs}px ${s.fontFamily}`;
+          syncTextInputStyles(_textInput, s, getLayoutScale());
           _textInput.style.color = hexToRgba(s.color, s.opacity / 100);
           _textInput.style.caretColor = s.color;
-          _textInput.style.minHeight = `${visualFs * 1.2}px`;
-          _textInput.style.margin = `${-(1.5 + 4 + visualFs * 0.1)}px 0 0 -5.5px`;
-          _textInput.style.width = '1px';
-          _textInput.style.height = '1px';
-          _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
-          _textInput.style.height = _textInput.scrollHeight + 'px';
         }
       }
     );
@@ -2053,6 +2043,28 @@ let _textDragOffX = 0, _textDragOffY = 0;
 const GRIP_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>';
 const SCALE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 13v6h-6"/><path d="M5 11V5h6"/><path d="m5 5 14 14"/></svg>';
 
+const TEXT_BORDER_W = 1.5;
+const TEXT_PAD = 4;
+const TEXT_LINE_HEIGHT = 1.2;
+const TEXT_MARGIN_LEFT = -(TEXT_BORDER_W + TEXT_PAD);
+
+function syncTextInputStyles(el, s, sf) {
+  const visualFs = s.fontSize * sf;
+  let fontStyle = '';
+  if (s.bold) fontStyle += 'bold ';
+  if (s.italic) fontStyle += 'italic ';
+  el.style.font = `${fontStyle}${visualFs}px ${s.fontFamily}`;
+  el.style.minHeight = `${visualFs * TEXT_LINE_HEIGHT}px`;
+  el.style.margin = `${-(TEXT_BORDER_W + TEXT_PAD + visualFs * 0.1)}px 0 0 ${TEXT_MARGIN_LEFT}px`;
+  // Auto-size: shrink to 1px so scrollWidth/scrollHeight reflect content size
+  el.style.width = '1px';
+  el.style.height = '1px';
+  el.style.width = (el.scrollWidth + TEXT_PAD) + 'px';
+  const h = el.scrollHeight + TEXT_PAD;
+  el.style.height = h + 'px';
+  return h;
+}
+
 function createTextInput(x, y, imageId, existingAnnot) {
   commitTextInput(true);
 
@@ -2160,20 +2172,8 @@ function createTextInput(x, y, imageId, existingAnnot) {
       state.toolSettings.text.fontSize = newV;
       updateSliderValue('text_fontSize', newV);
       if (_textInput) {
-        const sf2 = getLayoutScale();
-        const s2 = state.toolSettings.text;
-        const visualFs = s2.fontSize * sf2;
-        let fs = '';
-        if (s2.bold) fs += 'bold ';
-        if (s2.italic) fs += 'italic ';
-        _textInput.style.font = `${fs}${visualFs}px ${s2.fontFamily}`;
-        _textInput.style.minHeight = `${visualFs * 1.2}px`;
-        _textInput.style.margin = `${-(1.5 + 4 + visualFs * 0.1)}px 0 0 -5.5px`;
-        _textInput.style.width = '1px';
-        _textInput.style.height = '1px';
-        _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
-        _textInput.style.height = (_textInput.scrollHeight + 4) + 'px';
-        grip.style.height = _textInput.scrollHeight + 'px';
+        const h = syncTextInputStyles(_textInput, state.toolSettings.text, getLayoutScale());
+        grip.style.height = h + 'px';
       }
       recomputeAndRender();
     };
@@ -2190,30 +2190,17 @@ function createTextInput(x, y, imageId, existingAnnot) {
   const ta = document.createElement('textarea');
   ta.className = 'annotation-text-box';
   const visualFontSize = s.fontSize * sf;
-  const pad = 4;
-  const bdr = 1.5;
-  const mt = -(bdr + pad + visualFontSize * 0.1);
-  const ml = -(bdr + pad);
 
   ta.value = initialText;
-  ta.style.background = 'rgba(255, 255, 255, 0.08)';
-  ta.style.border = `${bdr}px dashed rgba(255, 255, 255, 0.6)`;
-  ta.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.5)';
-  ta.style.outline = 'none';
-  ta.style.padding = `${pad}px`;
-  ta.style.margin = `${mt}px 0 0 ${ml}px`;
-  ta.style.minWidth = '80px';
-  ta.style.minHeight = `${visualFontSize * 1.2}px`;
-  ta.style.overflow = 'hidden';
-  ta.style.resize = 'none';
-  ta.style.whiteSpace = 'pre';
-  ta.style.lineHeight = '1.2';
+  ta.style.border = `${TEXT_BORDER_W}px dashed rgba(255, 255, 255, 0.6)`;
+  ta.style.margin = `${-(TEXT_BORDER_W + TEXT_PAD + visualFontSize * 0.1)}px 0 0 ${TEXT_MARGIN_LEFT}px`;
+  ta.style.minHeight = `${visualFontSize * TEXT_LINE_HEIGHT}px`;
   ta.style.caretColor = s.color;
 
   let fontStyle = '';
   if (s.bold) fontStyle += 'bold ';
   if (s.italic) fontStyle += 'italic ';
-  ta.style.font = `${fontStyle}${s.fontSize * sf}px ${s.fontFamily}`;
+  ta.style.font = `${fontStyle}${visualFontSize}px ${s.fontFamily}`;
   ta.style.color = s.color;
 
   wrapper.appendChild(ta);
@@ -3324,17 +3311,7 @@ canvas.addEventListener('wheel', (e) => {
       s.fontSize = v;
       updateSliderValue('text_fontSize', v);
       if (_textInput) {
-        let fs = '';
-        if (s.bold) fs += 'bold ';
-        if (s.italic) fs += 'italic ';
-        const visualFs = s.fontSize * getLayoutScale();
-        _textInput.style.font = `${fs}${visualFs}px ${s.fontFamily}`;
-        _textInput.style.minHeight = `${visualFs * 1.2}px`;
-        _textInput.style.margin = `${-(1.5 + 4 + visualFs * 0.1)}px 0 0 -5.5px`;
-        _textInput.style.width = '1px';
-        _textInput.style.height = '1px';
-        _textInput.style.width = (_textInput.scrollWidth + 4) + 'px';
-        _textInput.style.height = (_textInput.scrollHeight + 4) + 'px';
+        syncTextInputStyles(_textInput, s, getLayoutScale());
       }
       recomputeAndRender();
     }

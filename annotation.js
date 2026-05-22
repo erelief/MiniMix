@@ -1,5 +1,44 @@
 // src/annotation.js
 
+// --- Drawing constants ---
+
+// Dash pattern segments (multiplied by sqrt(lineWidth))
+const DASH_SOLID = 14;
+const DASH_GAP = 10;
+const DASH_DOT = 0.5;
+
+// Shadow rendering
+const SHADOW_GRAY_MIX = 0.2;
+const SHADOW_COLOR_MIX = 0.1;
+const SHADOW_DEFAULT_ALPHA = 0.35;
+const SHADOW_BLUR_RATIO = 0.6;
+const SHADOW_MAX_BLUR = 20;
+const SHADOW_OFFSET_RATIO = 0.12;
+
+// Arrow head dimensions
+const ARROW_HEAD_BASE = 12;
+const ARROW_HEAD_LW_MULT = 2;
+const ARROW_BAR_HEIGHT_MULT = 2.5;
+
+// Sequence number circle
+const SEQ_MIN_RADIUS = 16;
+const SEQ_LINE_W_RATIO = 0.1;
+const SEQ_MIN_LINE_W = 2;
+const SEQ_SHADOW_RATIO = 0.15;
+const SEQ_MAX_TEXT_RATIO = 1.7;
+const SEQ_FONT_SCALE = 1 / 0.8;
+
+// Text annotation
+const TEXT_SHADOW_RATIO = 0.15;
+const TEXT_LINE_HEIGHT_RATIO = 1.2;
+
+// Stamp markers
+const STAMP_LINE_W_RATIO = 0.12;
+const CHECK_START = { x: 0.15, y: 0.5 };
+const CHECK_MID   = { x: 0.4,  y: 0.75 };
+const CHECK_END   = { x: 0.85, y: 0.2 };
+const X_PAD_RATIO = 0.2;
+
 // --- Annotation unique ID counter ---
 let nextAnnotationId = 1;
 export function resetAnnotationIdCounter() {
@@ -140,15 +179,15 @@ export function applyLineStyle(ctx, lineStyle, lineWidth) {
       ctx.setLineDash([]);
       break;
     case 'dashed':
-      ctx.setLineDash([14 * s, 10 * s]);
+      ctx.setLineDash([DASH_SOLID * s, DASH_GAP * s]);
       break;
     case 'dotted': {
       // 极短 dash + round cap = 正圆点
-      ctx.setLineDash([0.5, 10 * s]);
+      ctx.setLineDash([DASH_DOT, DASH_GAP * s]);
       break;
     }
     case 'dash-dot':
-      ctx.setLineDash([14 * s, 10 * s, 0.5, 10 * s]);
+      ctx.setLineDash([DASH_SOLID * s, DASH_GAP * s, DASH_DOT, DASH_GAP * s]);
       break;
     default:
       ctx.setLineDash([]);
@@ -261,20 +300,20 @@ function getShadowColor(hexColor, alpha) {
   const g = parseInt(hexColor.slice(3, 5), 16);
   const b = parseInt(hexColor.slice(5, 7), 16);
   const gray = (r + g + b) / 3;
-  const sr = Math.round(gray * 0.2 + r * 0.1);
-  const sg = Math.round(gray * 0.2 + g * 0.1);
-  const sb = Math.round(gray * 0.2 + b * 0.1);
+  const sr = Math.round(gray * SHADOW_GRAY_MIX + r * SHADOW_COLOR_MIX);
+  const sg = Math.round(gray * SHADOW_GRAY_MIX + g * SHADOW_COLOR_MIX);
+  const sb = Math.round(gray * SHADOW_GRAY_MIX + b * SHADOW_COLOR_MIX);
   return `rgba(${sr},${sg},${sb},${alpha})`;
 }
 
 function applyShadow(ctx, p, sizeMetric) {
   if (!p.shadow) return;
   const s = Math.max(sizeMetric, 1);
-  const alpha = typeof p.shadow === 'number' ? p.shadow / 100 : 0.35;
+  const alpha = typeof p.shadow === 'number' ? p.shadow / 100 : SHADOW_DEFAULT_ALPHA;
   ctx.shadowColor = getShadowColor(p.color, alpha);
-  ctx.shadowBlur = Math.min(s * 0.6, 20);
-  ctx.shadowOffsetX = s * 0.12;
-  ctx.shadowOffsetY = s * 0.12;
+  ctx.shadowBlur = Math.min(s * SHADOW_BLUR_RATIO, SHADOW_MAX_BLUR);
+  ctx.shadowOffsetX = s * SHADOW_OFFSET_RATIO;
+  ctx.shadowOffsetY = s * SHADOW_OFFSET_RATIO;
 }
 
 function clearShadow(ctx) {
@@ -481,7 +520,7 @@ function drawArrowAnnotation(ctx, p) {
   const sx = startPoint.x, sy = startPoint.y;
   const ex = endPoint.x, ey = endPoint.y;
   const angle = Math.atan2(ey - sy, ex - sx);
-  const headLen = 12 + lw * 2;
+  const headLen = ARROW_HEAD_BASE + lw * ARROW_HEAD_LW_MULT;
 
   if (p.lineStyle === 'double') {
     const minX = Math.min(sx, ex), minY = Math.min(sy, ey);
@@ -496,7 +535,7 @@ function drawArrowAnnotation(ctx, p) {
       applyShadow(ctx, p, lw);
       if (arrowStyle === 'line') {
         const perpX = Math.cos(angle + Math.PI / 2), perpY = Math.sin(angle + Math.PI / 2);
-        const barH = lw * 2.5;
+        const barH = lw * ARROW_BAR_HEIGHT_MULT;
         ctx.beginPath();
         ctx.moveTo(sx + perpX * barH / 2, sy + perpY * barH / 2);
         ctx.lineTo(sx - perpX * barH / 2, sy - perpY * barH / 2);
@@ -536,7 +575,7 @@ function drawArrowAnnotation(ctx, p) {
   if (arrowStyle === 'line') {
     // 线段头 |——|：两端画短竖线，用原始端点
     const perpX = Math.cos(angle + Math.PI / 2), perpY = Math.sin(angle + Math.PI / 2);
-    const barH = lw * 2.5;
+    const barH = lw * ARROW_BAR_HEIGHT_MULT;
     ctx.beginPath();
     ctx.moveTo(startPoint.x + perpX * barH / 2, startPoint.y + perpY * barH / 2);
     ctx.lineTo(startPoint.x - perpX * barH / 2, startPoint.y - perpY * barH / 2);
@@ -584,19 +623,19 @@ function drawSequenceAnnotation(ctx, p) {
   const { x, y, number, numberStyle, size } = p;
   const label = formatNumber(number, numberStyle);
 
-  const radius = Math.max(size / 2, 16);
+  const radius = Math.max(size / 2, SEQ_MIN_RADIUS);
   const cx = x + radius;
   const cy = y + radius;
-  const lineW = Math.max(radius * 0.1, 2);
-  applyShadow(ctx, p, size * 0.15);
+  const lineW = Math.max(radius * SEQ_LINE_W_RATIO, SEQ_MIN_LINE_W);
+  applyShadow(ctx, p, size * SEQ_SHADOW_RATIO);
   ctx.beginPath();
   ctx.arc(cx, cy, radius - lineW / 2, 0, Math.PI * 2);
   ctx.strokeStyle = p.color;
   ctx.lineWidth = lineW;
   ctx.stroke();
 
-  const maxW = (radius - lineW) * 1.7;
-  let fontSize = radius / 0.8;
+  const maxW = (radius - lineW) * SEQ_MAX_TEXT_RATIO;
+  let fontSize = radius * SEQ_FONT_SCALE;
   ctx.font = `bold ${fontSize}px sans-serif`;
   const measured = ctx.measureText(label).width;
   if (measured > maxW) {
@@ -621,9 +660,9 @@ function drawTextAnnotation(ctx, p) {
   ctx.fillStyle = p.color;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  applyShadow(ctx, p, fontSize * 0.15);
+  applyShadow(ctx, p, fontSize * TEXT_SHADOW_RATIO);
   const lines = text.split('\n');
-  const lineHeight = fontSize * 1.2;
+  const lineHeight = fontSize * TEXT_LINE_HEIGHT_RATIO;
   for (let i = 0; i < lines.length; i++) {
     ctx.fillText(lines[i], x, y + i * lineHeight);
   }
@@ -638,17 +677,17 @@ function drawStampAnnotation(ctx, p) {
   ctx.fillStyle = p.color;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = size * 0.12;
-  applyShadow(ctx, p, size * 0.12);
+  ctx.lineWidth = size * STAMP_LINE_W_RATIO;
+  applyShadow(ctx, p, size * STAMP_LINE_W_RATIO);
 
   if (shape === 'check') {
     ctx.beginPath();
-    ctx.moveTo(x + size * 0.15, y + size * 0.5);
-    ctx.lineTo(x + size * 0.4, y + size * 0.75);
-    ctx.lineTo(x + size * 0.85, y + size * 0.2);
+    ctx.moveTo(x + size * CHECK_START.x, y + size * CHECK_START.y);
+    ctx.lineTo(x + size * CHECK_MID.x, y + size * CHECK_MID.y);
+    ctx.lineTo(x + size * CHECK_END.x, y + size * CHECK_END.y);
     ctx.stroke();
   } else if (shape === 'x') {
-    const pad = size * 0.2;
+    const pad = size * X_PAD_RATIO;
     ctx.beginPath();
     ctx.moveTo(x + pad, y + pad);
     ctx.lineTo(x + size - pad, y + size - pad);

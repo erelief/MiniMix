@@ -1788,15 +1788,18 @@ body {
 }
 
 .annotation-text-box {
+  box-sizing: content-box;
   border: none;
-  outline: 1px dashed rgba(255, 255, 255, 0.4);
-  background: transparent;
-  padding: 0;
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  padding: 4px;
   margin: 0;
+  min-width: 80px;
   overflow: hidden;
   resize: none;
-  line-height: 1.2;
   white-space: pre;
+  line-height: 1.2;
 }
 
 .annotation-text-input::placeholder {
