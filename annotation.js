@@ -60,6 +60,7 @@ export const LINE_STYLES = [
 
 // Arrow style options
 export const ARROW_STYLES = [
+  { value: 'taper', label: '渐尖箭头' },
   { value: 'single', label: '单边箭头' },
   { value: 'double', label: '双边箭头' },
   { value: 'line', label: '线段头' },
@@ -108,7 +109,7 @@ export function createDefaultToolSettings() {
       shadow: 35,
     },
     arrow: {
-      arrowStyle: 'single',
+      arrowStyle: 'taper',
       lineStyle: 'solid',
       lineWidth: 10,
       color: '#E61919',
@@ -575,12 +576,24 @@ function drawArrowAnnotation(ctx, p) {
     oc.fillStyle = p.color;
     oc.lineWidth = lw;
     oc.lineCap = 'round';
-    oc.beginPath();
-    oc.moveTo(sx, sy);
-    oc.lineTo(ex, ey);
-    oc.stroke();
 
-    if (arrowStyle === 'line') {
+    if (arrowStyle === 'taper') {
+      // Tapered shaft: filled triangle from point at start to full width at end
+      const perpX = Math.cos(angle + Math.PI / 2), perpY = Math.sin(angle + Math.PI / 2);
+      oc.beginPath();
+      oc.moveTo(sx, sy);
+      oc.lineTo(ex + perpX * lw / 2, ey + perpY * lw / 2);
+      oc.lineTo(ex - perpX * lw / 2, ey - perpY * lw / 2);
+      oc.closePath();
+      oc.fill();
+      drawArrowHead(oc, ex, ey, angle, headLen);
+    } else {
+      oc.beginPath();
+      oc.moveTo(sx, sy);
+      oc.lineTo(ex, ey);
+      oc.stroke();
+
+      if (arrowStyle === 'line') {
       const perpX = Math.cos(angle + Math.PI / 2), perpY = Math.sin(angle + Math.PI / 2);
       const barH = lw * ARROW_BAR_HEIGHT_MULT;
       oc.beginPath();
@@ -599,6 +612,8 @@ function drawArrowAnnotation(ctx, p) {
         drawArrowHead(oc, sx, sy, angle + Math.PI, headLen);
       }
     }
+
+    } // else (non-taper)
 
     oc.setLineDash([]);
     applyShadow(ctx, p, lw);

@@ -1041,21 +1041,38 @@ function makeArrowStylePreview(value) {
   ctx.strokeStyle = '#ddd'; ctx.fillStyle = '#ddd'; ctx.lineWidth = 1.5;
   ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
   const cx1 = 4, cy = 7, cx2 = 36;
-  ctx.beginPath(); ctx.moveTo(cx1, cy); ctx.lineTo(cx2, cy); ctx.stroke();
-  if (value === 'single' || value === 'double') {
-    ctx.beginPath(); ctx.moveTo(cx2, cy);
-    ctx.lineTo(cx2 - 6, cy - 3.5); ctx.lineTo(cx2 - 6, cy + 3.5);
-    ctx.closePath(); ctx.fill();
-  }
-  if (value === 'double') {
-    ctx.beginPath(); ctx.moveTo(cx1, cy);
-    ctx.lineTo(cx1 + 6, cy - 3.5); ctx.lineTo(cx1 + 6, cy + 3.5);
-    ctx.closePath(); ctx.fill();
-  }
-  if (value === 'line') {
-    const barH = 5;
-    ctx.beginPath(); ctx.moveTo(cx1, cy - barH / 2); ctx.lineTo(cx1, cy + barH / 2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx2, cy - barH / 2); ctx.lineTo(cx2, cy + barH / 2); ctx.stroke();
+
+  if (value === 'taper') {
+    // 渐尖杆身 + 与 single 同尺寸的箭头
+    ctx.beginPath();
+    ctx.moveTo(cx1, cy);
+    ctx.lineTo(cx2 - 6, cy - 0.75);
+    ctx.lineTo(cx2 - 6, cy + 0.75);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx2, cy);
+    ctx.lineTo(cx2 - 6, cy - 3.5);
+    ctx.lineTo(cx2 - 6, cy + 3.5);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.moveTo(cx1, cy); ctx.lineTo(cx2, cy); ctx.stroke();
+    if (value === 'single' || value === 'double') {
+      ctx.beginPath(); ctx.moveTo(cx2, cy);
+      ctx.lineTo(cx2 - 6, cy - 3.5); ctx.lineTo(cx2 - 6, cy + 3.5);
+      ctx.closePath(); ctx.fill();
+    }
+    if (value === 'double') {
+      ctx.beginPath(); ctx.moveTo(cx1, cy);
+      ctx.lineTo(cx1 + 6, cy - 3.5); ctx.lineTo(cx1 + 6, cy + 3.5);
+      ctx.closePath(); ctx.fill();
+    }
+    if (value === 'line') {
+      const barH = 5;
+      ctx.beginPath(); ctx.moveTo(cx1, cy - barH / 2); ctx.lineTo(cx1, cy + barH / 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx2, cy - barH / 2); ctx.lineTo(cx2, cy + barH / 2); ctx.stroke();
+    }
   }
   return cvs;
 }
