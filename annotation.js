@@ -15,9 +15,10 @@ const SHADOW_BLUR_RATIO = 0.6;
 const SHADOW_MAX_BLUR = 20;
 const SHADOW_OFFSET_RATIO = 0.12;
 
-// Arrow head dimensions
-const ARROW_HEAD_BASE = 12;
-const ARROW_HEAD_LW_MULT = 2;
+// Arrow head dimensions — extracted from reference SVG (viewBox 540×675, stroke-width 50)
+// SVG shaft end at X=335.4, arrowhead spans X=284.6→497.1, Y=240.7→420.7
+// headLen = 4.25 × lineWidth, wing half-span = 1.8 × lineWidth
+const ARROW_HEAD_LW_MULT = 4.25;
 const ARROW_BAR_HEIGHT_MULT = 2.5;
 
 // Sequence number circle
@@ -520,7 +521,7 @@ function drawArrowAnnotation(ctx, p) {
   const sx = startPoint.x, sy = startPoint.y;
   const ex = endPoint.x, ey = endPoint.y;
   const angle = Math.atan2(ey - sy, ex - sx);
-  const headLen = ARROW_HEAD_BASE + lw * ARROW_HEAD_LW_MULT;
+  const headLen = lw * ARROW_HEAD_LW_MULT;
 
   if (p.lineStyle === 'double') {
     const minX = Math.min(sx, ex), minY = Math.min(sy, ey);
@@ -557,63 +558,81 @@ function drawArrowAnnotation(ctx, p) {
     return;
   }
 
+  // Render entire arrow to offscreen canvas, then blit with shadow —
+  // prevents double-shadow in the line↔head overlap zone
   applyOpacity(ctx, p, () => {
-  applyLineStyle(ctx, p.lineStyle, p.lineWidth);
-  ctx.strokeStyle = p.color;
-  ctx.fillStyle = p.color;
-  ctx.lineWidth = p.lineWidth;
-  ctx.lineCap = 'round';
+    const pad = Math.ceil(lw * 5);
+    const minX = Math.min(sx, ex) - pad, minY = Math.min(sy, ey) - pad;
+    const offW = Math.abs(ex - sx) + pad * 2, offH = Math.abs(ey - sy) + pad * 2;
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = Math.max(offW, 1);
+    offCanvas.height = Math.max(offH, 1);
+    const oc = offCanvas.getContext('2d');
+    oc.translate(-minX, -minY);
 
-  applyShadow(ctx, p, lw);
+    applyLineStyle(oc, p.lineStyle, lw);
+    oc.strokeStyle = p.color;
+    oc.fillStyle = p.color;
+    oc.lineWidth = lw;
+    oc.lineCap = 'round';
+    oc.beginPath();
+    oc.moveTo(sx, sy);
+    oc.lineTo(ex, ey);
+    oc.stroke();
 
-  // Draw line（round cap 在非箭头端正常显示，箭头端被三角底边覆盖）
-  ctx.beginPath();
-  ctx.moveTo(sx, sy);
-  ctx.lineTo(ex, ey);
-  ctx.stroke();
-
-  if (arrowStyle === 'line') {
-    // 线段头 |——|：两端画短竖线，用原始端点
-    const perpX = Math.cos(angle + Math.PI / 2), perpY = Math.sin(angle + Math.PI / 2);
-    const barH = lw * ARROW_BAR_HEIGHT_MULT;
-    ctx.beginPath();
-    ctx.moveTo(startPoint.x + perpX * barH / 2, startPoint.y + perpY * barH / 2);
-    ctx.lineTo(startPoint.x - perpX * barH / 2, startPoint.y - perpY * barH / 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(endPoint.x + perpX * barH / 2, endPoint.y + perpY * barH / 2);
-    ctx.lineTo(endPoint.x - perpX * barH / 2, endPoint.y - perpY * barH / 2);
-    ctx.stroke();
-  } else {
-    if (arrowStyle === 'single' || arrowStyle === 'double') {
-      drawArrowHead(ctx, endPoint.x, endPoint.y, angle, headLen);
+    if (arrowStyle === 'line') {
+      const perpX = Math.cos(angle + Math.PI / 2), perpY = Math.sin(angle + Math.PI / 2);
+      const barH = lw * ARROW_BAR_HEIGHT_MULT;
+      oc.beginPath();
+      oc.moveTo(sx + perpX * barH / 2, sy + perpY * barH / 2);
+      oc.lineTo(sx - perpX * barH / 2, sy - perpY * barH / 2);
+      oc.stroke();
+      oc.beginPath();
+      oc.moveTo(ex + perpX * barH / 2, ey + perpY * barH / 2);
+      oc.lineTo(ex - perpX * barH / 2, ey - perpY * barH / 2);
+      oc.stroke();
+    } else {
+      if (arrowStyle === 'single' || arrowStyle === 'double') {
+        drawArrowHead(oc, ex, ey, angle, headLen);
+      }
+      if (arrowStyle === 'double') {
+        drawArrowHead(oc, sx, sy, angle + Math.PI, headLen);
+      }
     }
-    if (arrowStyle === 'double') {
-      drawArrowHead(ctx, startPoint.x, startPoint.y, angle + Math.PI, headLen);
-    }
-  }
 
-  clearShadow(ctx);
-  ctx.setLineDash([]);
-  }); // applyOpacity
+    oc.setLineDash([]);
+    applyShadow(ctx, p, lw);
+    ctx.drawImage(offCanvas, minX, minY);
+    clearShadow(ctx);
+  });
 }
 
 function drawArrowHead(ctx, x, y, angle, headLen) {
-  // 三角底边中心对准线段端点(x,y)，尖端向前延伸覆盖 round cap
-  // 保持原 30° 夹角形状：底边宽 = headLen, 底边到尖距离 = headLen * cos(30°)
-  const tipX = x + headLen * Math.cos(Math.PI / 6) * Math.cos(angle);
-  const tipY = y + headLen * Math.cos(Math.PI / 6) * Math.sin(angle);
-  const hw = headLen * Math.sin(Math.PI / 6); // 半底边宽
-  // 底边两端（垂直于方向）
-  const bx1 = x - hw * Math.sin(angle);
-  const by1 = y + hw * Math.cos(angle);
-  const bx2 = x + hw * Math.sin(angle);
-  const by2 = y - hw * Math.cos(angle);
+  // Coordinates extracted from reference SVG (arrow.svg):
+  //   viewBox 0 0 540 675, stroke-width 50, shaft end X=335.4, center Y=330.7
+  //   Arrowhead path: M284.6,240.7 l32.5,90 l-32.5,90 l212.5,-90 Z
+  //   Vertices relative to shaft endpoint & center, in units of lineWidth:
+  //     upperWing  (-1.016, -1.8)   back center (-0.366, 0)
+  //     lowerWing  (-1.016, +1.8)   tip         (+3.234, 0)
+  //   headLen = 4.25 × lw
+  const cosA = Math.cos(angle), sinA = Math.sin(angle);
+  const s = headLen / 4.25; // = lineWidth
+
+  const upperWing = { x: s * -1.016, y: s * -1.8 };
+  const backCtr   = { x: s * -0.366, y: 0 };
+  const lowerWing = { x: s * -1.016, y: s *  1.8 };
+  const tip       = { x: s *  3.234, y: 0 };
+
+  const pt = p => ({
+    x: x + p.x * cosA - p.y * sinA,
+    y: y + p.x * sinA + p.y * cosA,
+  });
 
   ctx.beginPath();
-  ctx.moveTo(tipX, tipY);
-  ctx.lineTo(bx1, by1);
-  ctx.lineTo(bx2, by2);
+  ctx.moveTo(pt(upperWing).x, pt(upperWing).y);
+  ctx.lineTo(pt(backCtr).x, pt(backCtr).y);
+  ctx.lineTo(pt(lowerWing).x, pt(lowerWing).y);
+  ctx.lineTo(pt(tip).x, pt(tip).y);
   ctx.closePath();
   ctx.fill();
 }
