@@ -1407,17 +1407,25 @@ function buildStampMenu(panel, settings, onChange) {
   xBtn.className = 'annotation-shape-btn' + (s.shape === 'x' ? ' active' : '');
   xBtn.innerHTML = '<i data-lucide="x"></i>';
   xBtn.title = '叉号';
+  const updateColorDot = (color) => {
+    const dot = panel.querySelector('.annotation-inline-color');
+    if (dot) dot.style.setProperty('--dot-color', hexToRgba(color, s.opacity / 100));
+  };
   checkBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     checkBtn.classList.add('active');
     xBtn.classList.remove('active');
     onChange('stamp', 'shape', 'check');
+    onChange('stamp', 'color', s.checkColor);
+    updateColorDot(s.checkColor);
   });
   xBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     xBtn.classList.add('active');
     checkBtn.classList.remove('active');
     onChange('stamp', 'shape', 'x');
+    onChange('stamp', 'color', s.xColor);
+    updateColorDot(s.xColor);
   });
   panel.appendChild(checkBtn);
   panel.appendChild(xBtn);

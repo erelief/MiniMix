@@ -992,6 +992,7 @@ btnClear.addEventListener('click', () => {
   syncImagesFromGroups();
   state.hoveredImageId = -1;
   state.hoveredCloseId = -1;
+  state.toolSettings.sequence.nextNumber = 1;
   deactivateCanvasRatioLock();
   recomputeAndRender();
 });

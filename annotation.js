@@ -119,7 +119,9 @@ export function createDefaultToolSettings() {
     stamp: {
       shape: 'check',
       size: 256,
-      color: '#E61919',
+      color: '#00A651',
+      checkColor: '#00A651',
+      xColor: '#E61919',
       opacity: 100,
       shadow: 35,
     },
