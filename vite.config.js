@@ -17,6 +17,21 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
   },
+  // Dev 模式下，本地源文件首次按需转译极慢（main.js / floating-toolbar.js
+  // 各需 ~45s）。将它们加入 optimizeDeps，让 Vite 用 esbuild 预构建，
+  // 首屏加载从数十秒降到 ~2s。
+  optimizeDeps: {
+    include: [
+      'lucide',
+      './main.js',
+      './stitch-engine.js',
+      './floating-toolbar.js',
+      './annotation.js',
+      './image-item.js',
+      './undo-manager.js',
+      './slider-widget.js',
+    ],
+  },
   build: {
     outDir: 'dist',
     assetsInlineLimit: 0,
