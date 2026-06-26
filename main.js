@@ -3,6 +3,7 @@
  * 最简版本：添加图片 + 横排/纵排 + 撤销/重做 + 复制/保存
  */
 
+import { createIcons, icons } from 'lucide';
 import { ImageItem } from './image-item.js';
 import { UndoManager } from './undo-manager.js';
 import { createDefaultToolSettings, createAnnotation, hexToRgba } from './annotation.js';
@@ -20,6 +21,8 @@ import {
   formatFileSize,
   ASPECT_RATIOS,
 } from './stitch-engine.js';
+
+createIcons({ icons });
 
 // ========== 图片对象池（支持撤销恢复） ==========
 const imagePool = new Map();
@@ -1427,7 +1430,7 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
 
   // 动态渲染第三方依赖
   if (typeof __ABOUT_DEPS__ !== 'undefined' && __ABOUT_DEPS__.length) {
-    divider.style.display = 'block';
+    divider.classList.remove('hidden');
     const depsContainer = document.createElement('div');
     depsContainer.className = 'info-deps-list';
 
