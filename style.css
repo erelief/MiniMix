@@ -354,65 +354,6 @@ body {
   padding: 2px 0;
 }
 
-/* --- Row Tabs (toolbar 内的占位) --- */
-.row-tabs {
-  display: flex;
-  gap: 2px;
-  margin-left: 4px;
-}
-
-/* --- Floating Row Tabs Overlay (浮动在画布边缘) --- */
-.row-tabs-overlay {
-  position: absolute;
-  display: flex;
-  gap: 4px;
-  z-index: 50;
-  padding: 6px 8px;
-  background: rgba(22, 33, 62, 0.9);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  backdrop-filter: blur(8px);
-  pointer-events: auto;
-}
-
-/* 横排模式：标签在画布上方居中 */
-.row-tabs-overlay.horizontal {
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  flex-direction: row;
-}
-
-/* 纵排模式：标签在画布左侧居中 */
-.row-tabs-overlay.vertical {
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  flex-direction: column;
-}
-
-.row-tab {
-  padding: 5px 12px;
-  font-size: 13px;
-  border: 1px solid var(--border-color);
-  border-radius: 5px;
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.row-tab:hover {
-  border-color: var(--accent);
-  color: var(--text-primary);
-}
-
-.row-tab.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
 
 /* --- Workspace --- */
 #workspace {
@@ -1417,11 +1358,6 @@ body {
   box-shadow: 0 0 0 1px var(--bg-secondary);
 }
 
-/* Shape toggle */
-.annotation-shape-toggle {
-  display: flex;
-  gap: 2px;
-}
 
 .annotation-shape-btn {
   width: 28px;
@@ -1453,11 +1389,6 @@ body {
   color: #fff;
 }
 
-/* Style buttons (bold/italic) */
-.annotation-style-btns {
-  display: flex;
-  gap: 2px;
-}
 
 .annotation-style-btn {
   width: 28px;
@@ -1866,9 +1797,6 @@ body {
   line-height: 1.2;
 }
 
-.annotation-text-input::placeholder {
-  color: rgba(255, 255, 255, 0.25);
-}
 
 /* --- Icon size utilities --- */
 .icon-14 { width: 14px; height: 14px; }

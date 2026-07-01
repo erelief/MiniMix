@@ -9,7 +9,6 @@ import { UndoManager } from './undo-manager.js';
 import { createDefaultToolSettings, createAnnotation, hexToRgba } from './annotation.js';
 import { createFloatingToolbar, closeSubmenu, updateSliderValue } from './floating-toolbar.js';
 import {
-  computeLayout,
   computeGroupedLayout,
   renderPreview,
   hitTest,
@@ -70,9 +69,7 @@ const state = {
   annotations: new Map(),  // Map<imageId, Annotation[]>
   _annotationDims: new Map(), // Map<imageId, {rw, rh}> at annotation creation time
   _annotationDrawing: null,
-  _erasing: false,
   _textAnnot: null,  // { x, y, imageId, annotId?, text, ...style } being edited
-  _hoveredTextAnnotId: null,
   // 全局比例
   globalRatioIndex: -1,
   autoCropNewImages: false,
@@ -423,9 +420,7 @@ function enforceCanvasRatio() {
   const groupData = [];
   const srcGroups = groups.length > 0 ? groups : [state.images.map(i => i.id)];
   for (const group of srcGroups) {
-    const imgs = Array.isArray(group[0])
-      ? group // shouldn't happen, safety
-      : group.map(id => imagePool.get(id)).filter(Boolean);
+    const imgs = group.map(id => imagePool.get(id)).filter(Boolean);
     if (imgs.length === 0) { groupData.push(null); continue; }
     let refCross = 0, natSum = 0;
     for (const img of imgs) {
@@ -503,7 +498,7 @@ function enforceCanvasRatio() {
     const srcGroups2 = state.groups.length > 0 ? state.groups : [state.images.map(i => i.id)];
     let bestGroup = null, bestMain = 0;
     for (const group of srcGroups2) {
-      const ids = Array.isArray(group[0]) ? group.flat() : group;
+      const ids = group;
       let mainSum = 0;
       for (const id of ids) {
         const img = imagePool.get(id);
@@ -533,14 +528,13 @@ function enforceCanvasRatio() {
   }
 }
 
-function applyScaleToImages(images, S) {
+// Set cropWidth on each image (initializing editState if needed).
+// widthFn(img) returns the new cropWidth.
+function applyCropWidth(images, widthFn) {
   for (const img of images) {
-    const effH = img.editState ? img.editState.cropHeight : img.originalHeight;
-    const r_i = (img.editState ? img.editState.cropWidth : img.originalWidth) / effH;
-    const newCropW = Math.max(50, Math.round(effH * r_i * S));
-
+    const newCropW = widthFn(img);
     if (!img.editState) {
-      img.editState = { cropWidth: newCropW, cropHeight: effH, zoom: 1, panX: 0, panY: 0, rotation: 0 };
+      img.editState = { cropWidth: newCropW, cropHeight: img.originalHeight, zoom: 1, panX: 0, panY: 0, rotation: 0 };
     } else {
       img.editState.cropWidth = newCropW;
       clampPan(img);
@@ -548,15 +542,16 @@ function applyScaleToImages(images, S) {
   }
 }
 
+function applyScaleToImages(images, S) {
+  applyCropWidth(images, (img) => {
+    const effH = img.editState ? img.editState.cropHeight : img.originalHeight;
+    const r_i = (img.editState ? img.editState.cropWidth : img.originalWidth) / effH;
+    return Math.max(50, Math.round(effH * r_i * S));
+  });
+}
+
 function applyUniformWidth(images, uniformW) {
-  for (const img of images) {
-    if (!img.editState) {
-      img.editState = { cropWidth: uniformW, cropHeight: img.originalHeight, zoom: 1, panX: 0, panY: 0, rotation: 0 };
-    } else {
-      img.editState.cropWidth = uniformW;
-      clampPan(img);
-    }
-  }
+  applyCropWidth(images, () => uniformW);
 }
 
 // ========== 渲染 ==========
@@ -565,13 +560,6 @@ function recomputeAndRender() {
   enforceCanvasRatio();
   state.lastLayoutResult = computeGroupedLayout(state.groups, imagePool, state.layoutMode);
   setLayoutResult(state.lastLayoutResult);
-  // Expose annotation data to stitch-engine (no module cycle)
-  window.__annotations = state.annotations;
-  window.__annotationDims = state._annotationDims;
-  window.__annotationDrawing = state._annotationDrawing;
-  window.__activeAnnotationTool = state.activeAnnotationTool;
-  window.__editModeImageId = state.editModeImageId;
-  window.__editingTextAnnot = state._textAnnot;
   const result = renderPreview(canvas, state.lastLayoutResult, {
     hoveredCloseId: state.hoveredCloseId,
     hoveredImageId: state.hoveredImageId,
@@ -606,11 +594,15 @@ function recomputeAndRender() {
     dragGroupStartMX: state.dragGroupStartMX,
     dragGroupStartMY: state.dragGroupStartMY,
     dragGroupDropIndex: state.dragGroupDropIndex,
+    // 标注状态
+    annotations: state.annotations,
+    annotationDims: state._annotationDims,
+    annotationDrawing: state._annotationDrawing,
+    activeAnnotationTool: state.activeAnnotationTool,
+    editingTextAnnot: state._textAnnot,
   });
   if (result) {
     state.lastLayoutResult._displayScale = result.displayScale;
-    state.lastLayoutResult._gripOffX = result.gripOffX || 0;
-    state.lastLayoutResult._gripOffY = result.gripOffY || 0;
   }
   updateCanvasMargin();
   // 确保没有被强加偏移和残留动画
@@ -642,17 +634,7 @@ function captureEditStates() {
 }
 
 function pushUndo() {
-  state.undoManager.push({
-    groups: state.groups.map(g => [...g]),
-    layoutMode: state.layoutMode,
-    editStates: captureEditStates(),
-    editModeImageId: state.editModeImageId,
-    canvasRatioLocked: state.canvasRatioLocked,
-    canvasRatioIndex: state.canvasRatioIndex,
-    annotations: structuredClone(Array.from(state.annotations.entries())),
-    annotationDims: structuredClone(Array.from(state._annotationDims.entries())),
-    sequenceNextNumber: state.toolSettings.sequence.nextNumber,
-  });
+  state.undoManager.push(makeCurrentSnapshot());
 }
 
 // ========== 添加图片 ==========
@@ -742,6 +724,37 @@ layoutBtns.forEach(btn => {
 
 // ========== 全局快捷比例 ==========
 
+// Build the shared ratio grid (skips index 0 = "original"). datasetAttr is the
+// data-* attribute name set on each item (e.g. 'index' or 'canvasIndex').
+function buildRatioGrid(container, datasetAttr) {
+  const grid = document.createElement('div');
+  grid.className = 'ratio-grid';
+  for (let i = 1; i < ASPECT_RATIOS.length; i++) {
+    const r = ASPECT_RATIOS[i].ratio;
+    const maxH = 24, maxW = 36;
+    let pw, ph;
+    if (maxW / maxH > r) { ph = maxH; pw = maxH * r; }
+    else { pw = maxW; ph = maxW / r; }
+    const item = document.createElement('div');
+    item.className = 'ratio-grid-item';
+    item.dataset[datasetAttr] = String(i);
+    item.innerHTML = `<div class="ratio-preview" style="width:${pw}px;height:${ph}px"></div><span>${ASPECT_RATIOS[i].label}</span>`;
+    grid.appendChild(item);
+  }
+  container.appendChild(grid);
+}
+
+// Close a dropdown when clicking outside its toolbar wrapper.
+function registerOutsideClick(dropdown, btn) {
+  document.addEventListener('mousedown', (e) => {
+    if (!dropdown.classList.contains('open')) return;
+    const wrapper = btn.closest('.ratio-toolbar-wrapper');
+    if (!wrapper.contains(e.target)) {
+      dropdown.classList.remove('open');
+    }
+  });
+}
+
 function buildRatioDropdown() {
   // Header: 恢复原图比例
   const header = document.createElement('div');
@@ -753,22 +766,7 @@ function buildRatioDropdown() {
   `;
   ratioDropdown.appendChild(header);
 
-  // 网格
-  const grid = document.createElement('div');
-  grid.className = 'ratio-grid';
-  for (let i = 1; i < ASPECT_RATIOS.length; i++) {
-    const r = ASPECT_RATIOS[i].ratio;
-    const maxH = 24, maxW = 36;
-    let pw, ph;
-    if (maxW / maxH > r) { ph = maxH; pw = maxH * r; }
-    else { pw = maxW; ph = maxW / r; }
-    const item = document.createElement('div');
-    item.className = 'ratio-grid-item';
-    item.dataset.index = String(i);
-    item.innerHTML = `<div class="ratio-preview" style="width:${pw}px;height:${ph}px"></div><span>${ASPECT_RATIOS[i].label}</span>`;
-    grid.appendChild(item);
-  }
-  ratioDropdown.appendChild(grid);
+  buildRatioGrid(ratioDropdown, 'index');
 
   // 底部：新图片自动裁切开关
   const footer = document.createElement('div');
@@ -790,21 +788,7 @@ function buildCanvasRatioDropdown() {
   `;
   canvasRatioDropdown.appendChild(header);
 
-  const grid = document.createElement('div');
-  grid.className = 'ratio-grid';
-  for (let i = 1; i < ASPECT_RATIOS.length; i++) {
-    const r = ASPECT_RATIOS[i].ratio;
-    const maxH = 24, maxW = 36;
-    let pw, ph;
-    if (maxW / maxH > r) { ph = maxH; pw = maxH * r; }
-    else { pw = maxW; ph = maxW / r; }
-    const item = document.createElement('div');
-    item.className = 'ratio-grid-item';
-    item.dataset.canvasIndex = String(i);
-    item.innerHTML = `<div class="ratio-preview" style="width:${pw}px;height:${ph}px"></div><span>${ASPECT_RATIOS[i].label}</span>`;
-    grid.appendChild(item);
-  }
-  canvasRatioDropdown.appendChild(grid);
+  buildRatioGrid(canvasRatioDropdown, 'canvasIndex');
 }
 
 function deactivateCanvasRatioLock() {
@@ -887,13 +871,7 @@ btnRatio.addEventListener('click', () => {
 });
 
 // 点击菜单外关闭
-document.addEventListener('mousedown', (e) => {
-  if (!ratioDropdown.classList.contains('open')) return;
-  const wrapper = btnRatio.closest('.ratio-toolbar-wrapper');
-  if (!wrapper.contains(e.target)) {
-    ratioDropdown.classList.remove('open');
-  }
-});
+registerOutsideClick(ratioDropdown, btnRatio);
 
 // 菜单项点击
 ratioDropdown.addEventListener('click', (e) => {
@@ -931,13 +909,7 @@ btnCanvasRatio.addEventListener('click', () => {
 });
 
 // 点击菜单外关闭
-document.addEventListener('mousedown', (e) => {
-  if (!canvasRatioDropdown.classList.contains('open')) return;
-  const wrapper = btnCanvasRatio.closest('.ratio-toolbar-wrapper');
-  if (!wrapper.contains(e.target)) {
-    canvasRatioDropdown.classList.remove('open');
-  }
-});
+registerOutsideClick(canvasRatioDropdown, btnCanvasRatio);
 
 // 菜单项点击
 canvasRatioDropdown.addEventListener('click', (e) => {
@@ -1097,7 +1069,7 @@ function showCopyToast() {
 
 async function copyToClipboard() {
   if (state.images.length === 0) return;
-  const dataUrl = exportImage(state.lastLayoutResult, 'png', 100, 1);
+  const dataUrl = exportImage(state.lastLayoutResult, 'png', 100, 1, state.annotations, state._annotationDims);
   try {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
@@ -1253,7 +1225,7 @@ function updateSavePreview() {
     if (!state.lastLayoutResult) return;
     baseW = Math.round(state.lastLayoutResult.width * state.lastLayoutResult.scaleFactor);
     baseH = Math.round(state.lastLayoutResult.height * state.lastLayoutResult.scaleFactor);
-    du = generatePreviewDataURL(format, quality);
+    du = generatePreviewDataURL(format, quality, state.annotations, state._annotationDims);
   }
   saveSizeInfo._baseW = baseW;
   saveSizeInfo._baseH = baseH;
@@ -1337,7 +1309,7 @@ document.getElementById('save-modal-confirm').addEventListener('click', async ()
     if (state.saveTargetImage) {
       du = exportSingleImage(state.saveTargetImage, fmt, qual, res);
     } else {
-      du = exportImage(state.lastLayoutResult, fmt, qual, res);
+      du = exportImage(state.lastLayoutResult, fmt, qual, res, state.annotations, state._annotationDims);
     }
 
     await updateProgress('正在转换数据格式', 45);
@@ -1742,7 +1714,6 @@ function exitEditMode() {
 
 function resetEdit(img) {
   pushUndo();
-  const savedEdit = img.editState;
   img.editState = null;
   computeGroupedLayout(state.groups, imagePool, state.layoutMode);
   const cleanW = img.renderWidth;
@@ -2027,12 +1998,6 @@ function handleEditModeMouseDown(e, mx, my) {
 
 // ========== 标注绘制交互 ==========
 
-function isClickOnAnnotationUI(target) {
-  const tb = document.getElementById('annotation-toolbar');
-  if (tb && tb.contains(target)) return true;
-  if (_textWrapper && _textWrapper.contains(target)) return true;
-  return false;
-}
 
 function recordAnnotationDims(imageId, rw, rh) {
   state._annotationDims.set(imageId, { rw, rh });
@@ -3091,7 +3056,7 @@ document.addEventListener('mousemove', (e) => {
   const isHeavy = (state.editModeImageId !== -1 && state.editAction) ||
                   state.dragGroupIndex !== -1 ||
                   state.dragImageId !== -1 ||
-                  (state.editModeImageId !== -1 && (state._annotationDrawing || state._erasing));
+                  (state.editModeImageId !== -1 && state._annotationDrawing);
 
   if (!isHeavy) {
     handleGlobalMouseMove(e);
@@ -3110,7 +3075,7 @@ document.addEventListener('mousemove', (e) => {
 
 function handleGlobalMouseMove(e) {
   // 标注绘制中的鼠标移动
-  if (state.editModeImageId !== -1 && (state._annotationDrawing || state._erasing)) {
+  if (state.editModeImageId !== -1 && state._annotationDrawing) {
     const editedImg = state.images.find(i => i.id === state.editModeImageId);
     if (editedImg) updateAnnotationDrawing(e.clientX, e.clientY, editedImg);
   }
@@ -3129,7 +3094,7 @@ function handleGlobalMouseMove(e) {
 }
 document.addEventListener('mouseup', () => {
   // 标注绘制结束
-  if (state.editModeImageId !== -1 && (state._annotationDrawing || state._erasing)) {
+  if (state.editModeImageId !== -1 && state._annotationDrawing) {
     const editedImg = state.images.find(i => i.id === state.editModeImageId);
     if (editedImg) finishAnnotationDrawing(editedImg);
   }

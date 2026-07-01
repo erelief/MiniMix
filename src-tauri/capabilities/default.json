@@ -12,7 +12,6 @@
     "fs:default",
     "shell:allow-open",
     "updater:default",
-    "fs:allow-write-file",
     {
       "identifier": "fs:allow-write-file",
       "allow": [{ "path": "**" }]

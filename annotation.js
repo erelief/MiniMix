@@ -42,9 +42,6 @@ const X_PAD_RATIO = 0.2;
 
 // --- Annotation unique ID counter ---
 let nextAnnotationId = 1;
-export function resetAnnotationIdCounter() {
-  nextAnnotationId = 1;
-}
 
 // --- Tool definitions ---
 export const TOOLS = ['scaling', 'geometry', 'pencil', 'arrow', 'stamp', 'sequence', 'text', 'eraser'];
@@ -248,14 +245,6 @@ function toChineseNumber(num) {
 }
 
 /**
- * Get text label for a given number style.
- */
-export function getNumberStyleLabel(value) {
-  const entry = NUMBER_STYLES.find(s => s.value === value);
-  return entry ? entry.label : value;
-}
-
-/**
  * Render a single annotation to canvas context (in image-local coordinates).
  * Called by stitch-engine during the annotation render pass.
  */
@@ -298,11 +287,18 @@ function applyOpacity(ctx, p, fn) {
   ctx.restore();
 }
 
+// Parse #RRGGBB hex string into {r,g,b}
+function parseHex(hex) {
+  return {
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  };
+}
+
 // Compute shadow params: dark, desaturated, low-alpha version of the color
 function getShadowColor(hexColor, alpha) {
-  const r = parseInt(hexColor.slice(1, 3), 16);
-  const g = parseInt(hexColor.slice(3, 5), 16);
-  const b = parseInt(hexColor.slice(5, 7), 16);
+  const { r, g, b } = parseHex(hexColor);
   const gray = (r + g + b) / 3;
   const sr = Math.round(gray * SHADOW_GRAY_MIX + r * SHADOW_COLOR_MIX);
   const sg = Math.round(gray * SHADOW_GRAY_MIX + g * SHADOW_COLOR_MIX);
@@ -396,14 +392,9 @@ function drawFilledShape(ctx, p, buildPath) {
   ctx.restore();
 }
 
-function drawRectangleAnnotation(ctx, p) {
+// Shared shape renderer for rectangle/ellipse. buildPath(ctx) must trace the shape.
+function drawShape(ctx, p, buildPath) {
   const alpha = (p.opacity ?? 100) / 100;
-  const r = p.cornerRadius || 0;
-  const { x, y, width, height } = p;
-  const buildPath = (c) => {
-    if (r > 0) roundRectPath(c, x, y, width, height, r);
-    else { c.beginPath(); c.rect(x, y, width, height); }
-  };
 
   if (p.lineStyle === 'double') {
     if (p.fill) {
@@ -439,45 +430,21 @@ function drawRectangleAnnotation(ctx, p) {
   });
 }
 
-function drawEllipseAnnotation(ctx, p) {
-  const alpha = (p.opacity ?? 100) / 100;
+function drawRectangleAnnotation(ctx, p) {
+  const r = p.cornerRadius || 0;
   const { x, y, width, height } = p;
-  const buildPath = (c) => {
+  drawShape(ctx, p, (c) => {
+    c.beginPath();
+    if (r > 0) c.roundRect(x, y, width, height, r);
+    else c.rect(x, y, width, height);
+  });
+}
+
+function drawEllipseAnnotation(ctx, p) {
+  const { x, y, width, height } = p;
+  drawShape(ctx, p, (c) => {
     c.beginPath();
     c.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
-  };
-
-  if (p.lineStyle === 'double') {
-    if (p.fill) {
-      applyOpacity(ctx, p, () => {
-        ctx.fillStyle = p.color;
-        applyShadow(ctx, p, p.lineWidth);
-        buildPath(ctx);
-        ctx.fill();
-        clearShadow(ctx);
-      });
-    }
-    drawDoubleStroke(ctx, p, p, buildPath);
-    return;
-  }
-
-  if (p.fill && alpha < 1) {
-    drawFilledShape(ctx, p, buildPath);
-    return;
-  }
-
-  applyOpacity(ctx, p, () => {
-    ctx.lineCap = 'round';
-    applyLineStyle(ctx, p.lineStyle, p.lineWidth);
-    ctx.strokeStyle = p.color;
-    ctx.lineWidth = p.lineWidth;
-    if (p.fill) ctx.fillStyle = p.color;
-    applyShadow(ctx, p, p.lineWidth);
-    buildPath(ctx);
-    ctx.stroke();
-    if (p.fill) ctx.fill();
-    clearShadow(ctx);
-    ctx.setLineDash([]);
   });
 }
 
@@ -735,23 +702,7 @@ function drawStampAnnotation(ctx, p) {
   }); // applyOpacity
 }
 
-function roundRectPath(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.arcTo(x + w, y, x + w, y + r, r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-  ctx.lineTo(x + r, y + h);
-  ctx.arcTo(x, y + h, x, y + h - r, r);
-  ctx.lineTo(x, y + r);
-  ctx.arcTo(x, y, x + r, y, r);
-  ctx.closePath();
-}
-
 export function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
+  const { r, g, b } = parseHex(hex);
   return `rgba(${r},${g},${b},${alpha})`;
 }

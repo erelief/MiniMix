@@ -7,6 +7,15 @@ import { renderAnnotation } from './annotation.js';
 
 const MAX_PIXELS = 5120 * 5120;
 
+// Compute downscale factor so total pixels stay within MAX_PIXELS.
+function computeScale(w, h) {
+  const totalPixels = w * h;
+  if (totalPixels > MAX_PIXELS) {
+    return { scaleFactor: Math.sqrt(MAX_PIXELS / totalPixels), isScaledDown: true };
+  }
+  return { scaleFactor: 1, isScaledDown: false };
+}
+
 // --- Drawing constants ---
 const DASH_SEGMENT = 6;
 const DASH_GAP = 4;
@@ -64,23 +73,6 @@ function layoutRowVertical(images) {
   return { width: refWidth, height: yOffset };
 }
 
-export function computeLayout(images, layoutMode) {
-  if (images.length === 0) {
-    return { width: 0, height: 0, scaleFactor: 1, isScaledDown: false };
-  }
-
-  const layoutFn = layoutMode === 'horizontal' ? layoutRowHorizontal : layoutRowVertical;
-  const size = layoutFn(images);
-
-  const totalPixels = size.width * size.height;
-  let scaleFactor = 1, isScaledDown = false;
-  if (totalPixels > MAX_PIXELS) {
-    scaleFactor = Math.sqrt(MAX_PIXELS / totalPixels);
-    isScaledDown = true;
-  }
-
-  return { width: size.width, height: size.height, scaleFactor, isScaledDown };
-}
 
 // ========== 分组布局计算 ==========
 
@@ -97,12 +89,7 @@ export function computeGroupedLayout(groups, imagePool, layoutMode) {
     const imgs = groups[0].map(id => imagePool.get(id)).filter(Boolean);
     const layoutFn = layoutMode === 'horizontal' ? layoutRowHorizontal : layoutRowVertical;
     const size = layoutFn(imgs);
-    let scaleFactor = 1, isScaledDown = false;
-    const totalPixels = size.width * size.height;
-    if (totalPixels > MAX_PIXELS) {
-      scaleFactor = Math.sqrt(MAX_PIXELS / totalPixels);
-      isScaledDown = true;
-    }
+    const { scaleFactor, isScaledDown } = computeScale(size.width, size.height);
     allImages.push(...imgs);
     groupBounds.push({ x: 0, y: 0, width: size.width, height: size.height });
     return { width: size.width, height: size.height, scaleFactor, isScaledDown, _images: allImages, _groupBounds: groupBounds };
@@ -197,72 +184,13 @@ export function computeGroupedLayout(groups, imagePool, layoutMode) {
     ? groupResults.reduce((sum, g) => sum + g.height, 0)
     : Math.max(...groupResults.map(g => g.height));
 
-  const totalPixels = totalWidth * totalHeight;
-  let scaleFactor = 1, isScaledDown = false;
-  if (totalPixels > MAX_PIXELS) {
-    scaleFactor = Math.sqrt(MAX_PIXELS / totalPixels);
-    isScaledDown = true;
-  }
+  const { scaleFactor, isScaledDown } = computeScale(totalWidth, totalHeight);
 
   return { width: totalWidth, height: totalHeight, scaleFactor, isScaledDown, _images: allImages, _groupBounds: groupBounds };
 }
 
 // ========== 预览渲染 ==========
 
-// ========== 拖放区域指示器 ==========
-
-function drawDropZoneIndicator(ctx, dropZone, groupBounds, scaleFactor, displayScale, layoutMode, totalWidth, totalHeight, isActive = false) {
-  if (groupBounds.length === 0) return;
-
-  const { position } = dropZone;
-  const isHorizontal = layoutMode === 'horizontal';
-
-  // 屏幕像素尺寸，除以 displayScale 得到画布像素（不随画布缩放变化）
-  const ZONE_SCREEN_W = isHorizontal ? 160 : 44;
-  const ZONE_SCREEN_H = isHorizontal ? 44 : 160;
-  const RADIUS = 10;
-  const zw = ZONE_SCREEN_W / displayScale;
-  const zh = ZONE_SCREEN_H / displayScale;
-  const r = RADIUS / displayScale;
-
-  // 居中定位
-  const cw = totalWidth * scaleFactor;
-  const ch = totalHeight * scaleFactor;
-  let zx, zy;
-
-  if (isHorizontal) {
-    zx = (cw - zw) / 2;
-    zy = position === 'before' ? 6 / displayScale : ch - zh - 6 / displayScale;
-  } else {
-    zy = (ch - zh) / 2;
-    zx = position === 'before' ? 6 / displayScale : cw - zw - 6 / displayScale;
-  }
-
-  ctx.save();
-
-  ctx.beginPath();
-  ctx.roundRect(zx, zy, zw, zh, r);
-
-  ctx.fillStyle = isActive ? 'rgba(30, 42, 80, 0.9)' : 'rgba(25, 32, 65, 0.75)';
-  ctx.fill();
-
-  ctx.setLineDash([8 / displayScale, 5 / displayScale]);
-  ctx.strokeStyle = isActive ? 'rgba(100, 150, 230, 0.9)' : 'rgba(80, 120, 200, 0.6)';
-  ctx.lineWidth = (isActive ? 2.5 : 2);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // + 号图标
-  const iconScreenSize = 22;
-  const iconSize = iconScreenSize / displayScale;
-  const cx = zx + zw / 2;
-  const cy = zy + zh / 2;
-  ctx.globalAlpha = isActive ? 1 : 0.6;
-  drawSvgIcon(ctx, cx - iconSize / 2, cy - iconSize / 2, iconSize, displayScale,
-    'M5 12h14', 'M12 5v14');
-
-  ctx.restore();
-}
 
 export function renderPreview(canvas, layoutResult, options = {}) {
   const {
@@ -299,6 +227,12 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     dragGroupStartMX = 0,
     dragGroupStartMY = 0,
     dragGroupDropIndex = -1,
+    // 标注状态
+    annotations = null,
+    annotationDims = null,
+    annotationDrawing = null,
+    activeAnnotationTool = null,
+    editingTextAnnot = null,
   } = options;
   const { width, height, scaleFactor } = layoutResult;
 
@@ -318,9 +252,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   const scaledW = width * scaleFactor;
   const scaledH = height * scaleFactor;
   const displayScale = Math.min(containerW / scaledW, containerH / scaledH, 1);
-
-  // 把手在画布外侧（DOM 元素），画布不扩展
-  const gOx = 0, gOy = 0;
 
   canvas.width = Math.round(scaledW);
   canvas.height = Math.round(scaledH);
@@ -384,7 +315,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       if (dropZone && dropZone.type === 'new-group') {
         // === 新组拖放区域模式 ===
         // 绘制所有非拖拽图片（保持原位）
-        ctx.translate(gOx, gOy);
         if (scaleFactor < 1) ctx.scale(scaleFactor, scaleFactor);
         for (const img of images) {
           if (img.id === dragImageId) continue;
@@ -450,7 +380,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
             }
           }
 
-          ctx.translate(gOx, gOy);
           if (scaleFactor < 1) ctx.scale(scaleFactor, scaleFactor);
           for (const img of images) {
             if (img.id === dragImageId) continue;
@@ -500,14 +429,14 @@ export function renderPreview(canvas, layoutResult, options = {}) {
           const tempSH = tempLayout.height * tempSF;
 
           // 用原画布尺寸做适配，居中显示临时布局
-          const fitScale = Math.min((canvas.width - gOx) / tempSW, (canvas.height - gOy) / tempSH);
+          const fitScale = Math.min(canvas.width / tempSW, canvas.height / tempSH);
           let offX, offY;
           if (layoutMode === 'horizontal') {
-            offX = (canvas.width - gOx - tempSW * fitScale) / 2 + gOx;
-            offY = (canvas.height - gOy - tempSH * fitScale) / 2 + gOy;
+            offX = (canvas.width - tempSW * fitScale) / 2;
+            offY = (canvas.height - tempSH * fitScale) / 2;
           } else {
-            offY = (canvas.height - gOy - tempSH * fitScale) / 2 + gOy;
-            offX = (canvas.width - gOx - tempSW * fitScale) / 2 + gOx;
+            offY = (canvas.height - tempSH * fitScale) / 2;
+            offX = (canvas.width - tempSW * fitScale) / 2;
           }
 
           ctx.save();
@@ -542,7 +471,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
 
       } else {
         // dropZone 为 null（鼠标在画布外/组间空隙）→ 原位绘制所有非拖拽图片
-        ctx.translate(gOx, gOy);
         if (scaleFactor < 1) ctx.scale(scaleFactor, scaleFactor);
         for (const img of images) {
           if (img.id === dragImageId) continue;
@@ -557,8 +485,8 @@ export function renderPreview(canvas, layoutResult, options = {}) {
 
       // 绘制拖拽图片幽灵
       const sf = scaleFactor * displayScale;
-      const origScreenX = dragOrigPos.x * sf + gOx * displayScale;
-      const origScreenY = dragOrigPos.y * sf + gOy * displayScale;
+      const origScreenX = dragOrigPos.x * sf;
+      const origScreenY = dragOrigPos.y * sf;
       const offsetX = dragCurrentMX - dragStartMX;
       const offsetY = dragCurrentMY - dragStartMY;
       const ghostCanvasX = (origScreenX + offsetX) / displayScale;
@@ -585,7 +513,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       if (layoutResult._tempLayout) delete layoutResult._tempLayout;
     }
 
-    return { displayScale, gripOffX: gOx, gripOffY: gOy };
+    return { displayScale };
   }
 
   // ========== 行列拖拽模式 ==========
@@ -646,7 +574,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
 
       // 绘制所有非拖拽图片（在偏移后的位置）
       ctx.save();
-      ctx.translate(gOx, gOy);
       if (scaleFactor < 1) ctx.scale(scaleFactor, scaleFactor);
       for (const img of images) {
         if (dragGroupIds.includes(img.id)) continue;
@@ -672,8 +599,8 @@ export function renderPreview(canvas, layoutResult, options = {}) {
         const effectiveOffX = isHor ? 0 : offsetX / displayScale;
         const effectiveOffY = isHor ? offsetY / displayScale : 0;
 
-        const ghostOriginX = dragGb.x * scaleFactor + gOx + effectiveOffX;
-        const ghostOriginY = dragGb.y * scaleFactor + gOy + effectiveOffY;
+        const ghostOriginX = dragGb.x * scaleFactor + effectiveOffX;
+        const ghostOriginY = dragGb.y * scaleFactor + effectiveOffY;
 
         ctx.save();
         ctx.globalAlpha = 0.75;
@@ -703,7 +630,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       }
     }
 
-    return { displayScale, gripOffX: gOx, gripOffY: gOy };
+    return { displayScale };
   }
 
   // ========== 普通模式 ==========
@@ -714,7 +641,6 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // 缩放上下文：绘制图片（布局空间坐标）
-  ctx.translate(gOx, gOy);
   if (scaleFactor < 1) ctx.scale(scaleFactor, scaleFactor);
 
   // 绘制所有图片
@@ -727,23 +653,23 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   }
 
   // 绘制标注层（所有有标注的图片）
-  if (window.__annotations) {
+  if (annotations) {
     for (const img of images) {
-      const annots = window.__annotations.get(img.id);
+      const annots = annotations.get(img.id);
       if (annots && annots.length > 0) {
-        drawImageAnnotations(ctx, img, annots);
+        drawImageAnnotations(ctx, img, annots, null, null, annotationDims);
       }
     }
     // 绘制进行中的标注（几何图形/箭头/铅笔预览）
-    if (window.__editModeImageId !== -1 && window.__annotationDrawing) {
-      const eImg = images.find(i => i.id === window.__editModeImageId);
+    if (editModeImageId !== -1 && annotationDrawing) {
+      const eImg = images.find(i => i.id === editModeImageId);
       if (eImg) {
-        drawImageAnnotations(ctx, eImg, [], window.__annotationDrawing, window.__activeAnnotationTool);
+        drawImageAnnotations(ctx, eImg, [], annotationDrawing, activeAnnotationTool, annotationDims);
       }
     }
     // 正在编辑的文本用 textarea 显示（原生光标/选择/键盘行为），此处仅做 canvas 同步
-    if (window.__editingTextAnnot && window.__editingTextAnnot.text) {
-      const et = window.__editingTextAnnot;
+    if (editingTextAnnot && editingTextAnnot.text) {
+      const et = editingTextAnnot;
       // 当 textarea 存在时不画 canvas 文字，否则画（fallback）
       if (!document.querySelector('.annotation-text-box')) {
         const etImg = images.find(i => i.id === et.imageId);
@@ -758,7 +684,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
               fontSize: et.fontSize || 24, color: et.color || '#E61919',
               shadow: et.shadow !== false ? (typeof et.shadow === 'number' ? et.shadow : 35) : 0,
             },
-          }]);
+          }], null, null, null);
         }
       }
     }
@@ -771,8 +697,8 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   if (editModeImageId !== -1) {
     for (const img of images) {
       if (img.id === editModeImageId) continue;
-      const bx = img.x * scaleFactor + gOx;
-      const by = img.y * scaleFactor + gOy;
+      const bx = img.x * scaleFactor;
+      const by = img.y * scaleFactor;
       const bw = img.renderWidth * scaleFactor;
       const bh = img.renderHeight * scaleFactor;
       ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
@@ -784,8 +710,8 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   if (hoveredImageId !== -1) {
     const hImg = images.find(i => i.id === hoveredImageId);
     if (hImg) {
-      const bx = hImg.x * scaleFactor + gOx;
-      const by = hImg.y * scaleFactor + gOy;
+      const bx = hImg.x * scaleFactor;
+      const by = hImg.y * scaleFactor;
       const bw = hImg.renderWidth * scaleFactor;
       const bh = hImg.renderHeight * scaleFactor;
       ctx.save();
@@ -801,7 +727,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   if (editModeImageId !== -1) {
     const eImg = images.find(i => i.id === editModeImageId);
     if (eImg && eImg.editState) {
-      const isScaling = !window.__activeAnnotationTool || window.__activeAnnotationTool === 'scaling';
+      const isScaling = !activeAnnotationTool || activeAnnotationTool === 'scaling';
       ctx.save();
       if (isScaling) {
         ctx.setLineDash([DASH_SEGMENT / displayScale, DASH_GAP / displayScale]);
@@ -812,7 +738,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
         ctx.lineWidth = HOVER_BORDER_WIDTH / displayScale;
       }
       ctx.strokeRect(
-        eImg.x * scaleFactor + gOx, eImg.y * scaleFactor + gOy,
+        eImg.x * scaleFactor, eImg.y * scaleFactor,
         eImg.renderWidth * scaleFactor, eImg.renderHeight * scaleFactor
       );
       ctx.setLineDash([]);
@@ -825,182 +751,149 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   if (editModeImageId !== -1) {
     const eImg = images.find(i => i.id === editModeImageId);
     if (eImg) {
-      if (!window.__activeAnnotationTool || window.__activeAnnotationTool === 'scaling') {
-        drawResetButton(ctx, eImg, hoveredResetBtn, scaleFactor, displayScale, gOx, gOy);
-        drawRatioButton(ctx, eImg, hoveredRatioBtn, scaleFactor, displayScale, gOx, gOy);
-        drawRotateButton(ctx, eImg, hoveredRotateBtn, scaleFactor, displayScale, gOx, gOy);
+      if (!activeAnnotationTool || activeAnnotationTool === 'scaling') {
+        drawResetButton(ctx, eImg, hoveredResetBtn, scaleFactor, displayScale);
+        drawRatioButton(ctx, eImg, hoveredRatioBtn, scaleFactor, displayScale);
+        drawRotateButton(ctx, eImg, hoveredRotateBtn, scaleFactor, displayScale);
         if (showRatioMenu) {
           drawRatioMenu(ctx, eImg, hoveredRatioIndex, displayScale);
         }
       }
-      drawEditModeButtons(ctx, eImg, hoveredSaveBtn, scaleFactor, displayScale, gOx, gOy);
+      drawEditModeButtons(ctx, eImg, hoveredSaveBtn, scaleFactor, displayScale);
     }
   } else {
     // 普通模式：编辑按钮和关闭按钮
     for (const img of images) {
       if (img.id === hoveredImageId) {
-        drawEditButton(ctx, img, hoveredEditBtnId === img.id, scaleFactor, displayScale, gOx, gOy);
-        drawDuplicateButton(ctx, img, hoveredDupBtnId === img.id, scaleFactor, displayScale, gOx, gOy);
-        drawDownloadButton(ctx, img, hoveredDlBtnId === img.id, scaleFactor, displayScale, gOx, gOy);
-        drawCloseButton(ctx, img, hoveredCloseId === img.id, scaleFactor, displayScale, gOx, gOy);
+        drawEditButton(ctx, img, hoveredEditBtnId === img.id, scaleFactor, displayScale);
+        drawDuplicateButton(ctx, img, hoveredDupBtnId === img.id, scaleFactor, displayScale);
+        drawDownloadButton(ctx, img, hoveredDlBtnId === img.id, scaleFactor, displayScale);
+        drawCloseButton(ctx, img, hoveredCloseId === img.id, scaleFactor, displayScale);
       }
     }
   }
 
-  return { displayScale, gripOffX: gOx, gripOffY: gOy };
+  return { displayScale };
 }
 
 // ========== 编辑按钮（固定 28 屏幕像素，左上角） ==========
 
-const EDIT_BTN_SIZE = 28;
-const EDIT_BTN_PADDING = 4;
+const BTN_SIZE = 28;
+const BTN_PADDING = 4;
 
-function drawEditButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
-  const sf = scaleFactor * displayScale;
-  const screenX = img.x * sf + gOx * displayScale + EDIT_BTN_PADDING;
-  const screenY = img.y * sf + gOy * displayScale + EDIT_BTN_PADDING;
-  const canvasSize = EDIT_BTN_SIZE / displayScale;
+// Draw a square icon button at screen coords (screenX, screenY) and record its
+// hit-rect on img as img[propPrefix+'BtnX/Y/Size'].
+// opts: { screenX, screenY, propPrefix, hovered, accent, iconPaths, displayScale, extraDraw? }
+function drawIconButton(ctx, img, opts) {
+  const { screenX, screenY, propPrefix, hovered, accent, iconPaths, displayScale, extraDraw } = opts;
+  const canvasSize = BTN_SIZE / displayScale;
   const canvasX = screenX / displayScale;
   const canvasY = screenY / displayScale;
 
-  img.editBtnX = screenX;
-  img.editBtnY = screenY;
-  img.editBtnSize = EDIT_BTN_SIZE;
+  img[propPrefix + 'BtnX'] = screenX;
+  img[propPrefix + 'BtnY'] = screenY;
+  img[propPrefix + 'BtnSize'] = BTN_SIZE;
 
   ctx.save();
-  ctx.fillStyle = hovered ? 'rgba(66, 133, 244, 0.9)' : 'rgba(0, 0, 0, 0.45)';
+  ctx.fillStyle = hovered ? accent : 'rgba(0, 0, 0, 0.45)';
   ctx.beginPath();
   ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
   ctx.fill();
-
-  // square-pen icon (Lucide)
-  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, displayScale,
-    'M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
-    'M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z'
-  );
+  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, displayScale, ...iconPaths);
+  if (extraDraw) extraDraw(ctx, canvasX, canvasY, canvasSize);
   ctx.restore();
+}
+
+function drawEditButton(ctx, img, hovered, scaleFactor, displayScale) {
+  const sf = scaleFactor * displayScale;
+  drawIconButton(ctx, img, {
+    screenX: img.x * sf + BTN_PADDING,
+    screenY: img.y * sf + BTN_PADDING,
+    propPrefix: 'edit',
+    hovered,
+    accent: 'rgba(66, 133, 244, 0.9)',
+    displayScale,
+    iconPaths: [
+      'M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
+      'M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z',
+    ],
+  });
 }
 
 // ========== 复制按钮（编辑按钮右侧） ==========
 
-function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
-  const sf = scaleFactor * displayScale;
-  const screenX = img.editBtnX + EDIT_BTN_SIZE + EDIT_BTN_PADDING;
-  const screenY = img.editBtnY;
-  const canvasSize = EDIT_BTN_SIZE / displayScale;
-  const canvasX = screenX / displayScale;
-  const canvasY = screenY / displayScale;
-
-  img.dupBtnX = screenX;
-  img.dupBtnY = screenY;
-  img.dupBtnSize = EDIT_BTN_SIZE;
-
-  ctx.save();
-  ctx.fillStyle = hovered ? 'rgba(66, 133, 244, 0.9)' : 'rgba(0, 0, 0, 0.45)';
-  ctx.beginPath();
-  ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
-  ctx.fill();
-
-  // images icon (Lucide) — rect x=8 y=2 w=14 h=14 rx=2
-  const s = canvasSize / 24;
-  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, displayScale,
-    'm22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16',
-    'M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2',
-    'M8 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2z'
-  );
-  // Filled dot (circle at 13,7)
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(canvasX + 13 * s, canvasY + 7 * s, 1 * s, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.restore();
+function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale) {
+  drawIconButton(ctx, img, {
+    screenX: img.editBtnX + BTN_SIZE + BTN_PADDING,
+    screenY: img.editBtnY,
+    propPrefix: 'dup',
+    hovered,
+    accent: 'rgba(66, 133, 244, 0.9)',
+    displayScale,
+    iconPaths: [
+      'm22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16',
+      'M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2',
+      'M8 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2z',
+    ],
+    extraDraw: (c, cx, cy, size) => {
+      const s = size / 24;
+      c.fillStyle = '#fff';
+      c.beginPath();
+      c.arc(cx + 13 * s, cy + 7 * s, 1 * s, 0, Math.PI * 2);
+      c.fill();
+    },
+  });
 }
 
 // ========== 编辑模式按钮（保存退出 + 复位） ==========
 
-function drawEditModeButtons(ctx, img, saveHovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+function drawEditModeButtons(ctx, img, saveHovered, scaleFactor, displayScale) {
   const sf = scaleFactor * displayScale;
-  const screenY = img.y * sf + gOy * displayScale + EDIT_BTN_PADDING;
-  const canvasSize = EDIT_BTN_SIZE / displayScale;
-  const canvasY = screenY / displayScale;
-
-  // 保存退出按钮 — 右上角（与删除按钮位置一致）
-  const saveScreenX = (img.x + img.renderWidth) * sf + gOx * displayScale - EDIT_BTN_SIZE - CLOSE_BTN_PADDING;
-  img.saveBtnX = saveScreenX;
-  img.saveBtnY = screenY;
-  img.saveBtnSize = EDIT_BTN_SIZE;
-
-  const saveCanvasX = saveScreenX / displayScale;
-
-  ctx.save();
-  ctx.fillStyle = saveHovered ? 'rgba(78, 204, 163, 0.9)' : 'rgba(0, 0, 0, 0.45)';
-  ctx.beginPath();
-  ctx.roundRect(saveCanvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
-  ctx.fill();
-  drawSvgIcon(ctx, saveCanvasX, canvasY, canvasSize, displayScale,
-    'm16 17 5-5-5-5', 'M21 12H9', 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'
-  );
-  ctx.restore();
+  drawIconButton(ctx, img, {
+    screenX: (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING,
+    screenY: img.y * sf + BTN_PADDING,
+    propPrefix: 'save',
+    hovered: saveHovered,
+    accent: 'rgba(78, 204, 163, 0.9)',
+    displayScale,
+    iconPaths: ['m16 17 5-5-5-5', 'M21 12H9', 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'],
+  });
 }
 
-function drawResetButton(ctx, img, resetHovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+function drawResetButton(ctx, img, resetHovered, scaleFactor, displayScale) {
   const sf = scaleFactor * displayScale;
-  const screenY = img.y * sf + gOy * displayScale + EDIT_BTN_PADDING;
-  const canvasSize = EDIT_BTN_SIZE / displayScale;
-  const canvasY = screenY / displayScale;
-
-  const resetScreenX = img.x * sf + gOx * displayScale + EDIT_BTN_PADDING;
-  img.resetBtnX = resetScreenX;
-  img.resetBtnY = screenY;
-  img.resetBtnSize = EDIT_BTN_SIZE;
-
-  const resetCanvasX = resetScreenX / displayScale;
-
-  ctx.save();
-  ctx.fillStyle = resetHovered ? 'rgba(233, 69, 96, 0.9)' : 'rgba(0, 0, 0, 0.45)';
-  ctx.beginPath();
-  ctx.roundRect(resetCanvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
-  ctx.fill();
-  drawSvgIcon(ctx, resetCanvasX, canvasY, canvasSize, displayScale,
-    'm2 9 3-3 3 3', 'M13 18H7a2 2 0 0 1-2-2V6',
-    'm22 15-3 3-3-3', 'M11 6h6a2 2 0 0 1 2 2v10'
-  );
-  ctx.restore();
+  drawIconButton(ctx, img, {
+    screenX: img.x * sf + BTN_PADDING,
+    screenY: img.y * sf + BTN_PADDING,
+    propPrefix: 'reset',
+    hovered: resetHovered,
+    accent: 'rgba(233, 69, 96, 0.9)',
+    displayScale,
+    iconPaths: ['m2 9 3-3 3 3', 'M13 18H7a2 2 0 0 1-2-2V6', 'm22 15-3 3-3-3', 'M11 6h6a2 2 0 0 1 2 2v10'],
+  });
 }
 
 // ========== 比例按钮（复位按钮右侧） ==========
 
-function drawRatioButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+function drawRatioButton(ctx, img, hovered, scaleFactor, displayScale) {
   const sf = scaleFactor * displayScale;
-  const topY = img.y * sf + gOy * displayScale + EDIT_BTN_PADDING;
-  const canvasSize = EDIT_BTN_SIZE / displayScale;
-
-  const hScreenX = img.resetBtnX + EDIT_BTN_SIZE + EDIT_BTN_PADDING;
-  const saveScreenX = (img.x + img.renderWidth) * sf + gOx * displayScale - EDIT_BTN_SIZE - CLOSE_BTN_PADDING;
-  const wouldOverlap = hScreenX + EDIT_BTN_SIZE > saveScreenX;
-
-  const ratioScreenX = wouldOverlap ? img.resetBtnX : hScreenX;
-  const ratioScreenY = wouldOverlap ? topY + EDIT_BTN_SIZE + EDIT_BTN_PADDING : topY;
-  img.ratioBtnX = ratioScreenX;
-  img.ratioBtnY = ratioScreenY;
-  img.ratioBtnSize = EDIT_BTN_SIZE;
-
-  const ratioCanvasX = ratioScreenX / displayScale;
-  const ratioCanvasY = ratioScreenY / displayScale;
-
-  ctx.save();
-  ctx.fillStyle = hovered ? 'rgba(66, 133, 244, 0.9)' : 'rgba(0, 0, 0, 0.45)';
-  ctx.beginPath();
-  ctx.roundRect(ratioCanvasX, ratioCanvasY, canvasSize, canvasSize, 3 / displayScale);
-  ctx.fill();
-  // proportions icon (Lucide) — rect x=2 y=4 w=20 h=16 rx=2
-  drawSvgIcon(ctx, ratioCanvasX, ratioCanvasY, canvasSize, displayScale,
-    'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
-    'M12 9v11',
-    'M2 9h13a2 2 0 0 1 2 2v9'
-  );
-  ctx.restore();
+  const topY = img.y * sf + BTN_PADDING;
+  const hScreenX = img.resetBtnX + BTN_SIZE + BTN_PADDING;
+  const saveScreenX = (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING;
+  const wouldOverlap = hScreenX + BTN_SIZE > saveScreenX;
+  drawIconButton(ctx, img, {
+    screenX: wouldOverlap ? img.resetBtnX : hScreenX,
+    screenY: wouldOverlap ? topY + BTN_SIZE + BTN_PADDING : topY,
+    propPrefix: 'ratio',
+    hovered,
+    accent: 'rgba(66, 133, 244, 0.9)',
+    displayScale,
+    iconPaths: [
+      'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+      'M12 9v11',
+      'M2 9h13a2 2 0 0 1 2 2v9',
+    ],
+  });
 }
 
 // ========== 比例下拉菜单 ==========
@@ -1134,31 +1027,17 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
 
 // ========== 旋转按钮（右下角） ==========
 
-const ROTATE_BTN_SIZE = 28;
-const ROTATE_BTN_PADDING = 4;
-
-function drawRotateButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+function drawRotateButton(ctx, img, hovered, scaleFactor, displayScale) {
   const sf = scaleFactor * displayScale;
-  const screenX = (img.x + img.renderWidth) * sf + gOx * displayScale - ROTATE_BTN_SIZE - ROTATE_BTN_PADDING;
-  const screenY = (img.y + img.renderHeight) * sf + gOy * displayScale - ROTATE_BTN_SIZE - ROTATE_BTN_PADDING;
-  const canvasSize = ROTATE_BTN_SIZE / displayScale;
-  const canvasX = screenX / displayScale;
-  const canvasY = screenY / displayScale;
-
-  img.rotateBtnX = screenX;
-  img.rotateBtnY = screenY;
-  img.rotateBtnSize = ROTATE_BTN_SIZE;
-
-  ctx.save();
-  ctx.fillStyle = hovered ? 'rgba(66, 133, 244, 0.9)' : 'rgba(0, 0, 0, 0.45)';
-  ctx.beginPath();
-  ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
-  ctx.fill();
-  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, displayScale,
-    'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8',
-    'M3 3v5h5'
-  );
-  ctx.restore();
+  drawIconButton(ctx, img, {
+    screenX: (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING,
+    screenY: (img.y + img.renderHeight) * sf - BTN_SIZE - BTN_PADDING,
+    propPrefix: 'rotate',
+    hovered,
+    accent: 'rgba(66, 133, 244, 0.9)',
+    displayScale,
+    iconPaths: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'],
+  });
 }
 
 // ========== SVG 图标绘制工具 ==========
@@ -1229,8 +1108,8 @@ function drawEditedImage(ctx, img, scaleFactor) {
 /**
  * 如果图片渲染尺寸自标注创建以来发生了变化，按比例重新缩放所有标注坐标。
  */
-function rescaleAnnotationsIfNeeded(annotations, img) {
-  const dims = window.__annotationDims && window.__annotationDims.get(img.id);
+function rescaleAnnotationsIfNeeded(annotations, img, annotationDims) {
+  const dims = annotationDims && annotationDims.get(img.id);
   if (!dims || dims.rw === img.renderWidth && dims.rh === img.renderHeight) {
     return annotations;
   }
@@ -1254,7 +1133,7 @@ function rescaleAnnotationsIfNeeded(annotations, img) {
  * 在图片上方绘制标注层。
  * 裁切到图片显示区域内，与图片同步缩放/旋转/平移。
  */
-function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgressTool) {
+function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgressTool, annotationDims) {
   ctx.save();
   try {
     ctx.beginPath();
@@ -1310,7 +1189,7 @@ function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgre
         ctx.restore();
       }
     } else {
-      const rescaledAnnots = rescaleAnnotationsIfNeeded(annotations, img);
+      const rescaledAnnots = rescaleAnnotationsIfNeeded(annotations, img, annotationDims);
       for (const a of rescaledAnnots) renderAnnotation(ctx, a);
       if (inProgressDrawing) renderInProgressDrawing(ctx, inProgressDrawing, inProgressTool);
     }
@@ -1320,64 +1199,32 @@ function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgre
   ctx.restore();
 }
 
-const CLOSE_BTN_SIZE = 28;
-const CLOSE_BTN_PADDING = 4;
-
-function drawCloseButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+function drawCloseButton(ctx, img, hovered, scaleFactor, displayScale) {
   const sf = scaleFactor * displayScale;
-  const screenX = (img.x + img.renderWidth) * sf + gOx * displayScale - CLOSE_BTN_SIZE - CLOSE_BTN_PADDING;
-  const screenY = img.y * sf + gOy * displayScale + CLOSE_BTN_PADDING;
-  const canvasSize = CLOSE_BTN_SIZE / displayScale;
-  const canvasX = screenX / displayScale;
-  const canvasY = screenY / displayScale;
-
-  img.closeBtnX = screenX;
-  img.closeBtnY = screenY;
-  img.closeBtnSize = CLOSE_BTN_SIZE;
-
-  ctx.save();
-  ctx.fillStyle = hovered ? 'rgba(233, 69, 96, 0.9)' : 'rgba(0, 0, 0, 0.45)';
-  ctx.beginPath();
-  ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
-  ctx.fill();
-
-  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, displayScale,
-    'M10 11v6', 'M14 11v6',
-    'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6',
-    'M3 6h18', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2');
-  ctx.restore();
+  drawIconButton(ctx, img, {
+    screenX: (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING,
+    screenY: img.y * sf + BTN_PADDING,
+    propPrefix: 'close',
+    hovered,
+    accent: 'rgba(233, 69, 96, 0.9)',
+    displayScale,
+    iconPaths: ['M10 11v6', 'M14 11v6', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6', 'M3 6h18', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
+  });
 }
 
 // ========== 下载按钮（右下角，普通模式悬停时显示） ==========
 
-const DL_BTN_SIZE = 28;
-const DL_BTN_PADDING = 4;
-
-function drawDownloadButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 0, gOy = 0) {
+function drawDownloadButton(ctx, img, hovered, scaleFactor, displayScale) {
   const sf = scaleFactor * displayScale;
-  const screenX = (img.x + img.renderWidth) * sf + gOx * displayScale - DL_BTN_SIZE - DL_BTN_PADDING;
-  const screenY = (img.y + img.renderHeight) * sf + gOy * displayScale - DL_BTN_SIZE - DL_BTN_PADDING;
-  const canvasSize = DL_BTN_SIZE / displayScale;
-  const canvasX = screenX / displayScale;
-  const canvasY = screenY / displayScale;
-
-  img.dlBtnX = screenX;
-  img.dlBtnY = screenY;
-  img.dlBtnSize = DL_BTN_SIZE;
-
-  ctx.save();
-  ctx.fillStyle = hovered ? 'rgba(66, 133, 244, 0.9)' : 'rgba(0, 0, 0, 0.45)';
-  ctx.beginPath();
-  ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
-  ctx.fill();
-
-  // Lucide download icon
-  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, displayScale,
-    'M12 15V3',
-    'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4',
-    'm7 10 5 5 5-5'
-  );
-  ctx.restore();
+  drawIconButton(ctx, img, {
+    screenX: (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING,
+    screenY: (img.y + img.renderHeight) * sf - BTN_SIZE - BTN_PADDING,
+    propPrefix: 'dl',
+    hovered,
+    accent: 'rgba(66, 133, 244, 0.9)',
+    displayScale,
+    iconPaths: ['M12 15V3', 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'm7 10 5 5 5-5'],
+  });
 }
 
 // ========== 命中检测（屏幕/CSS 像素坐标，与鼠标事件一致） ==========
@@ -1385,30 +1232,16 @@ function drawDownloadButton(ctx, img, hovered, scaleFactor, displayScale, gOx = 
 const CROP_EDGE_THRESHOLD = 8;
 const CORNER_ZONE = 30;
 
-function drawPlaceholder(ctx, x, y, w, h, displayScale) {
-  ctx.save();
-  ctx.setLineDash([DASH_SEGMENT / displayScale, DASH_GAP / displayScale]);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-  ctx.lineWidth = DASH_BORDER_WIDTH / displayScale;
-  ctx.strokeRect(x, y, w, h);
-  ctx.setLineDash([]);
-  ctx.restore();
-}
-
-function findImageGroupBounds(img, groupBounds, allImages, layoutMode) {
-  for (let i = 0; i < groupBounds.length; i++) {
-    const gb = groupBounds[i];
-    if (layoutMode === 'horizontal') {
-      if (img.y >= gb.y - 1 && img.y <= gb.y + gb.height + 1) return { index: i, ...gb };
-    } else {
-      if (img.x >= gb.x - 1 && img.x <= gb.x + gb.width + 1) return { index: i, ...gb };
-    }
-  }
-  return null;
-}
 
 export function hitTest(mouseX, mouseY, images, hoveredImageId = -1, editModeImageId = -1, layoutMode = 'horizontal') {
   const lr = stateLastLayoutResult;
+  // Test whether (mouseX, mouseY) falls inside the button recorded as img[prefix+'Btn*'].
+  const btnHit = (img, prefix) => {
+    const size = img[prefix + 'BtnSize'];
+    return size > 0 &&
+      mouseX >= img[prefix + 'BtnX'] && mouseX < img[prefix + 'BtnX'] + size &&
+      mouseY >= img[prefix + 'BtnY'] && mouseY < img[prefix + 'BtnY'] + size;
+  };
 
   for (let i = images.length - 1; i >= 0; i--) {
     const img = images[i];
@@ -1441,29 +1274,13 @@ export function hitTest(mouseX, mouseY, images, hoveredImageId = -1, editModeIma
         }
       }
       // 保存按钮
-      if (img.saveBtnSize > 0 &&
-          mouseX >= img.saveBtnX && mouseX < img.saveBtnX + img.saveBtnSize &&
-          mouseY >= img.saveBtnY && mouseY < img.saveBtnY + img.saveBtnSize) {
-        return { image: img, isSaveBtn: true };
-      }
+      if (btnHit(img, 'save')) return { image: img, isSaveBtn: true };
       // 复位按钮
-      if (img.resetBtnSize > 0 &&
-          mouseX >= img.resetBtnX && mouseX < img.resetBtnX + img.resetBtnSize &&
-          mouseY >= img.resetBtnY && mouseY < img.resetBtnY + img.resetBtnSize) {
-        return { image: img, isResetBtn: true };
-      }
+      if (btnHit(img, 'reset')) return { image: img, isResetBtn: true };
       // 比例按钮
-      if (img.ratioBtnSize > 0 &&
-          mouseX >= img.ratioBtnX && mouseX < img.ratioBtnX + img.ratioBtnSize &&
-          mouseY >= img.ratioBtnY && mouseY < img.ratioBtnY + img.ratioBtnSize) {
-        return { image: img, isRatioBtn: true };
-      }
+      if (btnHit(img, 'ratio')) return { image: img, isRatioBtn: true };
       // 旋转按钮 — 仅右下角，按钮形式
-      if (img.rotateBtnSize > 0 &&
-          mouseX >= img.rotateBtnX && mouseX < img.rotateBtnX + img.rotateBtnSize &&
-          mouseY >= img.rotateBtnY && mouseY < img.rotateBtnY + img.rotateBtnSize) {
-        return { image: img, isRotateBtn: true };
-      }
+      if (btnHit(img, 'rotate')) return { image: img, isRotateBtn: true };
 
       // 裁切边缘
       if (layoutMode === 'horizontal') {
@@ -1513,30 +1330,16 @@ export function hitTest(mouseX, mouseY, images, hoveredImageId = -1, editModeIma
     }
 
     // 普通模式：编辑按钮（仅对悬停图片）
-    if (img.id === hoveredImageId && img.editBtnSize > 0 &&
-        mouseX >= img.editBtnX && mouseX < img.editBtnX + img.editBtnSize &&
-        mouseY >= img.editBtnY && mouseY < img.editBtnY + img.editBtnSize) {
-      return { image: img, isEditBtn: true };
-    }
+    if (img.id === hoveredImageId && btnHit(img, 'edit')) return { image: img, isEditBtn: true };
 
     // 复制按钮（仅对悬停图片）
-    if (img.id === hoveredImageId && img.dupBtnSize > 0 &&
-        mouseX >= img.dupBtnX && mouseX < img.dupBtnX + img.dupBtnSize &&
-        mouseY >= img.dupBtnY && mouseY < img.dupBtnY + img.dupBtnSize) {
-      return { image: img, isDupBtn: true };
-    }
+    if (img.id === hoveredImageId && btnHit(img, 'dup')) return { image: img, isDupBtn: true };
 
     // 下载按钮（仅对悬停图片）
-    if (img.id === hoveredImageId && img.dlBtnSize > 0 &&
-        mouseX >= img.dlBtnX && mouseX < img.dlBtnX + img.dlBtnSize &&
-        mouseY >= img.dlBtnY && mouseY < img.dlBtnY + img.dlBtnSize) {
-      return { image: img, isDlBtn: true };
-    }
+    if (img.id === hoveredImageId && btnHit(img, 'dl')) return { image: img, isDlBtn: true };
 
     // 关闭按钮（仅对悬停图片，且不在编辑模式）
-    if (editModeImageId === -1 && img.id === hoveredImageId && img.closeBtnSize > 0 &&
-        mouseX >= img.closeBtnX && mouseX < img.closeBtnX + img.closeBtnSize &&
-        mouseY >= img.closeBtnY && mouseY < img.closeBtnY + img.closeBtnSize) {
+    if (editModeImageId === -1 && img.id === hoveredImageId && btnHit(img, 'close')) {
       return { image: img, isCloseBtn: true };
     }
 
@@ -1553,7 +1356,7 @@ export function setLayoutResult(lr) { stateLastLayoutResult = lr; }
 
 // ========== 导出 ==========
 
-export function renderFullResolution(layoutResult) {
+export function renderFullResolution(layoutResult, annotations = null, annotationDims = null) {
   const { width, height, scaleFactor } = layoutResult;
   const outputW = Math.round(width * scaleFactor);
   const outputH = Math.round(height * scaleFactor);
@@ -1573,19 +1376,19 @@ export function renderFullResolution(layoutResult) {
     }
   }
   // 绘制标注层（导出时也包含标注）
-  if (window.__annotations) {
+  if (annotations) {
     for (const img of images) {
-      const annots = window.__annotations.get(img.id);
+      const annots = annotations.get(img.id);
       if (annots && annots.length > 0) {
-        drawImageAnnotations(ctx, img, annots);
+        drawImageAnnotations(ctx, img, annots, null, null, annotationDims);
       }
     }
   }
   return offscreen;
 }
 
-export function exportImage(layoutResult, format = 'png', quality = 90, resolutionScale = 1) {
-  const fullCanvas = renderFullResolution(layoutResult);
+export function exportImage(layoutResult, format = 'png', quality = 90, resolutionScale = 1, annotations = null, annotationDims = null) {
+  const fullCanvas = renderFullResolution(layoutResult, annotations, annotationDims);
   const targetW = Math.round(fullCanvas.width * resolutionScale);
   const targetH = Math.round(fullCanvas.height * resolutionScale);
   const exportCanvas = document.createElement('canvas');
@@ -1598,8 +1401,8 @@ export function exportImage(layoutResult, format = 'png', quality = 90, resoluti
 }
 
 /** 小尺寸预览（最大 320px），用于滑块拖动时的快速预览 */
-export function generatePreviewDataURL(format = 'png', quality = 90) {
-  const fullCanvas = renderFullResolution(stateLastLayoutResult);
+export function generatePreviewDataURL(format = 'png', quality = 90, annotations = null, annotationDims = null) {
+  const fullCanvas = renderFullResolution(stateLastLayoutResult, annotations, annotationDims);
   const MAX_PREVIEW = 320;
   const scale = Math.min(MAX_PREVIEW / fullCanvas.width, MAX_PREVIEW / fullCanvas.height, 1);
   const w = Math.round(fullCanvas.width * scale);
