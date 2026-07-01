@@ -3,7 +3,7 @@
  * 最简版本：添加图片 + 横排/纵排 + 撤销/重做 + 复制/保存
  */
 
-import { createIcons, ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image, CircleCheckBig, X, RotateCcw, Scale, Stamp } from 'lucide';
+import { createIcons, ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image as ImageIcon, CircleCheckBig, X, RotateCcw, Scale, Stamp } from 'lucide';
 import { ImageItem } from './image-item.js';
 import { UndoManager } from './undo-manager.js';
 import { createDefaultToolSettings, createAnnotation, hexToRgba } from './annotation.js';
@@ -22,7 +22,7 @@ import {
 } from './stitch-engine.js';
 
 createIcons({
-  icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image, CircleCheckBig, X, RotateCcw, Scale, Stamp },
+  icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image: ImageIcon, CircleCheckBig, X, RotateCcw, Scale, Stamp },
 });
 
 // ========== 图片对象池（支持撤销恢复） ==========
