@@ -14,8 +14,16 @@ export default defineConfig({
   },
   base: './',
   server: {
-    port: 1420,
+    port: 18739,
     strictPort: true,
+    watch: {
+      // 忽略 Rust 编译产物（src-tauri/target）。Rust 链接时会锁定
+      // minimix_lib.dll，Vite 尝试 watch 它会触发 EBUSY 崩溃。
+      ignored: [
+        '**/src-tauri/target/**',
+        '**/node_modules/**',
+      ],
+    },
   },
   // Dev 模式下，本地源文件首次按需转译极慢（main.js / floating-toolbar.js
   // 各需 ~45s）。将它们加入 optimizeDeps，让 Vite 用 esbuild 预构建，

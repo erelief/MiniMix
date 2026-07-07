@@ -514,28 +514,86 @@ body {
   opacity: 1;
 }
 
-/* --- Copy Success Toast --- */
-.copy-toast {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 8px 16px;
-  background: rgba(0, 0, 0, 0.8);
-  color: var(--success);
-  font-size: 13px;
-  border-radius: 8px;
-  opacity: 0;
-  transition: opacity 0.3s;
-  pointer-events: none;
-  z-index: 100;
+/* --- Copy Progress Overlay (blocking) --- */
+.copy-progress-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  z-index: 1500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
 }
-
-.copy-toast.visible {
+.copy-progress-overlay.visible {
   opacity: 1;
+  pointer-events: auto;
+}
+.copy-progress-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 36px 48px;
+  min-width: 200px;
+  background: var(--bg-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  transform: scale(0.92);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.copy-progress-overlay.visible .copy-progress-card {
+  transform: scale(1);
+}
+.copy-progress-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+/* spinner */
+.copy-progress-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: copy-spin 0.7s linear infinite;
+}
+.copy-progress-card.success .copy-progress-spinner,
+.copy-progress-card.error .copy-progress-spinner {
+  display: none;
+}
+/* result icons (hidden by default; lucide renders an <svg> inside) */
+.copy-progress-icon {
+  width: 44px;
+  height: 44px;
+  display: none;
+  animation: copy-pop 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.copy-progress-icon svg {
+  width: 44px;
+  height: 44px;
+}
+.copy-progress-card.success .copy-progress-icon.success {
+  display: block;
+  color: var(--success);
+}
+.copy-progress-card.error .copy-progress-icon.error {
+  display: block;
+  color: var(--error);
+}
+@keyframes copy-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes copy-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* --- Save Modal Progress --- */

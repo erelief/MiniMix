@@ -2,7 +2,7 @@
 ; Registers context menu ("用拼好图打开") with multi-file selection support,
 ; and "Open with" context menu entries.
 
-!define HOOK_BINARY "app"
+!define HOOK_BINARY "minimix"
 !include "nsDialogs.nsh"
 !include "LogicLib.nsh"
 

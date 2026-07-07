@@ -3,7 +3,7 @@
  * 最简版本：添加图片 + 横排/纵排 + 撤销/重做 + 复制/保存
  */
 
-import { createIcons, ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image as ImageIcon, CircleCheckBig, X, RotateCcw, Scale, Stamp } from 'lucide';
+import { createIcons, ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image as ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp } from 'lucide';
 import { ImageItem } from './image-item.js';
 import { UndoManager } from './undo-manager.js';
 import { createDefaultToolSettings, createAnnotation, hexToRgba } from './annotation.js';
@@ -22,7 +22,7 @@ import {
 } from './stitch-engine.js';
 
 createIcons({
-  icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image: ImageIcon, CircleCheckBig, X, RotateCcw, Scale, Stamp },
+  icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image: ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp },
 });
 
 // ========== 图片对象池（支持撤销恢复） ==========
@@ -125,7 +125,6 @@ const canvas = document.getElementById('main-canvas');
 const statusBar = document.getElementById('status-bar');
 const dropOverlay = document.getElementById('drop-overlay');
 const scaleToast = document.getElementById('scale-toast');
-const copyToast = document.getElementById('copy-toast');
 const newRowBefore = document.getElementById('new-row-before');
 const newRowAfter = document.getElementById('new-row-after');
 const addImagesInput = document.getElementById('add-images');
@@ -1061,28 +1060,44 @@ btnCopy.addEventListener('click', () => {
   copyToClipboard();
 });
 
-function showCopyToast() {
-  copyToast.classList.add('visible');
-  clearTimeout(copyToast._timer);
-  copyToast._timer = setTimeout(() => copyToast.classList.remove('visible'), 2500);
+// --- 复制进度遮罩（阻塞，给用户明确反馈）---
+const copyOverlay = document.getElementById('copy-progress-overlay');
+const copyCard = copyOverlay.querySelector('.copy-progress-card');
+const copyProgressText = document.getElementById('copy-progress-text');
+let _copyOverlayTimer = null;
+
+function showCopyProgress() {
+  clearTimeout(_copyOverlayTimer);
+  copyCard.classList.remove('success', 'error');
+  copyProgressText.textContent = '正在复制…';
+  copyOverlay.classList.add('visible');
+}
+
+function finishCopyProgress(ok, message) {
+  copyCard.classList.add(ok ? 'success' : 'error');
+  copyProgressText.textContent = message;
+  clearTimeout(_copyOverlayTimer);
+  _copyOverlayTimer = setTimeout(() => copyOverlay.classList.remove('visible'), ok ? 1100 : 1800);
 }
 
 async function copyToClipboard() {
   if (state.images.length === 0) return;
+  showCopyProgress();
   const dataUrl = exportImage(state.lastLayoutResult, 'png', 100, 1, state.annotations, state._annotationDims);
   try {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-    showCopyToast();
+    finishCopyProgress(true, '已复制到剪贴板');
   } catch (e) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('write_image_to_clipboard', { dataUrl });
-      showCopyToast();
+      finishCopyProgress(true, '已复制到剪贴板');
     } catch (e2) {
       console.error('Copy failed:', e2);
       statusBar.textContent = '复制失败';
+      finishCopyProgress(false, '复制失败');
     }
   }
 }

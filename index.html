@@ -97,10 +97,14 @@
     <!-- 5K 缩放提示 -->
     <div id="scale-toast" class="scale-toast">输出超过5K像素，已自动缩放</div>
 
-    <!-- 复制成功提示 -->
-    <div id="copy-toast" class="copy-toast">
-      <i data-lucide="circle-check-big" class="icon-18"></i>
-      <span>已复制到剪贴板</span>
+    <!-- 复制进度遮罩（阻塞） -->
+    <div id="copy-progress-overlay" class="copy-progress-overlay">
+      <div class="copy-progress-card">
+        <div class="copy-progress-spinner"></div>
+        <i data-lucide="circle-check-big" class="copy-progress-icon success"></i>
+        <i data-lucide="circle-x" class="copy-progress-icon error"></i>
+        <span class="copy-progress-text" id="copy-progress-text">正在复制…</span>
+      </div>
     </div>
 
     <div id="update-toast" class="update-toast">
