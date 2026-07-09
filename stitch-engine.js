@@ -297,7 +297,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // 画布底色：深蓝凹槽，比外部区域更深
-  ctx.fillStyle = '#12122a';
+  ctx.fillStyle = '#101218';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // ========== 拖拽模式：实时重排预览 ==========
@@ -637,7 +637,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // 画布底色：深蓝凹槽，比外部区域更深
-  ctx.fillStyle = '#12122a';
+  ctx.fillStyle = '#101218';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // 缩放上下文：绘制图片（布局空间坐标）
@@ -715,7 +715,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       const bw = hImg.renderWidth * scaleFactor;
       const bh = hImg.renderHeight * scaleFactor;
       ctx.save();
-      ctx.strokeStyle = 'rgba(66, 133, 244, 0.5)';
+      ctx.strokeStyle = 'rgba(240, 100, 100, 0.55)';
       ctx.lineWidth = HOVER_BORDER_WIDTH / displayScale;
       ctx.strokeRect(bx, by, bw, bh);
       ctx.restore();
@@ -734,7 +734,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
         ctx.lineWidth = DASH_BORDER_WIDTH / displayScale;
       } else {
-        ctx.strokeStyle = 'rgba(66, 133, 244, 0.5)';
+        ctx.strokeStyle = 'rgba(240, 100, 100, 0.55)';
         ctx.lineWidth = HOVER_BORDER_WIDTH / displayScale;
       }
       ctx.strokeRect(
@@ -811,7 +811,7 @@ function drawEditButton(ctx, img, hovered, scaleFactor, displayScale) {
     screenY: img.y * sf + BTN_PADDING,
     propPrefix: 'edit',
     hovered,
-    accent: 'rgba(66, 133, 244, 0.9)',
+    accent: 'rgba(240, 100, 100, 0.92)',
     displayScale,
     iconPaths: [
       'M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
@@ -828,7 +828,7 @@ function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale) {
     screenY: img.editBtnY,
     propPrefix: 'dup',
     hovered,
-    accent: 'rgba(66, 133, 244, 0.9)',
+    accent: 'rgba(240, 100, 100, 0.92)',
     displayScale,
     iconPaths: [
       'm22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16',
@@ -867,7 +867,7 @@ function drawResetButton(ctx, img, resetHovered, scaleFactor, displayScale) {
     screenY: img.y * sf + BTN_PADDING,
     propPrefix: 'reset',
     hovered: resetHovered,
-    accent: 'rgba(233, 69, 96, 0.9)',
+    accent: 'rgba(240, 100, 100, 0.92)',
     displayScale,
     iconPaths: ['m2 9 3-3 3 3', 'M13 18H7a2 2 0 0 1-2-2V6', 'm22 15-3 3-3-3', 'M11 6h6a2 2 0 0 1 2 2v10'],
   });
@@ -886,7 +886,7 @@ function drawRatioButton(ctx, img, hovered, scaleFactor, displayScale) {
     screenY: wouldOverlap ? topY + BTN_SIZE + BTN_PADDING : topY,
     propPrefix: 'ratio',
     hovered,
-    accent: 'rgba(66, 133, 244, 0.9)',
+    accent: 'rgba(240, 100, 100, 0.92)',
     displayScale,
     iconPaths: [
       'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
@@ -951,7 +951,7 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
   // --- Header: "源图比例" ---
   const isHeaderHovered = hoveredIndex === 0;
   if (isHeaderHovered) {
-    ctx.fillStyle = 'rgba(66, 133, 244, 0.3)';
+    ctx.fillStyle = 'rgba(240, 100, 100, 0.3)';
     ctx.beginPath();
     const r = 4 / displayScale;
     ctx.roundRect(canvasX, canvasY, menuW, headerH, [r, r, 0, 0]);
@@ -991,7 +991,7 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
     const isHovered = i === hoveredIndex;
 
     if (isHovered) {
-      ctx.fillStyle = 'rgba(66, 133, 244, 0.3)';
+      ctx.fillStyle = 'rgba(240, 100, 100, 0.3)';
       ctx.fillRect(ix, iy, gridItemW, gridItemH);
     }
 
@@ -1034,7 +1034,7 @@ function drawRotateButton(ctx, img, hovered, scaleFactor, displayScale) {
     screenY: (img.y + img.renderHeight) * sf - BTN_SIZE - BTN_PADDING,
     propPrefix: 'rotate',
     hovered,
-    accent: 'rgba(66, 133, 244, 0.9)',
+    accent: 'rgba(240, 100, 100, 0.92)',
     displayScale,
     iconPaths: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'],
   });
@@ -1206,7 +1206,7 @@ function drawCloseButton(ctx, img, hovered, scaleFactor, displayScale) {
     screenY: img.y * sf + BTN_PADDING,
     propPrefix: 'close',
     hovered,
-    accent: 'rgba(233, 69, 96, 0.9)',
+    accent: 'rgba(240, 100, 100, 0.92)',
     displayScale,
     iconPaths: ['M10 11v6', 'M14 11v6', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6', 'M3 6h18', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
   });
@@ -1221,7 +1221,7 @@ function drawDownloadButton(ctx, img, hovered, scaleFactor, displayScale) {
     screenY: (img.y + img.renderHeight) * sf - BTN_SIZE - BTN_PADDING,
     propPrefix: 'dl',
     hovered,
-    accent: 'rgba(66, 133, 244, 0.9)',
+    accent: 'rgba(240, 100, 100, 0.92)',
     displayScale,
     iconPaths: ['M12 15V3', 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'm7 10 5 5 5-5'],
   });
