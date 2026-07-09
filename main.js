@@ -36,6 +36,9 @@ const state = {
   groups: [],          // [[id1, id2], [id3]] — 分组结构
   layoutMode: 'horizontal',
   undoManager: new UndoManager(30),
+  // 单图编辑的独立撤销管理器（按图片 id 保存，跨会话保留编辑历史）
+  // 与画布撤销栈完全独立，互不影响
+  _editUndoManagers: new Map(),
   lastLayoutResult: null,
   hoveredCloseId: -1,
   hoveredImageId: -1,
@@ -116,7 +119,10 @@ function gcImagePool() {
     snap.groups.flat().forEach(id => activeIds.add(id));
   });
   for (const key of imagePool.keys()) {
-    if (!activeIds.has(key)) imagePool.delete(key);
+    if (!activeIds.has(key)) {
+      imagePool.delete(key);
+      state._editUndoManagers.delete(key);
+    }
   }
 }
 
@@ -386,8 +392,8 @@ function updateButtonStates() {
   btnCopy.disabled = !hasImages || editing;
   btnSave.disabled = !hasImages || editing;
   btnClear.disabled = !hasImages || editing;
-  btnUndo.disabled = !state.undoManager.canUndo();
-  btnRedo.disabled = !state.undoManager.canRedo();
+  btnUndo.disabled = !getActiveUndoManager().canUndo();
+  btnRedo.disabled = !getActiveUndoManager().canRedo();
   btnRatio.disabled = !hasImages || editing;
   btnCanvasRatio.disabled = !hasImages || editing;
 }
@@ -639,8 +645,21 @@ function captureEditStates() {
   return editStates;
 }
 
+// 当前生效的撤销管理器：编辑模式下使用单图专属管理器，否则使用全局画布管理器
+function getActiveUndoManager() {
+  if (state.editModeImageId !== -1) {
+    let mgr = state._editUndoManagers.get(state.editModeImageId);
+    if (!mgr) {
+      mgr = new UndoManager(30);
+      state._editUndoManagers.set(state.editModeImageId, mgr);
+    }
+    return mgr;
+  }
+  return state.undoManager;
+}
+
 function pushUndo() {
-  state.undoManager.push(makeCurrentSnapshot());
+  getActiveUndoManager().push(makeCurrentSnapshot());
 }
 
 // ========== 添加图片 ==========
@@ -1060,13 +1079,13 @@ function makeCurrentSnapshot() {
 }
 
 function doUndo() {
-  const prev = state.undoManager.undo(makeCurrentSnapshot());
+  const prev = getActiveUndoManager().undo(makeCurrentSnapshot());
   if (!prev) return;
   restoreSnapshot(prev);
 }
 
 function doRedo() {
-  const next = state.undoManager.redo(makeCurrentSnapshot());
+  const next = getActiveUndoManager().redo(makeCurrentSnapshot());
   if (!next) return;
   restoreSnapshot(next);
 }
@@ -1718,6 +1737,13 @@ function updateBrushCursor() {
 function enterEditMode(image) {
   if (!image.editState) image.initEditState();
   state.editModeImageId = image.id;
+  // 进入编辑模式：切换到该图片专属的撤销管理器。
+  // 仅当编辑历史为空（首次进入）时，把"进入前状态"压为撤销栈底；
+  // 重新进入时保留上次的编辑历史，不额外压栈。
+  const editMgr = getActiveUndoManager();
+  if (editMgr.undoStack.length === 0) {
+    editMgr.push(makeCurrentSnapshot());
+  }
   state.hoveredImageId = image.id;
   state.editAction = null;
   state.editActionStart = null;
@@ -1785,6 +1811,8 @@ function exitEditMode() {
   if (state.floatingToolbar) {
     state.floatingToolbar.hide();
   }
+  // 编辑栈与画布栈完全独立：退出时不向画布栈提交任何内容。
+  // 下次进入同一张图时仍可继续撤销该图的编辑历史。
   state.editModeImageId = -1;
   state.editAction = null;
   state.editActionStart = null;
