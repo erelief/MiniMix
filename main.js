@@ -3,7 +3,7 @@
  * 最简版本：添加图片 + 横排/纵排 + 撤销/重做 + 复制/保存
  */
 
-import { createIcons, ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image as ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp } from 'lucide';
+import { createIcons, ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image as ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket } from 'lucide';
 import { ImageItem } from './image-item.js';
 import { UndoManager } from './undo-manager.js';
 import { createDefaultToolSettings, createAnnotation, hexToRgba } from './annotation.js';
@@ -22,7 +22,7 @@ import {
 } from './stitch-engine.js';
 
 createIcons({
-  icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image: ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp },
+  icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image: ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket },
 });
 
 // ========== 图片对象池（支持撤销恢复） ==========
@@ -130,6 +130,13 @@ const newRowAfter = document.getElementById('new-row-after');
 const addImagesInput = document.getElementById('add-images');
 const uploadBtnLabel = addImagesInput.closest('.upload-btn');
 const gripContainer = document.getElementById('grip-container');
+
+// 纯色图片当前所选色
+const DEFAULT_SOLID_COLOR = '#000000';
+let solidColor = DEFAULT_SOLID_COLOR;
+const btnAddSolid = document.getElementById('btn-add-solid');
+const solidColorInput = document.getElementById('solid-color-input');
+const solidColorDot = document.getElementById('solid-color-dot');
 
 // 把手条宽度（屏幕像素，始终预留）
 const GRIP_STRIP = 32;
@@ -668,6 +675,64 @@ async function addImages(imageFilesOrDataUrls) {
   recomputeAndRender();
 }
 
+// ========== 添加纯色图片 ==========
+
+// 纯色图最大边长（像素）
+const SOLID_MAX_SIZE = 800;
+
+// 根据最后一张图的比例计算纯色图尺寸（最长边锁定 800px）；空画布时返回 800x800
+function computeSolidDimensions() {
+  if (state.images.length === 0) return { width: SOLID_MAX_SIZE, height: SOLID_MAX_SIZE };
+  const last = state.images[state.images.length - 1];
+  const effW = last.editState ? last.editState.cropWidth : last.originalWidth;
+  const effH = last.editState ? last.editState.cropHeight : last.originalHeight;
+  const r = effW / effH;
+  let width, height;
+  if (r >= 1) {
+    width = SOLID_MAX_SIZE;
+    height = Math.max(1, Math.round(SOLID_MAX_SIZE / r));
+  } else {
+    height = SOLID_MAX_SIZE;
+    width = Math.max(1, Math.round(SOLID_MAX_SIZE * r));
+  }
+  return { width, height };
+}
+
+// 用离屏 canvas 生成纯色 PNG，返回 HTMLImageElement
+function createSolidColorImage(color, width, height) {
+  const off = document.createElement('canvas');
+  off.width = width;
+  off.height = height;
+  const ctx = off.getContext('2d');
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, width, height);
+  const dataUrl = off.toDataURL('image/png');
+  return loadImageFromDataURL(dataUrl);
+}
+
+async function addSolidImage(color) {
+  pushUndo();
+
+  if (state.groups.length === 0) {
+    state.groups.push([]);
+  }
+  const targetGroup = state.groups[state.groups.length - 1];
+
+  try {
+    const { width, height } = computeSolidDimensions();
+    const img = await createSolidColorImage(color, width, height);
+    const imageItem = new ImageItem(img, 'solid.png');
+    // 纯色图比例已精确锁定，跳过全局自动裁剪
+    imagePool.set(imageItem.id, imageItem);
+    targetGroup.push(imageItem.id);
+  } catch (e) {
+    console.error('Failed to create solid image:', e);
+  }
+
+  syncImagesFromGroups();
+  recomputeAndRender();
+}
+
 function duplicateImage(original) {
   pushUndo();
   const dup = new ImageItem(original.image, original.fileName);
@@ -699,6 +764,16 @@ addImagesInput.addEventListener('change', async (e) => {
   const files = Array.from(e.target.files);
   if (files.length > 0) await addImages(files);
   e.target.value = '';
+});
+
+btnAddSolid.addEventListener('click', async () => {
+  if (state.editModeImageId !== -1) return; // 编辑模式下禁用
+  await addSolidImage(solidColor);
+});
+
+solidColorInput.addEventListener('input', (e) => {
+  solidColor = e.target.value;
+  solidColorDot.style.background = solidColor;
 });
 
 layoutBtns.forEach(btn => {
@@ -1653,6 +1728,7 @@ function enterEditMode(image) {
   // 编辑模式下禁用除撤销/重做/信息外的所有工具栏按钮
   addImagesInput.disabled = true;
   uploadBtnLabel.classList.add('disabled');
+  btnAddSolid.classList.add('disabled');
   btnClear.disabled = true;
   btnCopy.disabled = true;
   btnSave.disabled = true;
@@ -1722,6 +1798,7 @@ function exitEditMode() {
   // 恢复工具栏按钮状态
   addImagesInput.disabled = false;
   uploadBtnLabel.classList.remove('disabled');
+  btnAddSolid.classList.remove('disabled');
   layoutBtns.forEach(b => { b.disabled = false; b.classList.remove('disabled'); });
   updateButtonStates();
   recomputeAndRender();
