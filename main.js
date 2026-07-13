@@ -1181,11 +1181,8 @@ function hasIndexBadges() {
 function _stripIndexBadges() {
   for (const [imgId, annots] of state.annotations) {
     const filtered = annots.filter(a => a.type !== 'index-badge');
-    if (filtered.length > 0) {
-      state.annotations.set(imgId, filtered);
-    } else {
-      state.annotations.delete(imgId);
-    }
+    if (filtered.length > 0) state.annotations.set(imgId, filtered);
+    else state.annotations.delete(imgId);
   }
 }
 
@@ -1219,9 +1216,8 @@ function refreshIndexBadges() {
 function _createIndexBadges() {
   const { corner, color, size, numberStyle, opacity, shadow } = state.indexBadgeConfig;
   state.images.forEach((img, i) => {
-    const edited = !!img.editState;
-    const refW = edited ? img.originalWidth : img.renderWidth;
-    const refH = edited ? img.originalHeight : img.renderHeight;
+    const refW = img.editState ? img.originalWidth : img.renderWidth;
+    const refH = img.editState ? img.originalHeight : img.renderHeight;
     const annot = createAnnotation('index-badge', {
       number: i + 1,
       numberStyle,
@@ -1232,7 +1228,7 @@ function _createIndexBadges() {
       corner,
       refW,
       refH,
-    }, img.id, img.editState ? img.editState.rotation : 0);
+    }, img.id, img.editState?.rotation ?? 0);
     const arr = state.annotations.get(img.id) || [];
     arr.push(annot);
     state.annotations.set(img.id, arr);
@@ -1323,17 +1319,13 @@ btnIndexBadgeCaret.addEventListener('click', (e) => {
   }
 });
 
-// 失焦收起：点击菜单/三角按钮以外的区域时关闭。
-// 注意菜单内的颜色/滑块等三级弹窗挂在 body 上，必须排除，否则点弹窗会误关菜单。
-// 同时排除三角按钮本身——其 click 处理器负责 toggle，避免 mousedown 先关、click 再开的抖动。
+// 失焦收起：点击菜单与三角按钮以外的区域时关闭。
+// 三角按钮交给其 click 处理器 toggle；body 上的三级弹窗（颜色/滑块）需排除以免误关。
 document.addEventListener('mousedown', (e) => {
   if (!indexBadgeDropdown.classList.contains('open')) return;
-  // 点击在三角按钮或其子孙（图标 svg）上：交给 click 处理器 toggle
   if (btnIndexBadgeCaret.contains(e.target)) return;
-  // 点击在 split-button 容器或下拉菜单内：不关闭
   const wrapper = btnIndexBadgeCaret.closest('.ratio-toolbar-wrapper');
   if (wrapper && wrapper.contains(e.target)) return;
-  // 排除挂在 body 上的三级弹窗（颜色、滑块、下拉项）
   if (e.target.closest && e.target.closest('.annotation-popup, .annotation-linestyle-dropdown')) return;
   closeIndexBadgeDropdown();
 });
