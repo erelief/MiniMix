@@ -39,10 +39,17 @@
   --text-primary: #ecedf0;
   --text-secondary: #9ba1ad;
   --text-muted: #666b76;    /* alias — referenced by annotation popups */
-  --accent: #f06464;        /* refined warm coral */
-  --accent-hover: #f5807f;
-  --accent-soft: rgba(240, 100, 100, 0.14);
-  --accent-glow: rgba(240, 100, 100, 0.32);
+
+  /* Semantic colors */
+  /* --accent family is NEUTRAL (no hue): used for active/selected states,
+     primary-action fills, and focus rings. Red is reserved for danger only. */
+  --accent: #4a5161;          /* neutral active fill (light slate, brightest surface) */
+  --accent-hover: #555d6e;    /* slightly lighter on hover */
+  --accent-soft: rgba(120, 132, 152, 0.18);  /* neutral focus/selection glow */
+  --accent-glow: transparent;  /* no colored glow in neutral system */
+  --danger: #f06464;          /* red — destructive/danger actions ONLY */
+  --danger-hover: #f5807f;
+  --danger-soft: rgba(240, 100, 100, 0.14);
   --border-color: #2a2e3a;
   --border-hi: #3a3f4d;
   --disabled-bg: #21242e;
@@ -52,7 +59,8 @@
   --shadow-sm: 0 1px 3px rgba(8, 9, 14, 0.5);
   --shadow-md: 0 4px 14px rgba(8, 9, 14, 0.45);
   --shadow-lg: 0 16px 48px rgba(8, 9, 14, 0.55);
-  --shadow-accent: 0 4px 16px rgba(240, 100, 100, 0.28);
+  --shadow-accent: var(--shadow-sm);  /* neutral systems use plain shadow */
+  --focus-ring: #8b95a8;               /* bright-enough neutral for keyboard focus */
 }
 
 * {
@@ -135,7 +143,7 @@ body {
 }
 
 .btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -268,6 +276,12 @@ body {
   padding: 0;
 }
 
+/* Clear-canvas is a destructive action — signal danger on hover */
+#btn-clear:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border-color));
+}
+
 .tool-btn.active {
   background: var(--accent);
   border-color: var(--accent);
@@ -283,7 +297,7 @@ body {
 
 .tool-btn:focus-visible,
 .action-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -469,7 +483,7 @@ body {
 }
 
 .export-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -608,8 +622,8 @@ body {
 }
 
 .drop-zone.hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
   transform: scale(1.02);
 }
 
@@ -621,7 +635,7 @@ body {
 }
 
 .drop-zone.hover svg {
-  color: var(--accent);
+  color: var(--text-primary);
 }
 
 .drop-zone span {
@@ -632,7 +646,7 @@ body {
 }
 
 .drop-zone.hover span {
-  color: var(--accent);
+  color: var(--text-primary);
 }
 
 /* --- Scale Toast --- */
@@ -706,7 +720,7 @@ body {
   width: 44px;
   height: 44px;
   border: 3px solid rgba(255, 255, 255, 0.12);
-  border-top-color: var(--accent);
+  border-top-color: var(--text-primary);
   border-radius: 50%;
   animation: copy-spin 0.7s linear infinite;
 }
@@ -825,7 +839,7 @@ body {
 }
 
 .modal-close-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
@@ -1092,14 +1106,16 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--accent);
-  text-decoration: none;
-  transition: color 0.15s;
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--border-hi);
+  text-underline-offset: 2px;
+  transition: text-decoration-color 0.15s, color 0.15s;
 }
 
 .info-value-link:hover {
-  color: var(--accent-hover);
-  text-decoration: underline;
+  color: #fff;
+  text-decoration-color: var(--text-secondary);
 }
 
 /* --- Update Section --- */
@@ -1169,8 +1185,8 @@ body {
 }
 
 .btn-error {
-  background: var(--error) !important;
-  border-color: var(--error) !important;
+  background: var(--danger) !important;
+  border-color: var(--danger) !important;
 }
 
 /* --- Update Toast --- */
@@ -1326,7 +1342,7 @@ body {
 }
 
 .annotation-tool-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
@@ -1344,13 +1360,13 @@ body {
 }
 
 .annotation-clear-all-btn {
-  color: var(--accent);
+  color: var(--danger);
 }
 
 .annotation-clear-all-btn:hover {
-  background: var(--accent-soft) !important;
-  color: var(--accent-hover);
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent) !important;
+  background: var(--danger-soft) !important;
+  color: var(--danger-hover);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent) !important;
 }
 
 /* --- Annotation Submenu --- */
