@@ -180,9 +180,8 @@ body {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
-/* 纯色添加 / 批量编号：共用色块+隐藏取色器样式 */
-#solid-color-input,
-#index-badge-color {
+/* 纯色添加：隐藏取色器叠加在色块上 */
+#solid-color-input {
   position: absolute;
   right: 6px;
   width: 14px;
@@ -194,13 +193,11 @@ body {
   cursor: pointer;
 }
 
-#solid-color-input::-webkit-color-swatch-wrapper,
-#index-badge-color::-webkit-color-swatch-wrapper {
+#solid-color-input::-webkit-color-swatch-wrapper {
   padding: 0;
 }
 
-#solid-color-input::-webkit-color-swatch,
-#index-badge-color::-webkit-color-swatch {
+#solid-color-input::-webkit-color-swatch {
   border: none;
 }
 
@@ -208,6 +205,41 @@ body {
   opacity: 0.4;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+/* 批量编号 split-button：hash 主按钮 + 三角属性按钮连成一片 */
+.index-badge-split .btn-split-group {
+  display: inline-flex;
+  align-items: stretch;
+  height: 32px;
+}
+
+.index-badge-split .index-badge-main {
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 6px 0 0 6px;
+  border-right: none;
+}
+
+.index-badge-split .index-badge-caret {
+  width: 18px;
+  height: 32px;
+  border-radius: 0 6px 6px 0;
+}
+
+.index-badge-split .btn-split-group:hover .btn:not(:disabled) {
+  background: var(--surface-hi);
+  border-color: var(--border-hi);
+}
+
+/* 批量编号属性二级菜单：复用 annotation-submenu 控件样式，
+   但按 ratio-dropdown 行为锚定在 split-button 下方 */
+#index-badge-dropdown {
+  left: 0;
+  top: calc(100% + 4px);
+  min-width: auto;
+  padding: 4px 8px;
+  z-index: 200;
 }
 
 .tool-btn,

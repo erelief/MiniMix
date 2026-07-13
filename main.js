@@ -3,11 +3,11 @@
  * 最简版本：添加图片 + 横排/纵排 + 撤销/重做 + 复制/保存
  */
 
-import { createIcons, ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image as ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket, Hash, Eraser, MoveUpLeft, MoveUpRight, MoveDownLeft, MoveDownRight } from 'lucide';
+import { createIcons, ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image as ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket, Hash, Eraser, ChevronDown } from 'lucide';
 import { ImageItem } from './image-item.js';
 import { UndoManager } from './undo-manager.js';
-import { createDefaultToolSettings, createAnnotation, hexToRgba, INDEX_BADGE_CORNERS } from './annotation.js';
-import { createFloatingToolbar, closeSubmenu, updateSliderValue } from './floating-toolbar.js';
+import { createDefaultToolSettings, createAnnotation, hexToRgba, INDEX_BADGE_CORNERS, NUMBER_STYLES } from './annotation.js';
+import { createFloatingToolbar, closeSubmenu, updateSliderValue, addInlineSeparator, addInlineNumberSpinner, addInlineSliderValue, addInlineShadowControl, addInlineColorTrigger, addInlineDropdown } from './floating-toolbar.js';
 import {
   computeGroupedLayout,
   renderPreview,
@@ -22,7 +22,7 @@ import {
 } from './stitch-engine.js';
 
 createIcons({
-  icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image: ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket, Hash, Eraser, MoveUpLeft, MoveUpRight, MoveDownLeft, MoveDownRight },
+  icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image: ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket, Hash, Eraser, ChevronDown },
 });
 
 // ========== 图片对象池（支持撤销恢复） ==========
@@ -80,8 +80,12 @@ const state = {
   canvasRatioLocked: false,
   canvasRatioIndex: -1,
   _canvasRatioDragging: false,
-  // 批量编号（画布级一键给所有图片按顺序编号）
-  indexBadgeConfig: { corner: 'top-left', color: '#E61919', size: 64 },
+  // 批量编号（画布级一键给所有图片按顺序编号，属性对齐全图标序工具）
+  indexBadgeConfig: {
+    nextNumber: 1, numberStyle: 'arabic', size: 64,
+    color: '#E61919', opacity: 100, shadow: 35,
+    corner: 'top-left',
+  },
   // 行列拖拽
   isRowDragging: false,
   dragGroupIndex: -1,
@@ -164,11 +168,8 @@ const canvasRatioDropdown = document.getElementById('canvas-ratio-dropdown');
 
 // 批量编号控件
 const btnIndexBadge = document.getElementById('btn-index-badge');
-const indexBadgeColorInput = document.getElementById('index-badge-color');
-const indexBadgeColorDot = document.getElementById('index-badge-color-dot');
-const btnIndexBadgeCorner = document.getElementById('btn-index-badge-corner');
-const indexBadgeCornerDropdown = document.getElementById('index-badge-corner-dropdown');
-const btnIndexBadgeClear = document.getElementById('btn-index-badge-clear');
+const btnIndexBadgeCaret = document.getElementById('btn-index-badge-caret');
+const indexBadgeDropdown = document.getElementById('index-badge-dropdown');
 
 const saveModal = document.getElementById('save-modal');
 const infoModal = document.getElementById('info-modal');
@@ -406,13 +407,9 @@ function updateButtonStates() {
   btnRedo.disabled = !getActiveUndoManager().canRedo();
   btnRatio.disabled = !hasImages || editing;
   btnCanvasRatio.disabled = !hasImages || editing;
-  // 批量编号：有图且非编辑模式才可用；位置控件同理；清除按钮仅在有编号时可用
-  // 颜色取色器随主按钮禁用（隐藏 input 叠加在按钮上）
-  const hasBadges = hasIndexBadges();
+  // 批量编号：hash 主按钮与三角属性按钮在有图且非编辑模式时可用
   btnIndexBadge.disabled = !hasImages || editing;
-  btnIndexBadgeCorner.disabled = !hasImages || editing;
-  btnIndexBadgeClear.disabled = !hasImages || editing || !hasBadges;
-  indexBadgeColorInput.disabled = !hasImages || editing;
+  btnIndexBadgeCaret.disabled = !hasImages || editing;
 }
 
 function showScaleToast(show) {
@@ -1148,12 +1145,10 @@ function restoreSnapshot(snapshot) {
     state.toolSettings.sequence.nextNumber = snapshot.sequenceNextNumber;
     updateSliderValue('sequence_nextNumber', snapshot.sequenceNextNumber);
   }
-  // 恢复批量编号配置并同步控件
+  // 恢复批量编号配置；若属性菜单已展开则重建以同步控件
   if (snapshot.indexBadgeConfig) {
     state.indexBadgeConfig = structuredClone(snapshot.indexBadgeConfig);
-    indexBadgeColorInput.value = state.indexBadgeConfig.color;
-    indexBadgeColorDot.style.background = state.indexBadgeConfig.color;
-    updateIndexBadgeCornerIcon();
+    if (indexBadgeDropdown.classList.contains('open')) buildIndexBadgeMenu();
   }
   // 仅在当前处于编辑模式时才恢复编辑模式状态
   if (state.editModeImageId !== -1) {
@@ -1222,18 +1217,18 @@ function refreshIndexBadges() {
 
 // 内部：按当前 indexBadgeConfig 为每张图新建 index-badge 标注
 function _createIndexBadges() {
-  const { corner, color, size } = state.indexBadgeConfig;
+  const { corner, color, size, numberStyle, opacity, shadow } = state.indexBadgeConfig;
   state.images.forEach((img, i) => {
     const edited = !!img.editState;
     const refW = edited ? img.originalWidth : img.renderWidth;
     const refH = edited ? img.originalHeight : img.renderHeight;
     const annot = createAnnotation('index-badge', {
       number: i + 1,
-      numberStyle: 'arabic',
+      numberStyle,
       size,
       color,
-      opacity: 100,
-      shadow: 35,
+      opacity,
+      shadow,
       corner,
       refW,
       refH,
@@ -1246,47 +1241,68 @@ function _createIndexBadges() {
   });
 }
 
-// 角→图标组件映射（同步角按钮图标与下拉项图标）
-const CORNER_ICON_MAP = {
-  'move-up-left': MoveUpLeft,
-  'move-up-right': MoveUpRight,
-  'move-down-left': MoveDownLeft,
-  'move-down-right': MoveDownRight,
-};
+// 4–512px ↔ 1–100% 大小转换（与单图标序工具一致）
+function sizeToPercent(px) { return Math.round(((px - 4) / (512 - 4)) * 100) + 1; }
+function percentToSize(pct) { return Math.round(4 + (pct - 1) * (512 - 4) / (100 - 1)); }
 
-// 构建编号位置下拉（复用 .ratio-dropdown / .ratio-header 样式）
-function buildIndexBadgeCornerDropdown() {
-  indexBadgeCornerDropdown.innerHTML = '';
-  for (const opt of INDEX_BADGE_CORNERS) {
-    const item = document.createElement('div');
-    item.className = 'ratio-header';
-    item.dataset.corner = opt.value;
-    item.innerHTML = `<i data-lucide="${opt.icon}" class="icon-16"></i><span>${opt.label}</span>`;
-    indexBadgeCornerDropdown.appendChild(item);
-  }
-  createIcons({
-    icons: { MoveUpLeft, MoveUpRight, MoveDownLeft, MoveDownRight },
-    root: indexBadgeCornerDropdown,
+// 构建批量编号属性二级菜单（复用单图标序的 addInline* 控件）
+function buildIndexBadgeMenu() {
+  const panel = indexBadgeDropdown;
+  panel.innerHTML = '';
+  const cfg = state.indexBadgeConfig;
+  const onChange = (toolKey, key, value) => {
+    state.indexBadgeConfig[key] = value;
+    if (hasIndexBadges()) refreshIndexBadges();
+  };
+
+  addInlineNumberSpinner(panel, cfg.nextNumber, '起始', 1, 9999, 1, 'index-badge', 'nextNumber', onChange);
+  addInlineSeparator(panel);
+  addInlineDropdown(panel, {
+    options: NUMBER_STYLES,
+    currentValue: cfg.numberStyle,
+    settingKey: 'numberStyle',
+    onChange,
+  }, 'index-badge');
+  addInlineSeparator(panel);
+  addInlineSliderValue(panel, sizeToPercent(cfg.size), '大小', 1, 100, 1, 'index-badge', 'size',
+    (toolKey, key, val) => onChange(toolKey, key, percentToSize(val)), '%');
+  addInlineSeparator(panel);
+  addInlineColorTrigger(panel, cfg.color, cfg.opacity, onChange, 'index-badge');
+  addInlineSeparator(panel);
+  addInlineShadowControl(panel, cfg.shadow, 'index-badge', onChange);
+  addInlineSeparator(panel);
+  addInlineDropdown(panel, {
+    options: INDEX_BADGE_CORNERS,
+    currentValue: cfg.corner,
+    settingKey: 'corner',
+    onChange,
+  }, 'index-badge');
+  addInlineSeparator(panel);
+
+  // 清除按钮
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'annotation-submenu-btn';
+  clearBtn.innerHTML = '<i data-lucide="eraser" class="icon-16"></i><span>清除</span>';
+  clearBtn.title = '清除全部编号';
+  clearBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearIndexBadges();
+    closeIndexBadgeDropdown();
   });
-  updateIndexBadgeCornerIcon();
+  panel.appendChild(clearBtn);
+
+  // 渲染菜单内的 lucide 图标（清除按钮）
+  createIcons({ icons: { Eraser }, root: panel });
 }
 
-// 同步角按钮图标为当前所选角（并高亮下拉项）
-function updateIndexBadgeCornerIcon() {
-  const opt = INDEX_BADGE_CORNERS.find(o => o.value === state.indexBadgeConfig.corner) || INDEX_BADGE_CORNERS[0];
-  // createIcons 以 PascalCase 名注册；角按钮内放一个 <i data-lucide>，root 设为按钮即可替换
-  btnIndexBadgeCorner.innerHTML = `<i data-lucide="${opt.icon}" class="icon-20"></i>`;
-  const pascal = opt.icon.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('');
-  createIcons({ icons: { [pascal]: CORNER_ICON_MAP[opt.icon] }, root: btnIndexBadgeCorner });
-  // 高亮当前角
-  indexBadgeCornerDropdown.querySelectorAll('[data-corner]').forEach(el => {
-    el.classList.toggle('active', el.dataset.corner === state.indexBadgeConfig.corner);
-  });
+function openIndexBadgeDropdown() {
+  buildIndexBadgeMenu();
+  indexBadgeDropdown.classList.add('open');
 }
 
-// 批量编号初始化（必须在 CORNER_ICON_MAP 与函数声明之后执行，避免 TDZ）
-buildIndexBadgeCornerDropdown();
-indexBadgeColorDot.style.background = state.indexBadgeConfig.color;
+function closeIndexBadgeDropdown() {
+  indexBadgeDropdown.classList.remove('open');
+}
 
 // 批量编号按钮事件
 btnIndexBadge.addEventListener('click', () => {
@@ -1294,36 +1310,18 @@ btnIndexBadge.addEventListener('click', () => {
   generateIndexBadges();
 });
 
-btnIndexBadgeClear.addEventListener('click', () => {
-  if (state.editModeImageId !== -1) return;
-  clearIndexBadges();
-});
-
-// 颜色选择
-indexBadgeColorInput.addEventListener('input', (e) => {
-  state.indexBadgeConfig.color = e.target.value;
-  indexBadgeColorDot.style.background = e.target.value;
-  if (hasIndexBadges()) refreshIndexBadges();
-});
-
-// 角按钮：打开/关闭下拉
-btnIndexBadgeCorner.addEventListener('click', (e) => {
+// 三角按钮：展开/收起属性二级菜单
+btnIndexBadgeCaret.addEventListener('click', (e) => {
   e.stopPropagation();
   if (state.editModeImageId !== -1) return;
-  indexBadgeCornerDropdown.classList.toggle('open');
+  if (indexBadgeDropdown.classList.contains('open')) {
+    closeIndexBadgeDropdown();
+  } else {
+    openIndexBadgeDropdown();
+  }
 });
 
-// 角落下拉选项点击
-indexBadgeCornerDropdown.addEventListener('click', (e) => {
-  const item = e.target.closest('[data-corner]');
-  if (!item) return;
-  state.indexBadgeConfig.corner = item.dataset.corner;
-  updateIndexBadgeCornerIcon();
-  indexBadgeCornerDropdown.classList.remove('open');
-  if (hasIndexBadges()) refreshIndexBadges();
-});
-
-registerOutsideClick(indexBadgeCornerDropdown, btnIndexBadgeCorner);
+registerOutsideClick(indexBadgeDropdown, btnIndexBadgeCaret);
 
 // ========== 复制/保存 ==========
 
