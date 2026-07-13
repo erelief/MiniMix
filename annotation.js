@@ -73,6 +73,14 @@ export const NUMBER_STYLES = [
   { value: 'chinese', label: '一, 二, 三 …' },
 ];
 
+// Index-badge corner options (canvas-level 批量编号)
+export const INDEX_BADGE_CORNERS = [
+  { value: 'top-left',     label: '左上', icon: 'move-up-left' },
+  { value: 'top-right',    label: '右上', icon: 'move-up-right' },
+  { value: 'bottom-left',  label: '左下', icon: 'move-down-left' },
+  { value: 'bottom-right', label: '右下', icon: 'move-down-right' },
+];
+
 // Stamp shape options
 export const STAMP_SHAPES = [
   { value: 'check', label: '勾号' },
@@ -270,6 +278,9 @@ export function renderAnnotation(ctx, annotation) {
       break;
     case 'sequence':
       drawSequenceAnnotation(ctx, params);
+      break;
+    case 'index-badge':
+      drawIndexBadgeAnnotation(ctx, params);
       break;
     case 'text':
       drawTextAnnotation(ctx, params);
@@ -651,6 +662,24 @@ function drawSequenceAnnotation(ctx, p) {
   ctx.fillText(label, cx, cy);
   clearShadow(ctx);
   }); // applyOpacity
+}
+
+// Canvas-level 批量编号：根据 corner 与参考宽高(refW/refH) 计算徽章左上角坐标，
+// 然后委托 drawSequenceAnnotation 复用圆环+数字渲染。
+function drawIndexBadgeAnnotation(ctx, p) {
+  const { corner, refW, refH, size } = p;
+  const safeRefW = refW > 0 ? refW : size;
+  const safeRefH = refH > 0 ? refH : size;
+  let x = 0;
+  let y = 0;
+  switch (corner) {
+    case 'top-left':      x = 0;              y = 0;              break;
+    case 'top-right':     x = safeRefW - size; y = 0;             break;
+    case 'bottom-left':   x = 0;              y = safeRefH - size; break;
+    case 'bottom-right':  x = safeRefW - size; y = safeRefH - size; break;
+    default:              x = 0;              y = 0;
+  }
+  drawSequenceAnnotation(ctx, { ...p, x, y });
 }
 
 function drawTextAnnotation(ctx, p) {

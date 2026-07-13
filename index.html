@@ -50,6 +50,28 @@
         </div>
       </div>
 
+      <!-- 批量编号 -->
+      <div class="toolbar-group">
+        <button class="btn tool-btn" id="btn-index-badge" disabled title="给所有图片编号">
+          <i data-lucide="hash" class="icon-20"></i>
+        </button>
+        <div class="solid-add-wrapper">
+          <button class="btn tool-btn solid-color-pick-btn" id="btn-index-badge-color" disabled title="编号颜色">
+            <span class="solid-color-dot" id="index-badge-color-dot"></span>
+          </button>
+          <input type="color" id="index-badge-color" value="#E61919" title="编号颜色" />
+        </div>
+        <div class="ratio-toolbar-wrapper">
+          <button class="btn tool-btn" id="btn-index-badge-corner" disabled title="编号位置">
+            <i data-lucide="move-up-left" class="icon-20"></i>
+          </button>
+          <div class="ratio-dropdown" id="index-badge-corner-dropdown"></div>
+        </div>
+        <button class="btn tool-btn" id="btn-index-badge-clear" disabled title="清除全部编号">
+          <i data-lucide="eraser" class="icon-20"></i>
+        </button>
+      </div>
+
       <!-- 撤销/重做 -->
       <div class="toolbar-group">
         <button class="btn action-btn" id="btn-undo" disabled title="撤销 (Ctrl+Z)">
