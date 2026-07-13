@@ -1323,12 +1323,16 @@ btnIndexBadgeCaret.addEventListener('click', (e) => {
 
 // 失焦收起：点击菜单/三角按钮以外的区域时关闭。
 // 注意菜单内的颜色/滑块等三级弹窗挂在 body 上，必须排除，否则点弹窗会误关菜单。
+// 同时排除三角按钮本身——其 click 处理器负责 toggle，避免 mousedown 先关、click 再开的抖动。
 document.addEventListener('mousedown', (e) => {
   if (!indexBadgeDropdown.classList.contains('open')) return;
+  // 点击在三角按钮或其子孙（图标 svg）上：交给 click 处理器 toggle
+  if (btnIndexBadgeCaret.contains(e.target)) return;
+  // 点击在 split-button 容器或下拉菜单内：不关闭
   const wrapper = btnIndexBadgeCaret.closest('.ratio-toolbar-wrapper');
-  if (wrapper.contains(e.target)) return;
+  if (wrapper && wrapper.contains(e.target)) return;
   // 排除挂在 body 上的三级弹窗（颜色、滑块、下拉项）
-  if (e.target.closest('.annotation-popup, .annotation-linestyle-dropdown')) return;
+  if (e.target.closest && e.target.closest('.annotation-popup, .annotation-linestyle-dropdown')) return;
   closeIndexBadgeDropdown();
 });
 
