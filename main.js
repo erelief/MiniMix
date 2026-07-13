@@ -1298,10 +1298,12 @@ function buildIndexBadgeMenu() {
 function openIndexBadgeDropdown() {
   buildIndexBadgeMenu();
   indexBadgeDropdown.classList.add('open');
+  btnIndexBadgeCaret.classList.add('open');
 }
 
 function closeIndexBadgeDropdown() {
   indexBadgeDropdown.classList.remove('open');
+  btnIndexBadgeCaret.classList.remove('open');
 }
 
 // 批量编号按钮事件
