@@ -164,7 +164,6 @@ const canvasRatioDropdown = document.getElementById('canvas-ratio-dropdown');
 
 // 批量编号控件
 const btnIndexBadge = document.getElementById('btn-index-badge');
-const btnIndexBadgeColor = document.getElementById('btn-index-badge-color');
 const indexBadgeColorInput = document.getElementById('index-badge-color');
 const indexBadgeColorDot = document.getElementById('index-badge-color-dot');
 const btnIndexBadgeCorner = document.getElementById('btn-index-badge-corner');
@@ -407,12 +406,13 @@ function updateButtonStates() {
   btnRedo.disabled = !getActiveUndoManager().canRedo();
   btnRatio.disabled = !hasImages || editing;
   btnCanvasRatio.disabled = !hasImages || editing;
-  // 批量编号：有图且非编辑模式才可用；颜色/位置控件同理；清除按钮仅在有编号时可用
+  // 批量编号：有图且非编辑模式才可用；位置控件同理；清除按钮仅在有编号时可用
+  // 颜色取色器随主按钮禁用（隐藏 input 叠加在按钮上）
   const hasBadges = hasIndexBadges();
   btnIndexBadge.disabled = !hasImages || editing;
-  btnIndexBadgeColor.disabled = !hasImages || editing;
   btnIndexBadgeCorner.disabled = !hasImages || editing;
   btnIndexBadgeClear.disabled = !hasImages || editing || !hasBadges;
+  indexBadgeColorInput.disabled = !hasImages || editing;
 }
 
 function showScaleToast(show) {
@@ -1013,10 +1013,6 @@ ratioAutoCropCheckbox.addEventListener('change', () => {
 // 锁定全局画布比例
 buildCanvasRatioDropdown();
 
-// 批量编号初始化
-buildIndexBadgeCornerDropdown();
-indexBadgeColorDot.style.background = state.indexBadgeConfig.color;
-
 btnCanvasRatio.addEventListener('click', () => {
   if (state.editModeImageId !== -1) return;
   canvasRatioDropdown.classList.toggle('open');
@@ -1250,6 +1246,14 @@ function _createIndexBadges() {
   });
 }
 
+// 角→图标组件映射（同步角按钮图标与下拉项图标）
+const CORNER_ICON_MAP = {
+  'move-up-left': MoveUpLeft,
+  'move-up-right': MoveUpRight,
+  'move-down-left': MoveDownLeft,
+  'move-down-right': MoveDownRight,
+};
+
 // 构建编号位置下拉（复用 .ratio-dropdown / .ratio-header 样式）
 function buildIndexBadgeCornerDropdown() {
   indexBadgeCornerDropdown.innerHTML = '';
@@ -1268,12 +1272,6 @@ function buildIndexBadgeCornerDropdown() {
 }
 
 // 同步角按钮图标为当前所选角（并高亮下拉项）
-const CORNER_ICON_MAP = {
-  'move-up-left': MoveUpLeft,
-  'move-up-right': MoveUpRight,
-  'move-down-left': MoveDownLeft,
-  'move-down-right': MoveDownRight,
-};
 function updateIndexBadgeCornerIcon() {
   const opt = INDEX_BADGE_CORNERS.find(o => o.value === state.indexBadgeConfig.corner) || INDEX_BADGE_CORNERS[0];
   // createIcons 以 PascalCase 名注册；角按钮内放一个 <i data-lucide>，root 设为按钮即可替换
@@ -1285,6 +1283,10 @@ function updateIndexBadgeCornerIcon() {
     el.classList.toggle('active', el.dataset.corner === state.indexBadgeConfig.corner);
   });
 }
+
+// 批量编号初始化（必须在 CORNER_ICON_MAP 与函数声明之后执行，避免 TDZ）
+buildIndexBadgeCornerDropdown();
+indexBadgeColorDot.style.background = state.indexBadgeConfig.color;
 
 // 批量编号按钮事件
 btnIndexBadge.addEventListener('click', () => {

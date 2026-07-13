@@ -180,7 +180,9 @@ body {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
-#solid-color-input {
+/* 纯色添加 / 批量编号：共用色块+隐藏取色器样式 */
+#solid-color-input,
+#index-badge-color {
   position: absolute;
   right: 6px;
   width: 14px;
@@ -192,42 +194,14 @@ body {
   cursor: pointer;
 }
 
-#solid-color-input::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-
-#solid-color-input::-webkit-color-swatch {
-  border: none;
-}
-
-/* 批量编号颜色选择按钮 */
-.solid-color-pick-btn {
-  padding: 0;
-  gap: 0;
-}
-
-#index-badge-color {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: none;
-  background: none;
-  opacity: 0;
-  cursor: pointer;
-}
-
+#solid-color-input::-webkit-color-swatch-wrapper,
 #index-badge-color::-webkit-color-swatch-wrapper {
   padding: 0;
 }
 
+#solid-color-input::-webkit-color-swatch,
 #index-badge-color::-webkit-color-swatch {
   border: none;
-}
-
-.solid-color-pick-btn:disabled + #index-badge-color {
-  pointer-events: none;
 }
 
 .solid-add-btn.disabled {
