@@ -1959,12 +1959,20 @@ function enterEditMode(image) {
       },
       (tool, key, value) => {
         state.toolSettings[tool][key] = value;
-        // 编辑时实时更新 textarea 样式
+        // 编辑时实时更新（文字画在 canvas 上 → 同步 _textAnnot 样式并重渲染）
         if (_textInput && tool === 'text') {
           const s = state.toolSettings.text;
           syncTextInputStyles(_textInput, s, getLayoutScale());
-          _textInput.style.color = hexToRgba(s.color, s.opacity / 100);
-          _textInput.style.caretColor = s.color;
+          if (_textAnnot) {
+            _textAnnot.bold = s.bold;
+            _textAnnot.italic = s.italic;
+            _textAnnot.fontSize = s.fontSize;
+            _textAnnot.color = s.color;
+            _textAnnot.fontFamily = s.fontFamily;
+            _textAnnot.shadow = s.shadow;
+            _textAnnot.opacity = s.opacity;
+          }
+          recomputeAndRender();
         }
       }
     );
@@ -2317,11 +2325,12 @@ let _textDragOffX = 0, _textDragOffY = 0;
 const GRIP_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>';
 const SCALE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 13v6h-6"/><path d="M5 11V5h6"/><path d="m5 5 14 14"/></svg>';
 
-const TEXT_BORDER_W = 1.5;
 const TEXT_PAD = 4;
 const TEXT_LINE_HEIGHT = 1.2;
-const TEXT_MARGIN_LEFT = -(TEXT_BORDER_W + TEXT_PAD);
 
+// 文字编辑态：textarea 透明（仅抓输入/IME + 显示光标），文字由 canvas 实时绘制。
+// 这里只同步 font/minHeight/caret，维持 IME 候选窗位置与点击热区大小，
+// 不再做像素级盒模型对齐（删去了旧的 -fontSize*0.1 / TEXT_MARGIN_LEFT hack）。
 function syncTextInputStyles(el, s, sf) {
   const visualFs = s.fontSize * sf;
   let fontStyle = '';
@@ -2329,7 +2338,7 @@ function syncTextInputStyles(el, s, sf) {
   if (s.italic) fontStyle += 'italic ';
   el.style.font = `${fontStyle}${visualFs}px ${s.fontFamily}`;
   el.style.minHeight = `${visualFs * TEXT_LINE_HEIGHT}px`;
-  el.style.margin = `${-(TEXT_BORDER_W + TEXT_PAD + visualFs * 0.1)}px 0 0 ${TEXT_MARGIN_LEFT}px`;
+  el.style.caretColor = s.color;
   // Auto-size: shrink to 1px so scrollWidth/scrollHeight reflect content size
   el.style.width = '1px';
   el.style.height = '1px';
@@ -2397,17 +2406,10 @@ function createTextInput(x, y, imageId, existingAnnot) {
       const wsRect = document.getElementById('workspace').getBoundingClientRect();
       _textWrapper.style.left = (ev.clientX - _textDragOffX - wsRect.left) + 'px';
       _textWrapper.style.top = (ev.clientY - _textDragOffY - wsRect.top) + 'px';
-    };
-    const onUp = () => {
-      if (!_textDragging) return;
-      _textDragging = false;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      // Reverse-map new position back to image-local coords
-      if (_textWrapper && _textAnnot) {
+      // 实时把拖拽位置映射回 image-local 坐标并重渲染 canvas 文字
+      if (_textAnnot) {
         const sf = getLayoutScale();
         const wr = _textWrapper.getBoundingClientRect();
-        const wsRect = document.getElementById('workspace').getBoundingClientRect();
         const canvasRect = canvas.getBoundingClientRect();
         const img = state.images.find(i => i.id === _textAnnot.imageId);
         if (img) {
@@ -2418,8 +2420,16 @@ function createTextInput(x, y, imageId, existingAnnot) {
           const pix = layoutToAnnotationCoords(lx, ly, img, delta);
           _textAnnot.x = pix.x;
           _textAnnot.y = pix.y;
+          recomputeAndRender();
         }
       }
+    };
+    const onUp = () => {
+      if (!_textDragging) return;
+      _textDragging = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      recomputeAndRender();
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -2449,6 +2459,7 @@ function createTextInput(x, y, imageId, existingAnnot) {
         const h = syncTextInputStyles(_textInput, state.toolSettings.text, getLayoutScale());
         grip.style.height = h + 'px';
       }
+      if (_textAnnot) _textAnnot.fontSize = newV;
       recomputeAndRender();
     };
     const onUp = () => {
@@ -2460,14 +2471,14 @@ function createTextInput(x, y, imageId, existingAnnot) {
   });
   wrapper.appendChild(scaleHandle);
 
-  // Textarea
+  // Textarea —— 透明：仅抓输入/IME + 显示光标。文字由 canvas 实时绘制（WYSIWYG）。
   const ta = document.createElement('textarea');
   ta.className = 'annotation-text-box';
   const visualFontSize = s.fontSize * sf;
 
   ta.value = initialText;
-  ta.style.border = `${TEXT_BORDER_W}px dashed rgba(255, 255, 255, 0.6)`;
-  ta.style.margin = `${-(TEXT_BORDER_W + TEXT_PAD + visualFontSize * 0.1)}px 0 0 ${TEXT_MARGIN_LEFT}px`;
+  ta.style.border = `${TEXT_PAD}px dashed rgba(255, 255, 255, 0.18)`;
+  ta.style.margin = `${-TEXT_PAD}px 0 0 ${-TEXT_PAD}px`;
   ta.style.minHeight = `${visualFontSize * TEXT_LINE_HEIGHT}px`;
   ta.style.caretColor = s.color;
 
@@ -2475,7 +2486,9 @@ function createTextInput(x, y, imageId, existingAnnot) {
   if (s.bold) fontStyle += 'bold ';
   if (s.italic) fontStyle += 'italic ';
   ta.style.font = `${fontStyle}${visualFontSize}px ${s.fontFamily}`;
-  ta.style.color = s.color;
+  ta.style.color = 'transparent';
+  ta.style.background = 'transparent';
+  ta.style.boxShadow = 'none';
 
   wrapper.appendChild(ta);
   document.getElementById('workspace').appendChild(wrapper);
@@ -2487,7 +2500,10 @@ function createTextInput(x, y, imageId, existingAnnot) {
     rotation: existingAnnot ? (existingAnnot.rotation != null ? existingAnnot.rotation : (img.editState ? img.editState.rotation : 0)) : (img.editState ? img.editState.rotation : 0),
     bold: s.bold, italic: s.italic, fontSize: s.fontSize,
     color: s.color, fontFamily: s.fontFamily, shadow: s.shadow,
+    opacity: s.opacity,
+    text: initialText,
   };
+  state._textAnnot = _textAnnot;
 
   setTimeout(() => {
     ta.focus();
@@ -2504,7 +2520,14 @@ function createTextInput(x, y, imageId, existingAnnot) {
     // 同步 grip 高度
     grip.style.height = ta.scrollHeight + 'px';
   };
-  ta.addEventListener('input', autoSize);
+  ta.addEventListener('input', () => {
+    autoSize();
+    // 实时把输入同步到 canvas（WYSIWYG）
+    if (_textAnnot) {
+      _textAnnot.text = ta.value;
+      recomputeAndRender();
+    }
+  });
   autoSize();
 
   ta.addEventListener('keydown', (e) => {
@@ -2599,6 +2622,7 @@ function commitTextInput(save) {
   _textInput = null;
   _textWrapper = null;
   _textAnnot = null;
+  state._textAnnot = null;
   recomputeAndRender();
 }
 
@@ -3587,6 +3611,7 @@ canvas.addEventListener('wheel', (e) => {
       if (_textInput) {
         syncTextInputStyles(_textInput, s, getLayoutScale());
       }
+      if (_textAnnot) _textAnnot.fontSize = v;
       recomputeAndRender();
     }
     return;

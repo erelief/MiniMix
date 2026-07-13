@@ -667,25 +667,23 @@ export function renderPreview(canvas, layoutResult, options = {}) {
         drawImageAnnotations(ctx, eImg, [], annotationDrawing, activeAnnotationTool, annotationDims);
       }
     }
-    // 正在编辑的文本用 textarea 显示（原生光标/选择/键盘行为），此处仅做 canvas 同步
-    if (editingTextAnnot && editingTextAnnot.text) {
+    // 编辑中文本：textarea 透明（仅抓输入/IME），文字由 canvas 实时绘制
+    if (editingTextAnnot) {
       const et = editingTextAnnot;
-      // 当 textarea 存在时不画 canvas 文字，否则画（fallback）
-      if (!document.querySelector('.annotation-text-box')) {
-        const etImg = images.find(i => i.id === et.imageId);
-        if (etImg) {
-          drawImageAnnotations(ctx, etImg, [{
-            id: -1, type: 'text', imageId: et.imageId,
-            params: {
-              x: et.x, y: et.y,
-              text: et.text,
-              bold: et.bold || false, italic: et.italic || false,
-              fontFamily: et.fontFamily || 'sans-serif',
-              fontSize: et.fontSize || 24, color: et.color || '#E61919',
-              shadow: et.shadow !== false ? (typeof et.shadow === 'number' ? et.shadow : 35) : 0,
-            },
-          }], null, null, null);
-        }
+      const etImg = images.find(i => i.id === et.imageId);
+      if (etImg) {
+        drawImageAnnotations(ctx, etImg, [{
+          id: -1, type: 'text', imageId: et.imageId,
+          params: {
+            x: et.x, y: et.y,
+            text: et.text || '',
+            bold: et.bold || false, italic: et.italic || false,
+            fontFamily: et.fontFamily || 'sans-serif',
+            fontSize: et.fontSize || 24, color: et.color || '#E61919',
+            opacity: et.opacity != null ? et.opacity : 100,
+            shadow: et.shadow !== false ? (typeof et.shadow === 'number' ? et.shadow : 35) : 0,
+          },
+        }], null, null, null);
       }
     }
   }
