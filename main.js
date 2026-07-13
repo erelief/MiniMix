@@ -640,8 +640,6 @@ function recomputeAndRender() {
   updateStatusBar();
   updateButtonStates();
   if (state.editModeImageId === -1) showScaleToast(state.lastLayoutResult.isScaledDown);
-  // 批量编号属性菜单展开时，实时预览徽章大小（在每张图的角画轮廓圈）
-  drawIndexBadgeSizePreview();
 }
 
 function captureEditStates() {
@@ -1247,39 +1245,6 @@ function _createIndexBadges() {
 function sizeToPercent(px) { return Math.round(((px - 4) / (512 - 4)) * 100) + 1; }
 function percentToSize(pct) { return Math.round(4 + (pct - 1) * (512 - 4) / (100 - 1)); }
 
-// 属性菜单展开时，在每张图的编号角位置画轮廓圈实时预览大小。
-// 已有真实编号时不重复画（真实编号本身即预览）。
-function drawIndexBadgeSizePreview() {
-  if (state.editModeImageId !== -1) return;
-  if (!indexBadgeDropdown || !indexBadgeDropdown.classList.contains('open')) return;
-  if (state.images.length === 0) return;
-  if (hasIndexBadges()) return; // 已有真实编号，无需额外预览
-
-  const lr = state.lastLayoutResult;
-  if (!lr) return;
-  const ctx = canvas.getContext('2d');
-  ctx.save();
-  if (lr.scaleFactor < 1) ctx.scale(lr.scaleFactor, lr.scaleFactor);
-  const { corner, size, color } = state.indexBadgeConfig;
-  const radius = Math.max(size / 2, 16);
-  for (const img of state.images) {
-    let cx = img.x, cy = img.y;
-    switch (corner) {
-      case 'top-left':      cx = img.x + radius;         cy = img.y + radius;          break;
-      case 'top-right':     cx = img.x + img.renderWidth - radius; cy = img.y + radius; break;
-      case 'bottom-left':   cx = img.x + radius;         cy = img.y + img.renderHeight - radius; break;
-      case 'bottom-right':  cx = img.x + img.renderWidth - radius; cy = img.y + img.renderHeight - radius; break;
-    }
-    ctx.globalAlpha = 0.6;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(radius * 0.1, 2);
-    ctx.beginPath();
-    ctx.arc(cx, cy, Math.max(radius - ctx.lineWidth / 2, 1), 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
 // 构建批量编号属性二级菜单（复用单图标序的 addInline* 控件）
 function buildIndexBadgeMenu() {
   const panel = indexBadgeDropdown;
@@ -1287,12 +1252,7 @@ function buildIndexBadgeMenu() {
   const cfg = state.indexBadgeConfig;
   const onChange = (toolKey, key, value) => {
     state.indexBadgeConfig[key] = value;
-    if (hasIndexBadges()) {
-      refreshIndexBadges();
-    } else {
-      // 无真实编号时仍重绘以更新大小/颜色/位置预览圈
-      recomputeAndRender();
-    }
+    if (hasIndexBadges()) refreshIndexBadges();
   };
 
   addInlineNumberSpinner(panel, cfg.nextNumber, '起始', 1, 9999, 1, 'index-badge', 'nextNumber', onChange);
@@ -1338,12 +1298,10 @@ function buildIndexBadgeMenu() {
 function openIndexBadgeDropdown() {
   buildIndexBadgeMenu();
   indexBadgeDropdown.classList.add('open');
-  recomputeAndRender(); // 显示大小预览圈
 }
 
 function closeIndexBadgeDropdown() {
   indexBadgeDropdown.classList.remove('open');
-  recomputeAndRender(); // 清除大小预览圈
 }
 
 // 批量编号按钮事件
@@ -1363,7 +1321,16 @@ btnIndexBadgeCaret.addEventListener('click', (e) => {
   }
 });
 
-registerOutsideClick(indexBadgeDropdown, btnIndexBadgeCaret);
+// 失焦收起：点击菜单/三角按钮以外的区域时关闭。
+// 注意菜单内的颜色/滑块等三级弹窗挂在 body 上，必须排除，否则点弹窗会误关菜单。
+document.addEventListener('mousedown', (e) => {
+  if (!indexBadgeDropdown.classList.contains('open')) return;
+  const wrapper = btnIndexBadgeCaret.closest('.ratio-toolbar-wrapper');
+  if (wrapper.contains(e.target)) return;
+  // 排除挂在 body 上的三级弹窗（颜色、滑块、下拉项）
+  if (e.target.closest('.annotation-popup, .annotation-linestyle-dropdown')) return;
+  closeIndexBadgeDropdown();
+});
 
 // ========== 复制/保存 ==========
 
