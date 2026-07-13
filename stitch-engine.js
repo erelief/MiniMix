@@ -1125,6 +1125,12 @@ function rescaleAnnotationsIfNeeded(annotations, img, annotationDims) {
     if (p.points) p.points = p.points.map(pt => ({ x: pt.x * sx, y: pt.y * sy }));
     if (p.startPoint) p.startPoint = { x: p.startPoint.x * sx, y: p.startPoint.y * sy };
     if (p.endPoint) p.endPoint = { x: p.endPoint.x * sx, y: p.endPoint.y * sy };
+    // index-badge：角锚定徽章，按图片尺寸比例重缩放 size 与参考宽高
+    if (a.type === 'index-badge') {
+      p.size *= (sx + sy) / 2;
+      p.refW *= sx;
+      p.refH *= sy;
+    }
     return copy;
   });
 }

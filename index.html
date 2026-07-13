@@ -50,6 +50,21 @@
         </div>
       </div>
 
+      <!-- 批量编号：hash 生成 + 三角展开属性二级菜单 -->
+      <div class="toolbar-group">
+        <div class="ratio-toolbar-wrapper index-badge-split">
+          <span class="btn-split-group">
+            <button class="btn solid-add-btn index-badge-main" id="btn-index-badge" disabled title="给所有图片编号">
+              <i data-lucide="hash" class="icon-20"></i>
+            </button>
+            <button class="btn tool-btn index-badge-caret" id="btn-index-badge-caret" disabled title="编号属性">
+              <i data-lucide="chevron-down" class="icon-16"></i>
+            </button>
+          </span>
+          <div class="ratio-dropdown annotation-submenu annotation-submenu-inline" id="index-badge-dropdown"></div>
+        </div>
+      </div>
+
       <!-- 撤销/重做 -->
       <div class="toolbar-group">
         <button class="btn action-btn" id="btn-undo" disabled title="撤销 (Ctrl+Z)">

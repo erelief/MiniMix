@@ -308,7 +308,7 @@ function closeAllCustomDropdowns() {
 
 // --- Inline helpers for compact horizontal submenu ---
 
-function addInlineSeparator(container) {
+export function addInlineSeparator(container) {
   const sep = document.createElement('span');
   sep.className = 'annotation-inline-separator';
   container.appendChild(sep);
@@ -339,7 +339,7 @@ function positionPopup(popup, trigger) {
   popup.style.top = top + 'px';
 }
 
-function addInlineSliderValue(container, value, label, min, max, step, toolKey, settingKey, onChange, suffix) {
+export function addInlineSliderValue(container, value, label, min, max, step, toolKey, settingKey, onChange, suffix) {
   const valEl = document.createElement('span');
   valEl.className = 'annotation-inline-value';
   valEl.textContent = label ? (label + ' ' + value + (suffix || '')) : (value + (suffix || ''));
@@ -446,7 +446,7 @@ function addInlineSliderValue(container, value, label, min, max, step, toolKey, 
   return valEl;
 }
 
-function addInlineShadowControl(panel, value, toolName, onChange) {
+export function addInlineShadowControl(panel, value, toolName, onChange) {
   let currentVal = value;
   const cb = document.createElement('input');
   cb.type = 'checkbox';
@@ -569,7 +569,9 @@ function addInlineShadowControl(panel, value, toolName, onChange) {
   };
 }
 
-function addInlineColorTrigger(container, currentColor, currentOpacity, onChange) {
+export function addInlineColorTrigger(container, currentColor, currentOpacity, onChange, toolKey) {
+  // toolKey 可省略，回退到当前活动子菜单工具（向后兼容）
+  const tk = toolKey != null ? toolKey : activeSubmenuTool;
   const dot = document.createElement('span');
   dot.className = 'annotation-inline-color';
   dot.style.setProperty('--dot-color', hexToRgba(currentColor, currentOpacity / 100));
@@ -605,7 +607,7 @@ function addInlineColorTrigger(container, currentColor, currentOpacity, onChange
         swatches.querySelectorAll('.active').forEach(s => s.classList.remove('active'));
         swatch.classList.add('active');
         dot.style.setProperty('--dot-color', hexToRgba(liveColor, liveOpacity / 100));
-        onChange(activeSubmenuTool, 'color', c);
+        onChange(tk, 'color', c);
       });
       swatches.appendChild(swatch);
     });
@@ -638,7 +640,7 @@ function addInlineColorTrigger(container, currentColor, currentOpacity, onChange
       liveOpacity = v;
       opInput.value = v;
       dot.style.setProperty('--dot-color', hexToRgba(liveColor, v / 100));
-      onChange(activeSubmenuTool, 'opacity', v);
+      onChange(tk, 'opacity', v);
     }
 
     _activePopupSlider = createSlider({
@@ -673,7 +675,7 @@ function addInlineColorTrigger(container, currentColor, currentOpacity, onChange
   return dot;
 }
 
-function addInlineNumberSpinner(container, value, label, min, max, step, toolKey, settingKey, onChange) {
+export function addInlineNumberSpinner(container, value, label, min, max, step, toolKey, settingKey, onChange) {
   const wrapper = document.createElement('span');
   wrapper.className = 'annotation-inline-spinner';
 
@@ -794,7 +796,9 @@ function makeArrowStylePreview(value) {
   return cvs;
 }
 
-function addInlineDropdown(container, { options, currentValue, makePreview, settingKey, onChange }) {
+export function addInlineDropdown(container, { options, currentValue, makePreview, settingKey, onChange }, toolKey) {
+  // toolKey 可省略，回退到当前活动子菜单工具（向后兼容）
+  const tk = toolKey != null ? toolKey : activeSubmenuTool;
   const wrapper = document.createElement('div');
   wrapper.className = 'annotation-linestyle-select';
 
@@ -828,7 +832,7 @@ function addInlineDropdown(container, { options, currentValue, makePreview, sett
     item.title = opt.label;
     item.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      onChange(activeSubmenuTool, settingKey, opt.value);
+      onChange(tk, settingKey, opt.value);
       updatePreview(opt.value);
       dropdown.querySelectorAll('.annotation-linestyle-option').forEach(o => o.classList.remove('active'));
       item.classList.add('active');
