@@ -1403,11 +1403,15 @@ body {
 }
 
 .annotation-submenu-btn {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
   background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 6px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   font-size: 11px;
   cursor: pointer;
   transition: background 0.15s;
