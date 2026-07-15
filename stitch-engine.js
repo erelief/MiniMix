@@ -4,6 +4,7 @@
  */
 
 import { renderAnnotation } from './annotation.js';
+import { t } from './src/i18n/i18n.js';
 
 const MAX_PIXELS = 5120 * 5120;
 
@@ -23,7 +24,7 @@ const DASH_BORDER_WIDTH = 1.5;
 const HOVER_BORDER_WIDTH = 2;
 
 export const ASPECT_RATIOS = [
-  { label: '恢复原图比例', ratio: null },
+  { labelKey: 'canvas.resetRatio', ratio: null },
   // 左列：横版（宽→窄），右列：对应的竖版
   { label: '21:9',   ratio: 21 / 9 },   { label: '9:21',   ratio: 9 / 21 },
   { label: '2:1',    ratio: 2 },         { label: '1:2',    ratio: 0.5 },
@@ -32,6 +33,12 @@ export const ASPECT_RATIOS = [
   { label: '4:3',    ratio: 4 / 3 },     { label: '3:4',    ratio: 3 / 4 },
   { label: '1:1',    ratio: 1 },
 ];
+
+// 取比例项的显示文本：labelKey（可翻译）优先，否则静态 label（如 "21:9"）。
+export function ratioLabel(entry) {
+  if (!entry) return '';
+  return entry.labelKey ? t(entry.labelKey) : (entry.label ?? '');
+}
 
 // ========== 布局计算 ==========
 
@@ -972,7 +979,7 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
   ctx.font = `${13 / displayScale}px system-ui, sans-serif`;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  ctx.fillText(ASPECT_RATIOS[0].label, canvasX + 32 / displayScale, canvasY + headerH / 2);
+  ctx.fillText(ratioLabel(ASPECT_RATIOS[0]), canvasX + 32 / displayScale, canvasY + headerH / 2);
 
   // --- Grid: 比例选项（两列） ---
   const gridY = canvasY + headerH;
@@ -1017,7 +1024,7 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
     ctx.font = `${11 / displayScale}px system-ui, sans-serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'center';
-    ctx.fillText(ASPECT_RATIOS[i].label, ix + gridItemW / 2, py + ph + 2 / displayScale);
+    ctx.fillText(ratioLabel(ASPECT_RATIOS[i]), ix + gridItemW / 2, py + ph + 2 / displayScale);
   }
 
   ctx.restore();

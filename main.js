@@ -3,7 +3,7 @@
  * 最简版本：添加图片 + 横排/纵排 + 撤销/重做 + 复制/保存
  */
 
-import { createIcons, ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image as ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket, Hash, Eraser, ChevronDown } from 'lucide';
+import { createIcons, ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Settings, Plus, Image as ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket, Hash, Eraser, ChevronDown } from 'lucide';
 import { ImageItem } from './image-item.js';
 import { UndoManager } from './undo-manager.js';
 import { createDefaultToolSettings, createAnnotation, hexToRgba, INDEX_BADGE_CORNERS, NUMBER_STYLES } from './annotation.js';
@@ -19,10 +19,12 @@ import {
   generateSingleImagePreviewDataURL,
   formatFileSize,
   ASPECT_RATIOS,
+  ratioLabel,
 } from './stitch-engine.js';
+import { t, onLanguageChange, getLanguageSetting, setLanguageSetting } from './src/i18n/i18n.js';
 
 createIcons({
-  icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Info, Plus, Image: ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket, Hash, Eraser, ChevronDown },
+  icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Settings, Plus, Image: ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket, Hash, Eraser, ChevronDown },
 });
 
 // ========== 图片对象池（支持撤销恢复） ==========
@@ -159,7 +161,7 @@ const btnUndo = document.getElementById('btn-undo');
 const btnRedo = document.getElementById('btn-redo');
 const btnCopy = document.getElementById('btn-copy');
 const btnSave = document.getElementById('btn-save');
-const btnInfo = document.getElementById('btn-info');
+const btnSettings = document.getElementById('btn-settings');
 const btnClear = document.getElementById('btn-clear');
 const btnRatio = document.getElementById('btn-ratio');
 const ratioDropdown = document.getElementById('ratio-dropdown');
@@ -172,7 +174,7 @@ const btnIndexBadgeCaret = document.getElementById('btn-index-badge-caret');
 const indexBadgeDropdown = document.getElementById('index-badge-dropdown');
 
 const saveModal = document.getElementById('save-modal');
-const infoModal = document.getElementById('info-modal');
+const settingsModal = document.getElementById('settings-modal');
 const saveFormatSelect = document.getElementById('save-format');
 const saveQualitySlider = document.getElementById('save-quality');
 const saveQualityValue = document.getElementById('save-quality-value');
@@ -307,13 +309,13 @@ function loadImageFromFile(file) {
 
 function updateStatusBar() {
   const n = state.images.length;
-  if (n === 0) { statusBar.textContent = '拖拽或点击添加图片开始拼图'; return; }
+  if (n === 0) { statusBar.textContent = t('status.empty'); return; }
   const lr = state.lastLayoutResult;
   if (!lr) return;
   const w = Math.round(lr.width * lr.scaleFactor);
   const h = Math.round(lr.height * lr.scaleFactor);
-  let text = `${n} 张图片 · ${w} × ${h}`;
-  if (lr.isScaledDown) text += '（已缩放）';
+  let text = t('status.summary', { count: n, w, h });
+  if (lr.isScaledDown) text += t('status.scaledDown');
   statusBar.textContent = text;
 }
 
@@ -845,7 +847,7 @@ function buildRatioGrid(container, datasetAttr) {
     const item = document.createElement('div');
     item.className = 'ratio-grid-item';
     item.dataset[datasetAttr] = String(i);
-    item.innerHTML = `<div class="ratio-preview" style="width:${pw}px;height:${ph}px"></div><span>${ASPECT_RATIOS[i].label}</span>`;
+    item.innerHTML = `<div class="ratio-preview" style="width:${pw}px;height:${ph}px"></div><span>${ratioLabel(ASPECT_RATIOS[i])}</span>`;
     grid.appendChild(item);
   }
   container.appendChild(grid);
@@ -869,7 +871,7 @@ function buildRatioDropdown() {
   header.dataset.index = '0';
   header.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M14 15H9v-5"/><path d="M16 3h5v5"/><path d="M21 3 9 15"/></svg>
-    <span>恢复原图比例</span>
+    <span data-i18n="canvas.resetRatio">${t('canvas.resetRatio')}</span>
   `;
   ratioDropdown.appendChild(header);
 
@@ -879,8 +881,8 @@ function buildRatioDropdown() {
   const footer = document.createElement('div');
   footer.className = 'ratio-footer';
   footer.innerHTML = `
-    <span>新图片自动调整</span>
-    <label class="ratio-toggle" title="添加的新图片自动调整为当前选定比例"><input type="checkbox" id="ratio-auto-crop" /><span class="ratio-toggle-slider"></span></label>
+    <span data-i18n="ratio.newImageAutoAdjust">${t('ratio.newImageAutoAdjust')}</span>
+    <label class="ratio-toggle" data-i18n-title="toolbar.ratioAutoCrop"><input type="checkbox" id="ratio-auto-crop" /><span class="ratio-toggle-slider"></span></label>
   `;
   ratioDropdown.appendChild(footer);
 }
@@ -891,7 +893,7 @@ function buildCanvasRatioDropdown() {
   header.dataset.canvasIndex = '0';
   header.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-    <span>恢复自由比例</span>
+    <span data-i18n="canvas.resetFreeRatio">${t('canvas.resetFreeRatio')}</span>
   `;
   canvasRatioDropdown.appendChild(header);
 
@@ -1049,12 +1051,12 @@ canvasRatioDropdown.addEventListener('click', (e) => {
 
   // 更新状态栏
   if (state.canvasRatioLocked) {
-    statusBar.textContent = `画布比例已锁定: ${ASPECT_RATIOS[state.canvasRatioIndex].label}`;
+    statusBar.textContent = t('status.canvasRatioLocked', { label: ratioLabel(ASPECT_RATIOS[state.canvasRatioIndex]) });
   } else {
     if (state.images.length > 0) {
-      statusBar.textContent = '拖拽图片调整位置，点击编辑';
+      statusBar.textContent = t('status.editHint');
     } else {
-      statusBar.textContent = '拖拽或点击添加图片开始拼图';
+      statusBar.textContent = t('status.empty');
     }
   }
 });
@@ -1251,7 +1253,7 @@ function buildIndexBadgeMenu() {
     if (hasIndexBadges()) refreshIndexBadges();
   };
 
-  addInlineNumberSpinner(panel, cfg.nextNumber, '起始', 1, 9999, 1, 'index-badge', 'nextNumber', onChange);
+  addInlineNumberSpinner(panel, cfg.nextNumber, 'annotation.startAt', 1, 9999, 1, 'index-badge', 'nextNumber', onChange);
   addInlineSeparator(panel);
   addInlineDropdown(panel, {
     options: NUMBER_STYLES,
@@ -1260,7 +1262,7 @@ function buildIndexBadgeMenu() {
     onChange,
   }, 'index-badge');
   addInlineSeparator(panel);
-  addInlineSliderValue(panel, sizeToPercent(cfg.size), '大小', 1, 100, 1, 'index-badge', 'size',
+  addInlineSliderValue(panel, sizeToPercent(cfg.size), 'annotation.size', 1, 100, 1, 'index-badge', 'size',
     (toolKey, key, val) => onChange(toolKey, key, percentToSize(val)), '%');
   addInlineSeparator(panel);
   addInlineColorTrigger(panel, cfg.color, cfg.opacity, onChange, 'index-badge');
@@ -1278,8 +1280,8 @@ function buildIndexBadgeMenu() {
   // 清除按钮
   const clearBtn = document.createElement('button');
   clearBtn.className = 'annotation-submenu-btn';
-  clearBtn.innerHTML = '<i data-lucide="eraser" class="icon-16"></i><span>清除</span>';
-  clearBtn.title = '清除全部编号';
+  clearBtn.innerHTML = `<i data-lucide="eraser" class="icon-16"></i><span>${t('annotation.clear')}</span>`;
+  clearBtn.title = t('annotation.clearAllNumbers');
   clearBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     clearIndexBadges();
@@ -1346,7 +1348,7 @@ let _copyOverlayTimer = null;
 function showCopyProgress() {
   clearTimeout(_copyOverlayTimer);
   copyCard.classList.remove('success', 'error');
-  copyProgressText.textContent = '正在复制…';
+  copyProgressText.textContent = t('copy.inProgress');
   copyOverlay.classList.add('visible');
 }
 
@@ -1365,16 +1367,16 @@ async function copyToClipboard() {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-    finishCopyProgress(true, '已复制到剪贴板');
+    finishCopyProgress(true, t('status.copied'));
   } catch (e) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('write_image_to_clipboard', { dataUrl });
-      finishCopyProgress(true, '已复制到剪贴板');
+      finishCopyProgress(true, t('status.copied'));
     } catch (e2) {
       console.error('Copy failed:', e2);
-      statusBar.textContent = '复制失败';
-      finishCopyProgress(false, '复制失败');
+      statusBar.textContent = t('status.copyFailed');
+      finishCopyProgress(false, t('status.copyFailed'));
     }
   }
 }
@@ -1400,7 +1402,7 @@ function openSaveModal() {
   if (state.images.length === 0) return;
   const headerSpan = saveModal.querySelector('.modal-header span');
   if (headerSpan) {
-    headerSpan.textContent = state.saveTargetImage ? '保存单张图片' : '保存图片';
+    headerSpan.textContent = state.saveTargetImage ? t('save.titleSingle') : t('save.title');
   }
   saveModal.classList.add('modal-open');
   updateSavePreview();
@@ -1590,11 +1592,11 @@ document.getElementById('save-modal-confirm').addEventListener('click', async ()
     let fp = null;
     if (window.__TAURI_INTERNALS__) {
       const { save } = await import('@tauri-apps/plugin-dialog');
-      fp = await save({ defaultPath: defaultName, filters: [{ name: '图片', extensions: [ext] }] });
+      fp = await save({ defaultPath: defaultName, filters: [{ name: t('save.fileTypeImage'), extensions: [ext] }] });
       if (!fp) throw new Error('USER_CANCELLED');
     }
 
-    await updateProgress('正在合成图片', 10);
+    await updateProgress(t('save.progress.composing'), 10);
 
     // 2. 渲染导出图片
     let du;
@@ -1604,7 +1606,7 @@ document.getElementById('save-modal-confirm').addEventListener('click', async ()
       du = exportImage(state.lastLayoutResult, fmt, qual, res, state.annotations, state._annotationDims);
     }
 
-    await updateProgress('正在转换数据格式', 45);
+    await updateProgress(t('save.progress.converting'), 45);
 
     // 3. DataURL → 二进制（优先用 fetch 异步解析，降级用分块解码）
     let bytes;
@@ -1612,7 +1614,7 @@ document.getElementById('save-modal-confirm').addEventListener('click', async ()
       const response = await fetch(du);
       const arrayBuffer = await response.arrayBuffer();
       bytes = new Uint8Array(arrayBuffer);
-      await updateProgress('数据转换完成', 80);
+      await updateProgress(t('save.progress.converted'), 80);
     } catch (fetchErr) {
       const base64 = du.split(',')[1];
       const binaryStr = atob(base64);
@@ -1622,17 +1624,17 @@ document.getElementById('save-modal-confirm').addEventListener('click', async ()
       for (let i = 0; i < len; i += chunkSize) {
         const end = Math.min(i + chunkSize, len);
         for (let j = i; j < end; j++) bytes[j] = binaryStr.charCodeAt(j);
-        await updateProgress('正在转换数据格式', 45 + Math.floor((end / len) * 35));
+        await updateProgress(t('save.progress.converting'), 45 + Math.floor((end / len) * 35));
       }
     }
 
-    await updateProgress('正在写入文件', 90);
+    await updateProgress(t('save.progress.writing'), 90);
 
     // 4. 写入文件
     if (window.__TAURI_INTERNALS__) {
       const useCompression = fmt === 'png' && losslessCompressCheckbox.checked;
       if (useCompression) {
-        await updateProgress('正在压缩PNG', 90);
+        await updateProgress(t('save.progress.compressing'), 90);
         const { invoke } = await import('@tauri-apps/api/core');
         const resultMsg = await invoke('compress_and_save_png', { data: Array.from(bytes), path: fp });
         statusBar.textContent = resultMsg;
@@ -1640,13 +1642,13 @@ document.getElementById('save-modal-confirm').addEventListener('click', async ()
       } else {
         const { writeFile } = await import('@tauri-apps/plugin-fs');
         await writeFile(fp, bytes);
-        statusBar.textContent = `已保存: ${fp}`;
+        statusBar.textContent = t('status.saved', { path: fp });
         setTimeout(updateStatusBar, 2000);
       }
     } else if ('showSaveFilePicker' in window) {
       const handle = await window.showSaveFilePicker({
         suggestedName: defaultName,
-        types: [{ description: '图片', accept: { [fmt === 'png' ? 'image/png' : 'image/jpeg']: [`.${ext}`] } }],
+        types: [{ description: t('save.fileTypeImage'), accept: { [fmt === 'png' ? 'image/png' : 'image/jpeg']: [`.${ext}`] } }],
       });
       const writable = await handle.createWritable();
       await writable.write(bytes);
@@ -1660,34 +1662,86 @@ document.getElementById('save-modal-confirm').addEventListener('click', async ()
       URL.revokeObjectURL(a.href);
     }
 
-    await updateProgress('保存成功', 100);
+    await updateProgress(t('save.progress.done'), 100);
     setTimeout(closeSaveModal, 300);
   } catch (e) {
     if (e.name === 'AbortError' || e.message === 'USER_CANCELLED') {
       // 用户取消，恢复按钮
     } else {
       console.error('Save failed:', e);
-      saveConfirmBtn.textContent = '保存失败';
+      saveConfirmBtn.textContent = t('save.failed');
       await yieldToUI();
     }
   } finally {
     setTimeout(() => {
       saveConfirmBtn.classList.remove('btn-saving');
       saveConfirmBtn.disabled = false;
-      saveConfirmBtn.textContent = '保存';
+      saveConfirmBtn.textContent = t('save.confirm');
     }, 1000);
   }
 });
 
-// 信息弹窗
-btnInfo.addEventListener('click', () => {
-  infoModal.classList.add('modal-open');
+// ========== i18n：静态文本批量填充 ==========
+
+// 遍历带 data-i18n / data-i18n-title 的元素，用当前语言填充。
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+  // 状态栏在无图片时显示空状态提示
+  if (state.images.length === 0) statusBar.textContent = t('status.empty');
+}
+
+// 语言变更时：重填静态文本 + 重绘画布（画布上有可翻译的比例标签）
+onLanguageChange(() => {
+  applyI18n();
+  updateStatusBar();
+  recomputeAndRender();
+});
+
+// 启动时按当前语言填充静态文本
+applyI18n();
+
+// ========== 设置弹窗（Tab：通用 / 关于） ==========
+
+function openSettingsModal() {
+  // 默认切到「通用」tab
+  switchSettingsTab('general');
+  settingsModal.classList.add('modal-open');
   document.getElementById('info-version-number').textContent = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.0';
   const iconEl = document.getElementById('info-app-icon');
   iconEl.src = (typeof __APP_ICON__ !== 'undefined' && __APP_ICON__) ? __APP_ICON__ : './images/minimix-logo.png';
+}
+
+function switchSettingsTab(name) {
+  settingsModal.querySelectorAll('.settings-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === name);
+  });
+  settingsModal.querySelectorAll('.settings-panel').forEach(p => {
+    p.classList.toggle('active', p.id === `panel-${name}`);
+  });
+}
+
+btnSettings.addEventListener('click', openSettingsModal);
+document.getElementById('settings-modal-close').addEventListener('click', () => settingsModal.classList.remove('modal-open'));
+settingsModal.querySelectorAll('.settings-tab').forEach(btn => {
+  btn.addEventListener('click', () => switchSettingsTab(btn.dataset.tab));
 });
-document.getElementById('info-modal-close').addEventListener('click', () => infoModal.classList.remove('modal-open'));
-[saveModal, infoModal].forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('modal-open'); }));
+
+// 语言选择下拉
+const langSelect = document.getElementById('setting-language');
+if (langSelect) {
+  langSelect.value = getLanguageSetting();
+  langSelect.addEventListener('change', () => {
+    setLanguageSetting(langSelect.value);
+  });
+}
+
+// 点击遮罩关闭弹窗
+[saveModal, settingsModal].forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('modal-open'); }));
 
 // 在 Tauri 环境下通过 shell.open() 打开外部链接
 (function setupAboutLinks() {
@@ -1724,7 +1778,7 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
   }
 
   // 为所有外部链接绑定点击处理（只执行一次）
-  infoModal.querySelectorAll('a[href^="http"]').forEach(a => {
+  settingsModal.querySelectorAll('a[href^="http"]').forEach(a => {
     a.addEventListener('click', (e) => {
       e.preventDefault();
       if (typeof window.__TAURI_INTERNALS__ !== 'undefined' || typeof window.__TAURI__ !== 'undefined') {
@@ -1747,7 +1801,7 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
 
   btnCheck.disabled = false;
 
-  const origHTML = btnCheck.innerHTML;
+  const ICON_UPDATE = '<i data-lucide="rotate-ccw" class="icon-14"></i>';
 
   const AUTO_UPDATE_KEY = 'minimix-auto-update';
   const saved = localStorage.getItem(AUTO_UPDATE_KEY);
@@ -1763,13 +1817,14 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
   function resetBtn() {
     btnCheck.className = 'btn btn-update-check';
     btnCheck.disabled = false;
-    btnCheck.innerHTML = origHTML;
+    btnCheck.innerHTML = ICON_UPDATE + t('about.checkUpdate');
+    createIcons({ icons: { RotateCcw }, root: btnCheck });
   }
 
   async function checkForUpdate({ silent = false } = {}) {
     btnCheck.classList.add('btn-checking');
     btnCheck.disabled = true;
-    btnCheck.innerHTML = '<svg class="spin-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> 检查中...';
+    btnCheck.innerHTML = '<svg class="spin-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ' + t('update.checking');
 
     try {
       const proxy = await invoke('get_proxy_url');
@@ -1779,7 +1834,7 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
         if (!silent) {
           btnCheck.classList.remove('btn-checking');
           btnCheck.classList.add('btn-up-to-date');
-          btnCheck.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg> 已是最新';
+          btnCheck.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg> ' + t('update.upToDate');
           setTimeout(resetBtn, 2000);
         } else {
           resetBtn();
@@ -1791,7 +1846,7 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
       btnCheck.classList.remove('btn-checking');
       btnCheck.classList.add('btn-has-update');
       btnCheck.disabled = false;
-      btnCheck.innerHTML = '<span class="update-ver-text">v' + update.version + '</span><span class="update-action-text">立即更新</span>';
+      btnCheck.innerHTML = '<span class="update-ver-text">v' + update.version + '</span><span class="update-action-text">' + t('update.install') + '</span>';
 
       // 静默检查时显示 toast
       if (silent) {
@@ -1800,11 +1855,11 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
         const toastBtn = document.getElementById('update-toast-btn');
         const toastClose = document.getElementById('update-toast-close');
         if (toast && toastText && toastBtn && toastClose) {
-          toastText.textContent = '发现新版本 v' + update.version;
+          toastText.textContent = t('update.newVersion', { version: update.version });
           toast.classList.add('visible');
           toastBtn.addEventListener('click', () => {
             toast.classList.remove('visible');
-            infoModal.classList.add('modal-open');
+            settingsModal.classList.add('modal-open');
           });
           toastClose.addEventListener('click', () => toast.classList.remove('visible'));
           setTimeout(() => toast.classList.remove('visible'), 10000);
@@ -1816,7 +1871,7 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
         btnCheck.classList.remove('btn-has-update');
         btnCheck.classList.add('btn-downloading');
         btnCheck.disabled = true;
-        btnCheck.textContent = '准备下载...';
+        btnCheck.textContent = t('update.preparingDownload');
 
         let downloaded = 0;
         let contentLength = 0;
@@ -1833,22 +1888,22 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
                   const pct = Math.round((downloaded / contentLength) * 100);
                   btnCheck.textContent = pct + '%';
                 } else {
-                  btnCheck.textContent = '下载中...';
+                  btnCheck.textContent = t('update.downloading');
                 }
                 break;
               case 'Finished':
-                btnCheck.textContent = '安装中...';
+                btnCheck.textContent = t('update.installing');
                 break;
             }
           });
 
-          btnCheck.textContent = '重启中...';
+          btnCheck.textContent = t('update.restarting');
           await relaunch();
         } catch (e) {
           btnCheck.classList.remove('btn-downloading');
           btnCheck.classList.add('btn-error');
           btnCheck.disabled = false;
-          btnCheck.textContent = '更新失败';
+          btnCheck.textContent = t('update.failed');
           setTimeout(resetBtn, 3000);
         }
       }, { once: true });
@@ -1860,7 +1915,7 @@ document.getElementById('info-modal-close').addEventListener('click', () => info
         btnCheck.classList.add('btn-error');
         btnCheck.disabled = false;
         const msg = e instanceof Error ? e.message : String(e);
-        btnCheck.textContent = msg ? '失败: ' + msg.slice(0, 30) : '检查失败';
+        btnCheck.textContent = msg ? t('update.failedWithMsg', { msg: msg.slice(0, 30) }) : t('update.checkFailed');
         setTimeout(resetBtn, 4000);
       } else {
         resetBtn();
@@ -3468,14 +3523,14 @@ canvas.addEventListener('mousemove', (e) => {
     }
 
     // 光标 & tooltip
-    if (hit.isSaveBtn) { canvas.style.cursor = 'pointer'; canvas.title = '保存退出'; }
-    else if (hit.isResetBtn) { canvas.style.cursor = 'pointer'; canvas.title = '复位'; }
+    if (hit.isSaveBtn) { canvas.style.cursor = 'pointer'; canvas.title = t('canvas.title.saveExit'); }
+    else if (hit.isResetBtn) { canvas.style.cursor = 'pointer'; canvas.title = t('canvas.title.reset'); }
     else if (state.activeAnnotationTool === 'scaling') {
-      if (hit.isRatioBtn) { canvas.style.cursor = 'pointer'; canvas.title = '预设比例'; }
+      if (hit.isRatioBtn) { canvas.style.cursor = 'pointer'; canvas.title = t('canvas.title.presetRatio'); }
       else if (hit.isRatioMenuItem) { canvas.style.cursor = 'pointer'; canvas.title = ''; }
-      else if (hit.isRotateBtn) { canvas.style.cursor = ROTATE_CURSOR; canvas.title = '按住旋转'; }
+      else if (hit.isRotateBtn) { canvas.style.cursor = ROTATE_CURSOR; canvas.title = t('canvas.title.rotate'); }
       else if (hit.isCropEdge) { canvas.style.cursor = hit.cropEdgeAxis === 'width' ? 'ew-resize' : 'ns-resize'; canvas.title = ''; }
-      else if (hit.isImageBody && img && isPanAvailable(img)) { canvas.style.cursor = 'grab'; canvas.title = '平移'; }
+      else if (hit.isImageBody && img && isPanAvailable(img)) { canvas.style.cursor = 'grab'; canvas.title = t('canvas.title.pan'); }
       else { canvas.style.cursor = 'default'; canvas.title = ''; }
     } else if (state.activeAnnotationTool === 'text') {
       if (!hit.isImageBody) {
@@ -3498,7 +3553,7 @@ canvas.addEventListener('mousemove', (e) => {
           }
         }
         canvas.style.cursor = overText ? 'pointer' : 'text';
-        canvas.title = overText ? '点击编辑文字' : '';
+        canvas.title = overText ? t('canvas.title.editText') : '';
       }
     } else if (state.activeAnnotationTool === 'stamp') {
       if (!hit.isImageBody) {
@@ -3507,7 +3562,7 @@ canvas.addEventListener('mousemove', (e) => {
         const sf = getLayoutScale();
         const screenD = state.toolSettings.stamp.size * sf;
         canvas.style.cursor = getBrushCursor(screenD);
-        canvas.title = '点击放置图章';
+        canvas.title = t('canvas.title.placeStamp');
       }
     } else if (state.activeAnnotationTool === 'pencil') {
       if (!hit.isImageBody) {
@@ -3524,7 +3579,7 @@ canvas.addEventListener('mousemove', (e) => {
       } else {
         const sf = getLayoutScale();
         canvas.style.cursor = getBrushCursor(state.toolSettings.sequence.size * sf);
-        canvas.title = '点击放置序号';
+        canvas.title = t('canvas.title.placeSequence');
       }
     } else if (state.activeAnnotationTool === 'geometry' || state.activeAnnotationTool === 'arrow') {
       canvas.style.cursor = hit.isImageBody ? 'crosshair' : 'default';
@@ -3557,10 +3612,10 @@ canvas.addEventListener('mousemove', (e) => {
     recomputeAndRender();
   }
 
-  if (hit.isEditBtn) { canvas.style.cursor = 'pointer'; canvas.title = '编辑'; }
-  else if (hit.isDupBtn) { canvas.style.cursor = 'pointer'; canvas.title = '复制'; }
-  else if (hit.isDlBtn) { canvas.style.cursor = 'pointer'; canvas.title = '下载此图片'; }
-  else if (hit.isCloseBtn) { canvas.style.cursor = 'pointer'; canvas.title = '删除'; }
+  if (hit.isEditBtn) { canvas.style.cursor = 'pointer'; canvas.title = t('canvas.title.edit'); }
+  else if (hit.isDupBtn) { canvas.style.cursor = 'pointer'; canvas.title = t('canvas.title.copy'); }
+  else if (hit.isDlBtn) { canvas.style.cursor = 'pointer'; canvas.title = t('canvas.title.download'); }
+  else if (hit.isCloseBtn) { canvas.style.cursor = 'pointer'; canvas.title = t('canvas.title.delete'); }
   else if (hit.image) { canvas.style.cursor = 'grab'; canvas.title = ''; }
   else { canvas.style.cursor = 'default'; canvas.title = ''; }
 });

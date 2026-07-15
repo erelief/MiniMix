@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/check-i18n.js && vite build",
+    "check:i18n": "node scripts/check-i18n.js",
     "preview": "vite preview",
     "sync-version": "node scripts/sync-version.js",
     "tauri": "tauri",

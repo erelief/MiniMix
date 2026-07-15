@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>拼好图</title>
+  <title>MiniMix</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="toolbar-row">
       <!-- 添加图片 -->
       <div class="toolbar-group">
-        <label class="btn upload-btn" title="添加图片">
+        <label class="btn upload-btn" data-i18n-title="toolbar.addImage">
           <i data-lucide="image-plus" class="icon-20"></i>
           <input type="file" id="add-images" accept="image/*" multiple hidden />
         </label>
@@ -20,30 +20,30 @@
       <!-- 添加纯色图片 -->
       <div class="toolbar-group">
         <div class="solid-add-wrapper">
-          <button class="btn solid-add-btn" id="btn-add-solid" title="添加纯色图片">
+          <button class="btn solid-add-btn" id="btn-add-solid" data-i18n-title="toolbar.addSolid">
             <i data-lucide="paint-bucket" class="icon-20"></i>
             <span class="solid-color-dot" id="solid-color-dot"></span>
           </button>
-          <input type="color" id="solid-color-input" value="#000000" title="选择纯色图片颜色" />
+          <input type="color" id="solid-color-input" value="#000000" data-i18n-title="toolbar.solidColor" />
         </div>
       </div>
 
       <!-- 布局模式 -->
       <div class="toolbar-group">
-        <button class="btn tool-btn active" data-layout="horizontal" title="横排">
+        <button class="btn tool-btn active" data-layout="horizontal" data-i18n-title="toolbar.layoutHorizontal">
           <i data-lucide="columns-2" class="icon-20"></i>
         </button>
-        <button class="btn tool-btn" data-layout="vertical" title="纵排">
+        <button class="btn tool-btn" data-layout="vertical" data-i18n-title="toolbar.layoutVertical">
           <i data-lucide="rows-2" class="icon-20"></i>
         </button>
         <div class="ratio-toolbar-wrapper">
-          <button class="btn tool-btn" id="btn-ratio" disabled title="调整所有图片比例">
+          <button class="btn tool-btn" id="btn-ratio" disabled data-i18n-title="toolbar.adjustRatio">
             <i data-lucide="grid-2x2" class="icon-20"></i>
           </button>
           <div class="ratio-dropdown" id="ratio-dropdown"></div>
         </div>
         <div class="ratio-toolbar-wrapper">
-          <button class="btn tool-btn" id="btn-canvas-ratio" disabled title="锁定全局画布比例">
+          <button class="btn tool-btn" id="btn-canvas-ratio" disabled data-i18n-title="toolbar.lockCanvasRatio">
             <i data-lucide="layout" class="icon-20"></i>
           </button>
           <div class="ratio-dropdown" id="canvas-ratio-dropdown"></div>
@@ -54,10 +54,10 @@
       <div class="toolbar-group">
         <div class="ratio-toolbar-wrapper index-badge-split">
           <span class="btn-split-group">
-            <button class="btn solid-add-btn index-badge-main" id="btn-index-badge" disabled title="给所有图片编号">
+            <button class="btn solid-add-btn index-badge-main" id="btn-index-badge" disabled data-i18n-title="toolbar.indexBadge">
               <i data-lucide="hash" class="icon-20"></i>
             </button>
-            <button class="btn tool-btn index-badge-caret" id="btn-index-badge-caret" disabled title="编号属性">
+            <button class="btn tool-btn index-badge-caret" id="btn-index-badge-caret" disabled data-i18n-title="toolbar.indexBadgeProps">
               <i data-lucide="chevron-down" class="icon-16"></i>
             </button>
           </span>
@@ -67,34 +67,34 @@
 
       <!-- 撤销/重做 -->
       <div class="toolbar-group">
-        <button class="btn action-btn" id="btn-undo" disabled title="撤销 (Ctrl+Z)">
+        <button class="btn action-btn" id="btn-undo" disabled data-i18n-title="toolbar.undo">
           <i data-lucide="undo-2" class="icon-20"></i>
         </button>
-        <button class="btn action-btn" id="btn-redo" disabled title="重做 (Ctrl+Shift+Z)">
+        <button class="btn action-btn" id="btn-redo" disabled data-i18n-title="toolbar.redo">
           <i data-lucide="redo-2" class="icon-20"></i>
         </button>
-        <button class="btn action-btn" id="btn-clear" disabled title="清除画布">
+        <button class="btn action-btn" id="btn-clear" disabled data-i18n-title="toolbar.clearCanvas">
           <i data-lucide="trash-2" class="icon-20"></i>
         </button>
       </div>
 
       <!-- 导出 -->
       <div class="toolbar-group export-group">
-        <button class="btn export-btn" id="btn-copy" disabled title="复制到剪贴板 (Ctrl+C)">
+        <button class="btn export-btn" id="btn-copy" disabled data-i18n-title="toolbar.copy">
           <i data-lucide="copy" class="icon-20"></i>
         </button>
-        <button class="btn export-btn" id="btn-save" disabled title="保存">
+        <button class="btn export-btn" id="btn-save" disabled data-i18n-title="toolbar.save">
           <i data-lucide="download" class="icon-20"></i>
         </button>
       </div>
 
-      <!-- 信息 -->
-      <button class="btn" id="btn-info" title="关于">
-        <i data-lucide="info" class="icon-20"></i>
+      <!-- 设置 -->
+      <button class="btn" id="btn-settings" data-i18n-title="toolbar.settings">
+        <i data-lucide="settings" class="icon-20"></i>
       </button>
     </div>
 
-    <div id="status-bar">拖拽或点击添加图片开始拼图</div>
+    <div id="status-bar" data-i18n="status.empty">拖拽或点击添加图片开始拼图</div>
   </div>
 
   <!-- 主工作区 -->
@@ -116,12 +116,12 @@
     <div id="drop-overlay" class="drop-overlay">
       <div class="drop-zone">
         <i data-lucide="image" class="icon-40"></i>
-        <span>释放以添加图片</span>
+        <span data-i18n="drop.release">释放以添加图片</span>
       </div>
     </div>
 
     <!-- 5K 缩放提示 -->
-    <div id="scale-toast" class="scale-toast">输出超过5K像素，已自动缩放</div>
+    <div id="scale-toast" class="scale-toast" data-i18n="status.scaledToast">输出超过5K像素，已自动缩放</div>
 
     <!-- 复制进度遮罩（阻塞） -->
     <div id="copy-progress-overlay" class="copy-progress-overlay">
@@ -129,13 +129,13 @@
         <div class="copy-progress-spinner"></div>
         <i data-lucide="circle-check-big" class="copy-progress-icon success"></i>
         <i data-lucide="circle-x" class="copy-progress-icon error"></i>
-        <span class="copy-progress-text" id="copy-progress-text">正在复制…</span>
+        <span class="copy-progress-text" id="copy-progress-text" data-i18n="copy.inProgress">正在复制…</span>
       </div>
     </div>
 
     <div id="update-toast" class="update-toast">
       <span id="update-toast-text"></span>
-      <button class="update-toast-btn" id="update-toast-btn">查看</button>
+      <button class="update-toast-btn" id="update-toast-btn" data-i18n="update.view">查看</button>
       <button class="update-toast-close" id="update-toast-close"><i data-lucide="x" class="icon-16"></i></button>
     </div>
   </div>
@@ -144,7 +144,7 @@
   <div class="modal-overlay" id="save-modal">
     <div class="modal-card">
       <div class="modal-header">
-        <span>保存图片</span>
+        <span data-i18n="save.title">保存图片</span>
         <button class="modal-close-btn" id="save-modal-close"><i data-lucide="x" class="icon-16"></i></button>
       </div>
       <div class="modal-body">
@@ -153,87 +153,108 @@
         </div>
         <div class="modal-controls">
           <div class="modal-control-row">
-            <label class="modal-label">格式</label>
+            <label class="modal-label" data-i18n="save.format">格式</label>
             <select id="save-format">
-              <option value="png">PNG (无损)</option>
-              <option value="jpg">JPG (有损)</option>
+              <option value="png" data-i18n="save.formatPng">PNG (无损)</option>
+              <option value="jpg" data-i18n="save.formatJpg">JPG (有损)</option>
             </select>
           </div>
           <div class="modal-control-row" id="lossless-compress-row">
-            <label class="modal-label">压缩</label>
+            <label class="modal-label" data-i18n="save.compress">压缩</label>
             <label class="save-checkbox-label">
               <input type="checkbox" id="save-lossless-compress" />
-              <span>无损压缩（速度较慢）</span>
+              <span data-i18n="save.losslessCompress">无损压缩（速度较慢）</span>
             </label>
           </div>
           <div class="modal-control-row" id="quality-row">
-            <label class="modal-label">质量</label>
+            <label class="modal-label" data-i18n="save.quality">质量</label>
             <input type="range" id="save-quality" min="10" max="100" value="90" step="5" />
             <span id="save-quality-value">90</span>%
           </div>
           <div class="modal-control-row">
-            <label class="modal-label">分辨率</label>
+            <label class="modal-label" data-i18n="save.resolution">分辨率</label>
             <input type="range" id="save-resolution" min="10" max="200" value="100" step="1" />
             <span id="save-resolution-value">100</span>%
           </div>
           <div class="modal-control-row">
-            <span class="modal-label">尺寸</span>
+            <span class="modal-label" data-i18n="save.size">尺寸</span>
             <span id="save-size-info"><span id="save-size-w">-</span> x <span id="save-size-h">-</span></span>
           </div>
           <div class="modal-control-row">
-            <span class="modal-label">预估大小</span>
+            <span class="modal-label" data-i18n="save.estimatedSize">预估大小</span>
             <span id="save-file-size">-</span>
           </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn" id="save-modal-cancel">取消</button>
-        <button class="btn btn-primary" id="save-modal-confirm">保存</button>
+        <button class="btn" id="save-modal-cancel" data-i18n="save.cancel">取消</button>
+        <button class="btn btn-primary" id="save-modal-confirm" data-i18n="save.confirm">保存</button>
       </div>
     </div>
   </div>
 
-  <!-- 信息弹窗 -->
-  <div class="modal-overlay" id="info-modal">
-    <div class="modal-card info-card">
+  <!-- 设置弹窗（Tab：通用 / 关于） -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal-card settings-card">
       <div class="modal-header">
-        <span>关于</span>
-        <button class="modal-close-btn" id="info-modal-close"><i data-lucide="x" class="icon-16"></i></button>
+        <span data-i18n="settings.title">设置</span>
+        <button class="modal-close-btn" id="settings-modal-close"><i data-lucide="x" class="icon-16"></i></button>
       </div>
-      <div class="modal-body info-body">
-        <div class="info-title-row">
-          <img class="info-app-icon" id="info-app-icon" src="" alt="">
-          <span class="info-app-name">拼好图</span>
-          <span class="info-app-name-en">MiniMix</span>
-          <span class="info-version">v<span id="info-version-number"></span></span>
+      <div class="modal-body settings-body">
+        <!-- Tab 切换 -->
+        <div class="settings-tabs">
+          <button class="settings-tab active" data-tab="general" data-i18n="settings.tab.general">通用</button>
+          <button class="settings-tab" data-tab="about" data-i18n="settings.tab.about">关于</button>
         </div>
-        <div class="update-section" id="update-section">
-          <button class="btn btn-update-check" id="btn-check-update" disabled>
-            <i data-lucide="rotate-ccw" class="icon-14"></i>
-            检查更新
-          </button>
-          <label class="auto-update-toggle">
-            <span class="auto-update-label">自动更新</span>
-            <span class="ratio-toggle">
-              <input type="checkbox" id="auto-update-toggle" checked>
-              <span class="ratio-toggle-slider"></span>
-            </span>
-          </label>
+
+        <!-- 通用面板 -->
+        <div class="settings-panel active" id="panel-general">
+          <div class="settings-row">
+            <label class="settings-label" data-i18n="settings.language">语言</label>
+            <select id="setting-language" class="settings-select">
+              <option value="system" data-i18n="settings.language.system">跟随系统</option>
+              <option value="en">English</option>
+              <option value="zh-CN" data-i18n="settings.language.zhCN">简体中文</option>
+            </select>
+          </div>
         </div>
-        <div class="info-divider"></div>
-        <div class="info-section">
-          <span class="info-label">项目地址</span>
-          <a class="info-value info-value-link" href="https://github.com/erelief/MiniMix" rel="noopener noreferrer">
-            <i data-lucide="github" class="icon-14"></i>
-            erelief/MiniMix
-          </a>
+
+        <!-- 关于面板 -->
+        <div class="settings-panel" id="panel-about">
+          <div class="info-title-row">
+            <img class="info-app-icon" id="info-app-icon" src="" alt="">
+            <span class="info-app-name" data-i18n="about.appName">拼好图</span>
+            <span class="info-app-name-en" data-i18n="about.appNameEn">MiniMix</span>
+            <span class="info-version">v<span id="info-version-number"></span></span>
+          </div>
+          <div class="update-section" id="update-section">
+            <button class="btn btn-update-check" id="btn-check-update" disabled>
+              <i data-lucide="rotate-ccw" class="icon-14"></i>
+              <span data-i18n="about.checkUpdate">检查更新</span>
+            </button>
+            <label class="auto-update-toggle">
+              <span class="auto-update-label" data-i18n="about.autoUpdate">自动更新</span>
+              <span class="ratio-toggle">
+                <input type="checkbox" id="auto-update-toggle" checked>
+                <span class="ratio-toggle-slider"></span>
+              </span>
+            </label>
+          </div>
+          <div class="info-divider"></div>
+          <div class="info-section">
+            <span class="info-label" data-i18n="about.repository">项目地址</span>
+            <a class="info-value info-value-link" href="https://github.com/erelief/MiniMix" rel="noopener noreferrer">
+              <i data-lucide="github" class="icon-14"></i>
+              erelief/MiniMix
+            </a>
+          </div>
+          <div class="info-section">
+            <span class="info-label" data-i18n="about.license">开源许可</span>
+            <span class="info-value">MIT License</span>
+          </div>
+          <div class="info-divider hidden" id="deps-divider"></div>
+          <div id="info-deps"></div>
         </div>
-        <div class="info-section">
-          <span class="info-label">开源许可</span>
-          <span class="info-value">MIT License</span>
-        </div>
-        <div class="info-divider hidden" id="deps-divider"></div>
-        <div id="info-deps"></div>
       </div>
     </div>
   </div>

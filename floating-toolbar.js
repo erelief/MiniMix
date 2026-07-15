@@ -3,20 +3,27 @@
 import { createIcons, GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2, Circle, Bold, Italic, ChevronUp, ChevronDown, Stamp, Check, X } from 'lucide';
 import { TOOLS, LINE_STYLES, ARROW_STYLES, NUMBER_STYLES, STAMP_SHAPES, COLOR_PRESETS, hexToRgba } from './annotation.js';
 import { createSlider } from './slider-widget.js';
+import { t, onLanguageChange } from './src/i18n/i18n.js';
 
 const FONT_SIZE_PRESETS = [
   5, 6, 7, 8, 9, 10, 11, 12, 14, 18, 20, 22, 24, 26, 28, 36, 48, 56, 60, 72,
 ];
 
-const TOOL_LABELS = {
-  scaling: '编辑画布',
-  geometry: '几何图形',
-  pencil: '铅笔',
-  arrow: '箭头和线段',
-  stamp: '图章',
-  sequence: '序列号',
-  text: '文本',
-  eraser: '删除',
+// 解析选项标签：优先 labelKey（可翻译），回退静态 label。
+function optionLabel(opt) {
+  if (opt.labelKey) return t(opt.labelKey);
+  return opt.label ?? '';
+}
+
+const TOOL_LABEL_KEYS = {
+  scaling: 'tools.scaling',
+  geometry: 'tools.geometry',
+  pencil: 'tools.pencil',
+  arrow: 'tools.arrow',
+  stamp: 'tools.stamp',
+  sequence: 'tools.sequence',
+  text: 'tools.text',
+  eraser: 'tools.eraser',
 };
 
 const TOOL_ICON_NAMES = {
@@ -85,7 +92,7 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
   TOOLS.forEach(tool => {
     const btn = document.createElement('button');
     btn.className = 'annotation-tool-btn';
-    btn.title = TOOL_LABELS[tool];
+    btn.title = t(TOOL_LABEL_KEYS[tool]);
     if (tool === 'scaling') btn.innerHTML = SCALING_SVG;
     else if (tool === 'eraser') btn.innerHTML = DELETE_SVG;
     else btn.innerHTML = `<i data-lucide="${TOOL_ICON_NAMES[tool]}"></i>`;
@@ -111,7 +118,7 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
 
   const clearAllBtn = document.createElement('button');
   clearAllBtn.className = 'annotation-tool-btn annotation-clear-all-btn';
-  clearAllBtn.title = '一键清除所有标记';
+  clearAllBtn.title = t('annotation.clearAll');
   clearAllBtn.innerHTML = '<i data-lucide="trash-2"></i>';
   clearAllBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -126,6 +133,15 @@ export function createFloatingToolbar(parent, initialTool, getSettings, onToolCh
   createIcons({
     icons: { GripVertical, Square, Pencil, ArrowRight, Hash, Type, Eraser, Trash2, Stamp },
     root: toolbarEl,
+  });
+
+  // 语言变更时刷新工具按钮 tooltip
+  onLanguageChange(() => {
+    btnsContainer.querySelectorAll('.annotation-tool-btn[data-tool]').forEach(btn => {
+      btn.title = t(TOOL_LABEL_KEYS[btn.dataset.tool]);
+    });
+    const ca = btnsContainer.querySelector('.annotation-clear-all-btn');
+    if (ca) ca.title = t('annotation.clearAll');
   });
 
   // Drag behavior
@@ -340,9 +356,10 @@ function positionPopup(popup, trigger) {
 }
 
 export function addInlineSliderValue(container, value, label, min, max, step, toolKey, settingKey, onChange, suffix) {
+  const lbl = label ? t(label) : '';
   const valEl = document.createElement('span');
   valEl.className = 'annotation-inline-value';
-  valEl.textContent = label ? (label + ' ' + value + (suffix || '')) : (value + (suffix || ''));
+  valEl.textContent = lbl ? (lbl + ' ' + value + (suffix || '')) : (value + (suffix || ''));
 
   valEl.addEventListener('mousedown', (e) => e.stopPropagation());
   valEl.addEventListener('click', (e) => e.stopPropagation());
@@ -386,7 +403,7 @@ export function addInlineSliderValue(container, value, label, min, max, step, to
 
     function updateAll(v) {
       headerValue.value = v;
-      valEl.textContent = label ? (label + ' ' + v + (suffix || '')) : (v + (suffix || ''));
+      valEl.textContent = lbl ? (lbl + ' ' + v + (suffix || '')) : (v + (suffix || ''));
       onChange(toolKey, settingKey, v);
     }
 
@@ -421,7 +438,7 @@ export function addInlineSliderValue(container, value, label, min, max, step, to
       if (v !== cur) {
         _activePopupSlider.setValue(v);
         headerValue.value = v;
-        valEl.textContent = label ? (label + ' ' + v + (suffix || '')) : (v + (suffix || ''));
+        valEl.textContent = lbl ? (lbl + ' ' + v + (suffix || '')) : (v + (suffix || ''));
         onChange(toolKey, settingKey, v);
       }
     }, { passive: false });
@@ -436,7 +453,7 @@ export function addInlineSliderValue(container, value, label, min, max, step, to
     if (v !== cur) {
       if (_activePopupSlider) _activePopupSlider.setValue(v);
       if (_activePopupInput) _activePopupInput.value = v;
-      valEl.textContent = label ? (label + ' ' + v + (suffix || '')) : (v + (suffix || ''));
+      valEl.textContent = lbl ? (lbl + ' ' + v + (suffix || '')) : (v + (suffix || ''));
       onChange(toolKey, settingKey, v);
     }
   }, { passive: false });
@@ -461,7 +478,7 @@ export function addInlineShadowControl(panel, value, toolName, onChange) {
     if (_activePopupInput) _activePopupInput.value = v;
   });
   lbl.appendChild(cb);
-  lbl.appendChild(document.createTextNode('投影'));
+  lbl.appendChild(document.createTextNode(t('annotation.shadow')));
 
   let hoverPopup = null;
   let hideTimer = null;
@@ -575,7 +592,7 @@ export function addInlineColorTrigger(container, currentColor, currentOpacity, o
   const dot = document.createElement('span');
   dot.className = 'annotation-inline-color';
   dot.style.setProperty('--dot-color', hexToRgba(currentColor, currentOpacity / 100));
-  dot.title = '颜色';
+  dot.title = t('annotation.color');
 
   dot.addEventListener('mousedown', (e) => e.stopPropagation());
   dot.addEventListener('click', (e) => e.stopPropagation());
@@ -619,7 +636,7 @@ export function addInlineColorTrigger(container, currentColor, currentOpacity, o
     opRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:6px;';
 
     const opLabel = document.createElement('span');
-    opLabel.textContent = '透明度';
+    opLabel.textContent = t('annotation.opacity');
     opLabel.style.cssText = 'font-size:11px;color:var(--text-muted);flex-shrink:0;';
 
     const opSliderContainer = document.createElement('div');
@@ -681,7 +698,7 @@ export function addInlineNumberSpinner(container, value, label, min, max, step, 
 
   const labelEl = document.createElement('span');
   labelEl.className = 'annotation-inline-spinner-label';
-  labelEl.textContent = label;
+  labelEl.textContent = label ? t(label) : '';
   wrapper.appendChild(labelEl);
 
   const valEl = document.createElement('span');
@@ -811,7 +828,7 @@ export function addInlineDropdown(container, { options, currentValue, makePrevie
       trigger.appendChild(makePreview(value));
     } else {
       const opt = options.find(o => o.value === value);
-      trigger.textContent = opt ? opt.label : value;
+      trigger.textContent = opt ? optionLabel(opt) : value;
     }
   }
 
@@ -827,9 +844,9 @@ export function addInlineDropdown(container, { options, currentValue, makePrevie
     if (makePreview) {
       item.appendChild(makePreview(opt.value));
     } else {
-      item.textContent = opt.label;
+      item.textContent = optionLabel(opt);
     }
-    item.title = opt.label;
+    item.title = optionLabel(opt);
     item.addEventListener('click', (ev) => {
       ev.stopPropagation();
       onChange(tk, settingKey, opt.value);
@@ -946,11 +963,11 @@ function buildGeometryMenu(panel, settings, onChange) {
   const rectBtn = document.createElement('button');
   rectBtn.className = 'annotation-shape-btn' + (s.shape !== 'ellipse' ? ' active' : '');
   rectBtn.innerHTML = '<i data-lucide="square"></i>';
-  rectBtn.title = '矩形';
+  rectBtn.title = t('annotation.rectangle');
   const ellipseBtn = document.createElement('button');
   ellipseBtn.className = 'annotation-shape-btn' + (s.shape === 'ellipse' ? ' active' : '');
   ellipseBtn.innerHTML = '<i data-lucide="circle"></i>';
-  ellipseBtn.title = '椭圆';
+  ellipseBtn.title = t('annotation.ellipse');
   rectBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     rectBtn.classList.add('active');
@@ -980,7 +997,7 @@ function buildGeometryMenu(panel, settings, onChange) {
   fillCheckbox.checked = s.fill;
   fillCheckbox.addEventListener('change', () => onChange('geometry', 'fill', fillCheckbox.checked));
   fillLabel.appendChild(fillCheckbox);
-  fillLabel.appendChild(document.createTextNode('填充'));
+  fillLabel.appendChild(document.createTextNode(t('annotation.fill')));
   panel.appendChild(fillLabel);
 
   addInlineSeparator(panel);
@@ -997,12 +1014,12 @@ function buildGeometryMenu(panel, settings, onChange) {
   addInlineSeparator(panel);
 
   // Line width
-  addInlineSliderValue(panel, s.lineWidth, '线条粗细', 1, 75, 1, 'geometry', 'lineWidth', onChange);
+  addInlineSliderValue(panel, s.lineWidth, 'annotation.lineWidth', 1, 75, 1, 'geometry', 'lineWidth', onChange);
 
   // Corner radius (only for non-ellipse)
   if (s.shape !== 'ellipse') {
     addInlineSeparator(panel);
-    addInlineSliderValue(panel, s.cornerRadius, '圆角角度', 0, 90, 1, 'geometry', 'cornerRadius', onChange);
+    addInlineSliderValue(panel, s.cornerRadius, 'annotation.cornerRadius', 0, 90, 1, 'geometry', 'cornerRadius', onChange);
   }
 
   addInlineSeparator(panel);
@@ -1031,7 +1048,7 @@ function buildPencilMenu(panel, settings, onChange) {
 
   addInlineSeparator(panel);
 
-  addInlineSliderValue(panel, s.lineWidth, '线条粗细', 1, 75, 1, 'pencil', 'lineWidth', onChange);
+  addInlineSliderValue(panel, s.lineWidth, 'annotation.lineWidth', 1, 75, 1, 'pencil', 'lineWidth', onChange);
 
   addInlineSeparator(panel);
 
@@ -1068,7 +1085,7 @@ function buildArrowMenu(panel, settings, onChange) {
 
   addInlineSeparator(panel);
 
-  addInlineSliderValue(panel, s.lineWidth, '线条粗细', 1, 75, 1, 'arrow', 'lineWidth', onChange);
+  addInlineSliderValue(panel, s.lineWidth, 'annotation.lineWidth', 1, 75, 1, 'arrow', 'lineWidth', onChange);
 
   addInlineSeparator(panel);
 
@@ -1085,7 +1102,7 @@ function buildSequenceMenu(panel, settings, onChange) {
 
   panel.classList.add('annotation-submenu-inline');
 
-  addInlineNumberSpinner(panel, s.nextNumber, '起始', 0, 9999, 1, 'sequence', 'nextNumber', onChange);
+  addInlineNumberSpinner(panel, s.nextNumber, 'annotation.startAt', 0, 9999, 1, 'sequence', 'nextNumber', onChange);
 
   addInlineSeparator(panel);
 
@@ -1099,7 +1116,7 @@ function buildSequenceMenu(panel, settings, onChange) {
   addInlineSeparator(panel);
 
   const pct = Math.round(((s.size - 4) / (512 - 4)) * 100) + 1;
-  addInlineSliderValue(panel, pct, '大小', 1, 100, 1, 'sequence', 'size', (toolKey, key, val) => {
+  addInlineSliderValue(panel, pct, 'annotation.size', 1, 100, 1, 'sequence', 'size', (toolKey, key, val) => {
     const pixelSize = Math.round(4 + (val - 1) * (512 - 4) / (100 - 1));
     onChange(toolKey, 'size', pixelSize);
   }, '%');
@@ -1123,11 +1140,11 @@ function buildStampMenu(panel, settings, onChange) {
   const checkBtn = document.createElement('button');
   checkBtn.className = 'annotation-shape-btn' + (s.shape === 'check' ? ' active' : '');
   checkBtn.innerHTML = '<i data-lucide="check"></i>';
-  checkBtn.title = '勾号';
+  checkBtn.title = t('annotation.check');
   const xBtn = document.createElement('button');
   xBtn.className = 'annotation-shape-btn' + (s.shape === 'x' ? ' active' : '');
   xBtn.innerHTML = '<i data-lucide="x"></i>';
-  xBtn.title = '叉号';
+  xBtn.title = t('annotation.x');
   const updateColorDot = (color) => {
     const dot = panel.querySelector('.annotation-inline-color');
     if (dot) dot.style.setProperty('--dot-color', hexToRgba(color, s.opacity / 100));
@@ -1157,7 +1174,7 @@ function buildStampMenu(panel, settings, onChange) {
 
   // Size: 4–512, displayed as percentage (4=1%, 512=100%)
   const pct = Math.round(((s.size - 4) / (512 - 4)) * 100);
-  addInlineSliderValue(panel, pct, '大小', 1, 100, 1, 'stamp', 'size', (toolKey, key, val) => {
+  addInlineSliderValue(panel, pct, 'annotation.size', 1, 100, 1, 'stamp', 'size', (toolKey, key, val) => {
     const pixelSize = Math.round(4 + (val - 1) * (512 - 4) / (100 - 1));
     onChange(toolKey, 'size', pixelSize);
   }, '%');
@@ -1181,7 +1198,7 @@ function buildTextMenu(panel, settings, onChange) {
   const boldBtn = document.createElement('button');
   boldBtn.className = 'annotation-style-btn' + (s.bold ? ' active' : '');
   boldBtn.innerHTML = '<i data-lucide="bold"></i>';
-  boldBtn.title = '加粗';
+  boldBtn.title = t('annotation.bold');
   boldBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     boldBtn.classList.toggle('active');
@@ -1192,7 +1209,7 @@ function buildTextMenu(panel, settings, onChange) {
   const italicBtn = document.createElement('button');
   italicBtn.className = 'annotation-style-btn' + (s.italic ? ' active' : '');
   italicBtn.innerHTML = '<i data-lucide="italic"></i>';
-  italicBtn.title = '斜体';
+  italicBtn.title = t('annotation.italic');
   italicBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     italicBtn.classList.toggle('active');
@@ -1242,7 +1259,7 @@ function buildEraserMenu(panel, settings, onChange) {
 
   const btn = document.createElement('button');
   btn.className = 'annotation-submenu-btn';
-  btn.innerHTML = '<i data-lucide="trash-2"></i><span>一键清除</span>';
+  btn.innerHTML = `<i data-lucide="trash-2"></i><span>${t('annotation.clearAll')}</span>`;
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     const event = new CustomEvent('annotation-clear-all');
@@ -1261,7 +1278,8 @@ export function updateSliderValue(key, value) {
     } else if (inline.el.tagName === 'INPUT') {
       inline.el.value = value;
     } else {
-      inline.el.textContent = inline.label ? (inline.label + ' ' + value + (inline.suffix || '')) : (value + (inline.suffix || ''));
+      const ilbl = inline.label ? t(inline.label) : '';
+      inline.el.textContent = ilbl ? (ilbl + ' ' + value + (inline.suffix || '')) : (value + (inline.suffix || ''));
     }
   }
   // 同步三级弹窗的滑块和输入框

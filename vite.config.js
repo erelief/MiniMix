@@ -38,6 +38,9 @@ export default defineConfig({
       './image-item.js',
       './undo-manager.js',
       './slider-widget.js',
+      './src/i18n/i18n.js',
+      './src/i18n/locales/en.js',
+      './src/i18n/locales/zh-CN.js',
     ],
   },
   build: {

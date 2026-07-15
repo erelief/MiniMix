@@ -48,23 +48,25 @@ export const TOOLS = ['scaling', 'geometry', 'pencil', 'arrow', 'stamp', 'sequen
 
 // Line style options (5 common styles)
 export const LINE_STYLES = [
-  { value: 'solid', label: '实线' },
-  { value: 'dashed', label: '虚线' },
-  { value: 'dotted', label: '点线' },
-  { value: 'dash-dot', label: '点划线' },
-  { value: 'double', label: '双实线' },
+  { value: 'solid', labelKey: 'annotation.lineStyle.solid' },
+  { value: 'dashed', labelKey: 'annotation.lineStyle.dashed' },
+  { value: 'dotted', labelKey: 'annotation.lineStyle.dotted' },
+  { value: 'dash-dot', labelKey: 'annotation.lineStyle.dash-dot' },
+  { value: 'double', labelKey: 'annotation.lineStyle.double' },
 ];
 
 // Arrow style options
 export const ARROW_STYLES = [
-  { value: 'taper', label: '渐尖箭头' },
-  { value: 'single', label: '单边箭头' },
-  { value: 'double', label: '双边箭头' },
-  { value: 'line', label: '线段头' },
-  { value: 'none', label: '无头' },
+  { value: 'taper', labelKey: 'annotation.arrowStyle.taper' },
+  { value: 'single', labelKey: 'annotation.arrowStyle.single' },
+  { value: 'double', labelKey: 'annotation.arrowStyle.double' },
+  { value: 'line', labelKey: 'annotation.arrowStyle.line' },
+  { value: 'none', labelKey: 'annotation.arrowStyle.none' },
 ];
 
 // Number style options
+// 注：数值格式（阿拉伯/罗马/字母/中文数字）本身是语言中立的字符示例，
+// 不随界面语言变化，因此保留静态 label。
 export const NUMBER_STYLES = [
   { value: 'arabic', label: '1, 2, 3 …' },
   { value: 'roman', label: 'I, II, III …' },
@@ -75,16 +77,16 @@ export const NUMBER_STYLES = [
 
 // Index-badge corner options (canvas-level 批量编号)
 export const INDEX_BADGE_CORNERS = [
-  { value: 'top-left',     label: '左上', icon: 'move-up-left' },
-  { value: 'top-right',    label: '右上', icon: 'move-up-right' },
-  { value: 'bottom-left',  label: '左下', icon: 'move-down-left' },
-  { value: 'bottom-right', label: '右下', icon: 'move-down-right' },
+  { value: 'top-left',     labelKey: 'annotation.corner.top-left',     icon: 'move-up-left' },
+  { value: 'top-right',    labelKey: 'annotation.corner.top-right',    icon: 'move-up-right' },
+  { value: 'bottom-left',  labelKey: 'annotation.corner.bottom-left',  icon: 'move-down-left' },
+  { value: 'bottom-right', labelKey: 'annotation.corner.bottom-right', icon: 'move-down-right' },
 ];
 
 // Stamp shape options
 export const STAMP_SHAPES = [
-  { value: 'check', label: '勾号' },
-  { value: 'x', label: '叉号' },
+  { value: 'check', labelKey: 'annotation.stampShape.check' },
+  { value: 'x', labelKey: 'annotation.stampShape.x' },
 ];
 
 // 9 color presets: 7 rainbow + black + white (desaturated to 80%)

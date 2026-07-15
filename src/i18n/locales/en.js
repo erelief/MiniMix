@@ -1,0 +1,161 @@
+/**
+ * en.js — English locale (development base / fallback language)
+ *
+ * 这个文件是权威源：所有翻译键首先在这里定义。
+ * scripts/check-i18n.js 会校验 zh-CN.js 与本文件键集完全一致。
+ */
+export default {
+  // ---- 工具栏 (index.html tooltips + 按钮) ----
+  'toolbar.addImage': 'Add image',
+  'toolbar.addSolid': 'Add solid color image',
+  'toolbar.solidColor': 'Choose solid color',
+  'toolbar.layoutHorizontal': 'Horizontal',
+  'toolbar.layoutVertical': 'Vertical',
+  'toolbar.adjustRatio': 'Adjust ratio of all images',
+  'toolbar.lockCanvasRatio': 'Lock global canvas ratio',
+  'toolbar.indexBadge': 'Number all images',
+  'toolbar.indexBadgeProps': 'Numbering properties',
+  'toolbar.undo': 'Undo (Ctrl+Z)',
+  'toolbar.redo': 'Redo (Ctrl+Shift+Z)',
+  'toolbar.clearCanvas': 'Clear canvas',
+  'toolbar.copy': 'Copy to clipboard (Ctrl+C)',
+  'toolbar.save': 'Save',
+  'toolbar.settings': 'Settings',
+  'toolbar.ratioAutoCrop': 'New images auto-adjust to the selected ratio',
+
+  // ---- 状态栏 (main.js updateStatusBar) ----
+  'status.empty': 'Drag or click to add images and start',
+  'status.summary': '{count} images · {w} × {h}',
+  'status.scaledDown': ' (scaled down)',
+  'status.canvasRatioLocked': 'Canvas ratio locked: {label}',
+  'status.editHint': 'Drag to rearrange, click to edit',
+  'status.copyFailed': 'Copy failed',
+  'status.copied': 'Copied to clipboard',
+  'status.saved': 'Saved: {path}',
+  'save.fileTypeImage': 'Image',
+
+  // ---- 拖拽覆盖层 / 复制进度 ----
+  'drop.release': 'Release to add image',
+  'copy.inProgress': 'Copying…',
+  'status.scaledToast': 'Output exceeds 5K pixels, auto-scaled',
+
+  // ---- 保存弹窗 ----
+  'save.title': 'Save image',
+  'save.titleSingle': 'Save single image',
+  'save.format': 'Format',
+  'save.formatPng': 'PNG (lossless)',
+  'save.formatJpg': 'JPG (lossy)',
+  'save.compress': 'Compress',
+  'save.losslessCompress': 'Lossless compression (slower)',
+  'save.quality': 'Quality',
+  'save.resolution': 'Resolution',
+  'save.size': 'Size',
+  'save.estimatedSize': 'Estimated size',
+  'save.cancel': 'Cancel',
+  'save.confirm': 'Save',
+  'save.saving': 'Saving',
+  'save.failed': 'Save failed',
+  'save.progress.composing': 'Composing image',
+  'save.progress.converting': 'Converting data',
+  'save.progress.converted': 'Data converted',
+  'save.progress.writing': 'Writing file',
+  'save.progress.compressing': 'Compressing PNG',
+  'save.progress.done': 'Saved',
+
+  // ---- 设置弹窗 ----
+  'settings.title': 'Settings',
+  'settings.tab.general': 'General',
+  'settings.tab.about': 'About',
+  'settings.language': 'Language',
+  'settings.language.system': 'System',
+  'settings.language.zhCN': '简体中文',
+
+  // ---- 关于 (info) 内容 ----
+  'about.appName': '拼好图',
+  'about.appNameEn': 'MiniMix',
+  'app.windowTitle': 'MiniMix',
+  'about.checkUpdate': 'Check for updates',
+  'about.autoUpdate': 'Auto-update',
+  'about.repository': 'Repository',
+  'about.license': 'License',
+
+  // ---- 更新模块 ----
+  'update.checking': 'Checking…',
+  'update.upToDate': 'Up to date',
+  'update.newVersion': 'New version v{version} available',
+  'update.view': 'View',
+  'update.install': 'Update now',
+  'update.preparingDownload': 'Preparing download…',
+  'update.downloading': 'Downloading…',
+  'update.installing': 'Installing…',
+  'update.restarting': 'Restarting…',
+  'update.failed': 'Update failed',
+  'update.checkFailed': 'Check failed',
+  'update.failedWithMsg': 'Failed: {msg}',
+
+  // ---- 标注工具 (floating-toolbar TOOL_LABELS) ----
+  'tools.scaling': 'Edit canvas',
+  'tools.geometry': 'Shapes',
+  'tools.pencil': 'Pencil',
+  'tools.arrow': 'Arrows & lines',
+  'tools.stamp': 'Stamp',
+  'tools.sequence': 'Sequence',
+  'tools.text': 'Text',
+  'tools.eraser': 'Delete',
+
+  // ---- 标注菜单标签 (floating-toolbar) ----
+  'annotation.clearAll': 'Clear all marks',
+  'annotation.clear': 'Clear',
+  'annotation.clearAllNumbers': 'Clear all numbers',
+  'annotation.color': 'Color',
+  'annotation.opacity': 'Opacity',
+  'annotation.shadow': 'Shadow',
+  'annotation.fill': 'Fill',
+  'annotation.lineWidth': 'Line width',
+  'annotation.cornerRadius': 'Corner radius',
+  'annotation.rectangle': 'Rectangle',
+  'annotation.ellipse': 'Ellipse',
+  'annotation.check': 'Check',
+  'annotation.x': 'X',
+  'annotation.bold': 'Bold',
+  'annotation.italic': 'Italic',
+  'annotation.size': 'Size',
+  'annotation.startAt': 'Start',
+
+  // 标注下拉选项 (annotation.js 常量)
+  'annotation.lineStyle.solid': 'Solid',
+  'annotation.lineStyle.dashed': 'Dashed',
+  'annotation.lineStyle.dotted': 'Dotted',
+  'annotation.lineStyle.dash-dot': 'Dash-dot',
+  'annotation.lineStyle.double': 'Double',
+  'annotation.arrowStyle.taper': 'Tapered',
+  'annotation.arrowStyle.single': 'Single arrow',
+  'annotation.arrowStyle.double': 'Double arrow',
+  'annotation.arrowStyle.line': 'Line cap',
+  'annotation.arrowStyle.none': 'No head',
+  'annotation.corner.top-left': 'Top-left',
+  'annotation.corner.top-right': 'Top-right',
+  'annotation.corner.bottom-left': 'Bottom-left',
+  'annotation.corner.bottom-right': 'Bottom-right',
+  'annotation.stampShape.check': 'Check',
+  'annotation.stampShape.x': 'X',
+
+  // ---- 画布上渲染的文字 (stitch-engine) ----
+  'canvas.resetRatio': 'Original ratio',
+  'canvas.resetFreeRatio': 'Free ratio',
+  'ratio.newImageAutoAdjust': 'Auto-adjust new images',
+
+  // ---- 画布上悬停 title (main.js) ----
+  'canvas.title.saveExit': 'Save & exit',
+  'canvas.title.reset': 'Reset',
+  'canvas.title.presetRatio': 'Preset ratio',
+  'canvas.title.rotate': 'Drag to rotate',
+  'canvas.title.pan': 'Pan',
+  'canvas.title.editText': 'Click to edit text',
+  'canvas.title.placeStamp': 'Click to place stamp',
+  'canvas.title.placeSequence': 'Click to place number',
+  'canvas.title.edit': 'Edit',
+  'canvas.title.copy': 'Copy',
+  'canvas.title.download': 'Download this image',
+  'canvas.title.delete': 'Delete',
+};
