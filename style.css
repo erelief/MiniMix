@@ -61,6 +61,76 @@
   --shadow-lg: 0 16px 48px rgba(8, 9, 14, 0.55);
   --shadow-accent: var(--shadow-sm);  /* neutral systems use plain shadow */
   --focus-ring: #8b95a8;               /* bright-enough neutral for keyboard focus */
+
+  /* 画布专用：canvas 无法读 CSS var，由 JS 经 getComputedStyle 读取 */
+  --canvas-trough: #101218;            /* 拼接凹槽底色（比 --bg-primary 更深） */
+  --canvas-chrome: #ffffff;            /* 凹槽上的前景色：图标 / 实线文字 / 边框 */
+  --canvas-chrome-soft: rgba(255, 255, 255, 0.6);   /* 凹槽上的弱化前景：虚线边框等 */
+  --canvas-chrome-text: rgba(255, 255, 255, 0.85);  /* 浮层菜单正文文字 */
+  --canvas-menu-bg: rgba(30, 30, 30, 0.95);         /* 浮层菜单背景（比例菜单） */
+  --canvas-btn-idle: rgba(0, 0, 0, 0.45);           /* 画布按钮未悬停时的背景 */
+  --canvas-dim: rgba(0, 0, 0, 0.55);                /* 编辑模式：非编辑图片的遮罩 */
+}
+
+/* ========== 浅色配色（冷中性蓝灰，与深色同色系） ========== */
+:root[data-theme="light"] {
+  --bg-primary: #f4f5f7;   /* main app background */
+  --bg-secondary: #ffffff; /* toolbar, modals, cards */
+  --bg-tertiary: #e9ebef;  /* raised buttons, dropdowns, inputs */
+  --surface-hi: #dfe2e8;   /* hover surfaces */
+  --text-primary: #1a1d24;
+  --text-secondary: #5a6172;
+  --text-muted: #8a909c;
+
+  --accent: #3a414f;          /* neutral active fill */
+  --accent-hover: #2e343f;
+  --accent-soft: rgba(90, 100, 118, 0.16);
+  --accent-glow: transparent;
+  --danger: #d9424a;
+  --danger-hover: #c93a41;
+  --danger-soft: rgba(217, 66, 74, 0.12);
+  --border-color: #d8dbe0;
+  --border-hi: #c4c8d0;
+  --disabled-bg: #eceef1;
+  --disabled-text: #a0a6b0;
+  --success: #2fa47a;
+  --error: #d9424a;
+  --shadow-sm: 0 1px 3px rgba(20, 24, 32, 0.08);
+  --shadow-md: 0 4px 14px rgba(20, 24, 32, 0.10);
+  --shadow-lg: 0 16px 48px rgba(20, 24, 32, 0.14);
+  --shadow-accent: var(--shadow-sm);
+  --focus-ring: #6b7488;
+
+  /* 画布专用（浅色）：凹槽略深于背景，前景文字/图标用深色 */
+  --canvas-trough: #e8eaef;
+  --canvas-chrome: #2a2e36;
+  --canvas-chrome-soft: rgba(40, 44, 52, 0.6);
+  --canvas-chrome-text: rgba(40, 44, 52, 0.88);
+  --canvas-menu-bg: rgba(255, 255, 255, 0.95);
+  --canvas-btn-idle: rgba(0, 0, 0, 0.28);
+  --canvas-dim: rgba(255, 255, 255, 0.62);
+}
+
+/* ========== 浅色模式适配：修正深色专用硬编码（滚动条/高光/噪点） ========== */
+:root[data-theme="light"] {
+  /* 内嵌滚动条：深色用半透白，浅色改用半透黑 */
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+:root[data-theme="light"] .annotation-fontsize-dropdown {
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+:root[data-theme="light"] .annotation-fontsize-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+:root[data-theme="light"] .annotation-fontsize-dropdown::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+}
+:root[data-theme="light"] .annotation-fontsize-dropdown::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.28);
+}
+/* 噪点纹理在浅色下减弱（深色噪点在浅底上过于明显） */
+:root[data-theme="light"] body::after {
+  opacity: 0.12;
 }
 
 * {

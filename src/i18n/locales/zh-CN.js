@@ -68,6 +68,10 @@ export default {
   'settings.language': '语言',
   'settings.language.system': '跟随系统',
   'settings.language.zhCN': '简体中文',
+  'settings.appearance': '外观',
+  'settings.appearance.system': '跟随系统',
+  'settings.appearance.light': '浅色',
+  'settings.appearance.dark': '深色',
 
   // ---- 关于内容 ----
   'about.appName': '拼好图',

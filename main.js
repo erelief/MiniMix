@@ -16,12 +16,14 @@ import {
   exportImage,
   generatePreviewDataURL,
   exportSingleImage,
+  invalidateCanvasColors,
   generateSingleImagePreviewDataURL,
   formatFileSize,
   ASPECT_RATIOS,
   ratioLabel,
 } from './stitch-engine.js';
 import { t, onLanguageChange, getLanguageSetting, setLanguageSetting } from './src/i18n/i18n.js';
+import { onThemeChange, getThemeSetting, setThemeSetting } from './src/theme.js';
 
 createIcons({
   icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Settings, Plus, Image: ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket, Hash, Eraser, ChevronDown },
@@ -1702,6 +1704,12 @@ onLanguageChange(() => {
   recomputeAndRender();
 });
 
+// 主题变更时：清画布颜色缓存并重绘（画布颜色读取 CSS 变量，需随主题重绘）
+onThemeChange(() => {
+  invalidateCanvasColors();
+  recomputeAndRender();
+});
+
 // 启动时按当前语言填充静态文本
 applyI18n();
 
@@ -1737,6 +1745,15 @@ if (langSelect) {
   langSelect.value = getLanguageSetting();
   langSelect.addEventListener('change', () => {
     setLanguageSetting(langSelect.value);
+  });
+}
+
+// 主题选择下拉（浅色 / 深色 / 跟随系统）
+const themeSelect = document.getElementById('setting-theme');
+if (themeSelect) {
+  themeSelect.value = getThemeSetting();
+  themeSelect.addEventListener('change', () => {
+    setThemeSetting(themeSelect.value);
   });
 }
 

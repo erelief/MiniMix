@@ -8,6 +8,27 @@ import { t } from './src/i18n/i18n.js';
 
 const MAX_PIXELS = 5120 * 5120;
 
+// ========== 画布取色：canvas 无法读 CSS 变量，经 getComputedStyle 读取主题 token ==========
+// 主题切换时由 main.js 的 onThemeChange → recomputeAndRender 触发重绘，取最新值。
+let _canvasColorsCache = null;
+function readCanvasColors() {
+  if (_canvasColorsCache) return _canvasColorsCache;
+  const cs = getComputedStyle(document.documentElement);
+  const v = (name) => cs.getPropertyValue(name).trim();
+  _canvasColorsCache = {
+    trough:       v('--canvas-trough'),
+    chrome:       v('--canvas-chrome'),
+    chromeSoft:   v('--canvas-chrome-soft'),
+    chromeText:   v('--canvas-chrome-text'),
+    menuBg:       v('--canvas-menu-bg'),
+    btnIdle:      v('--canvas-btn-idle'),
+    dim:          v('--canvas-dim'),
+  };
+  return _canvasColorsCache;
+}
+/** 主题变更后清缓存，使下次渲染读到新值（由 main.js onThemeChange 调用） */
+export function invalidateCanvasColors() { _canvasColorsCache = null; }
+
 // Compute downscale factor so total pixels stay within MAX_PIXELS.
 function computeScale(w, h) {
   const totalPixels = w * h;
@@ -303,8 +324,8 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 画布底色：深蓝凹槽，比外部区域更深
-  ctx.fillStyle = '#101218';
+  // 画布底色：凹槽（随主题变化）
+  ctx.fillStyle = readCanvasColors().trough;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // ========== 拖拽模式：实时重排预览 ==========
@@ -643,8 +664,8 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   // ========== 普通模式 ==========
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 画布底色：深蓝凹槽，比外部区域更深
-  ctx.fillStyle = '#101218';
+  // 画布底色：凹槽（随主题变化）
+  ctx.fillStyle = readCanvasColors().trough;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // 缩放上下文：绘制图片（布局空间坐标）
@@ -698,15 +719,16 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   // 恢复到画布像素空间
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-  // 编辑模式：非编辑图片变暗
+  // 编辑模式：非编辑图片遮罩（随主题变化）
   if (editModeImageId !== -1) {
+    const dim = readCanvasColors().dim;
     for (const img of images) {
       if (img.id === editModeImageId) continue;
       const bx = img.x * scaleFactor;
       const by = img.y * scaleFactor;
       const bw = img.renderWidth * scaleFactor;
       const bh = img.renderHeight * scaleFactor;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.fillStyle = dim;
       ctx.fillRect(bx, by, bw, bh);
     }
   }
@@ -736,7 +758,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       ctx.save();
       if (isScaling) {
         ctx.setLineDash([DASH_SEGMENT / displayScale, DASH_GAP / displayScale]);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.strokeStyle = readCanvasColors().chromeSoft;
         ctx.lineWidth = DASH_BORDER_WIDTH / displayScale;
       } else {
         ctx.strokeStyle = CANVAS_HOVER_BORDER;
@@ -800,7 +822,7 @@ function drawIconButton(ctx, img, opts) {
   img[propPrefix + 'BtnSize'] = BTN_SIZE;
 
   ctx.save();
-  ctx.fillStyle = hovered ? accent : 'rgba(0, 0, 0, 0.45)';
+  ctx.fillStyle = hovered ? accent : readCanvasColors().btnIdle;
   ctx.beginPath();
   ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
   ctx.fill();
@@ -842,7 +864,7 @@ function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale) {
     ],
     extraDraw: (c, cx, cy, size) => {
       const s = size / 24;
-      c.fillStyle = '#fff';
+      c.fillStyle = readCanvasColors().chrome;
       c.beginPath();
       c.arc(cx + 13 * s, cy + 7 * s, 1 * s, 0, Math.PI * 2);
       c.fill();
@@ -947,7 +969,7 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
   // 背景 + 阴影
   ctx.shadowColor = 'rgba(0,0,0,0.3)';
   ctx.shadowBlur = 8 / displayScale;
-  ctx.fillStyle = 'rgba(30, 30, 30, 0.95)';
+  ctx.fillStyle = readCanvasColors().menuBg;
   ctx.beginPath();
   ctx.roundRect(canvasX, canvasY, menuW, totalH, 4 / displayScale);
   ctx.fill();
@@ -975,7 +997,7 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
   );
 
   // Header label
-  ctx.fillStyle = isHeaderHovered ? '#fff' : 'rgba(255,255,255,0.85)';
+  ctx.fillStyle = isHeaderHovered ? readCanvasColors().chrome : readCanvasColors().chromeText;
   ctx.font = `${13 / displayScale}px system-ui, sans-serif`;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
@@ -1013,14 +1035,14 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
     const px = ix + (gridItemW - pw) / 2;
     const py = iy + gridItemH * 0.12;
 
-    ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.6)';
+    ctx.strokeStyle = isHovered ? readCanvasColors().chrome : readCanvasColors().chromeSoft;
     ctx.lineWidth = DASH_BORDER_WIDTH / displayScale;
     ctx.beginPath();
     ctx.roundRect(px, py, pw, ph, cornerR);
     ctx.stroke();
 
     // 文字标签
-    ctx.fillStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.85)';
+    ctx.fillStyle = isHovered ? readCanvasColors().chrome : readCanvasColors().chromeText;
     ctx.font = `${11 / displayScale}px system-ui, sans-serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'center';
@@ -1050,7 +1072,7 @@ function drawRotateButton(ctx, img, hovered, scaleFactor, displayScale) {
 function drawSvgIcon(ctx, x, y, size, displayScale, ...pathStrings) {
   const s = size / 24;
   ctx.save();
-  ctx.strokeStyle = '#fff';
+  ctx.strokeStyle = readCanvasColors().chrome;
   ctx.lineWidth = Math.max(DASH_BORDER_WIDTH, HOVER_BORDER_WIDTH / displayScale / s);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -1503,7 +1525,7 @@ export function generateSingleImagePreviewDataURL(img, format = 'png', quality =
 
 function renderInProgressDrawing(ctx, drawing, tool) {
   if (!drawing) return;
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = readCanvasColors().chrome;
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 3]);
   ctx.lineCap = 'round';

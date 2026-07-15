@@ -69,6 +69,10 @@ export default {
   'settings.language': 'Language',
   'settings.language.system': 'System',
   'settings.language.zhCN': '简体中文',
+  'settings.appearance': 'Appearance',
+  'settings.appearance.system': 'System',
+  'settings.appearance.light': 'Light',
+  'settings.appearance.dark': 'Dark',
 
   // ---- 关于 (info) 内容 ----
   'about.appName': '拼好图',

@@ -748,10 +748,17 @@ export function addInlineNumberSpinner(container, value, label, min, max, step, 
 
 // --- Shared preview generators ---
 
+// 预览图标前景色随主题变化（读取 --text-secondary，在工具栏背景上有合适对比度）
+function previewStrokeColor() {
+  const cs = getComputedStyle(document.documentElement);
+  return cs.getPropertyValue('--text-secondary').trim() || '#9ba1ad';
+}
+
 function makeLineStylePreview(value) {
   const cvs = document.createElement('canvas');
   cvs.width = 40; cvs.height = 12;
   const ctx = cvs.getContext('2d');
+  const stroke = previewStrokeColor();
   switch (value) {
     case 'solid': ctx.setLineDash([]); break;
     case 'dashed': ctx.setLineDash([8, 4]); break;
@@ -759,13 +766,13 @@ function makeLineStylePreview(value) {
     case 'dash-dot': ctx.setLineDash([8, 4, 0.5, 4]); break;
     case 'double': {
       ctx.setLineDash([]);
-      ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+      ctx.strokeStyle = stroke; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(40, 3); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, 9); ctx.lineTo(40, 9); ctx.stroke();
       return cvs;
     }
   }
-  ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+  ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(40, 6); ctx.stroke();
   return cvs;
 }
@@ -774,7 +781,8 @@ function makeArrowStylePreview(value) {
   const cvs = document.createElement('canvas');
   cvs.width = 40; cvs.height = 14;
   const ctx = cvs.getContext('2d');
-  ctx.strokeStyle = '#ddd'; ctx.fillStyle = '#ddd'; ctx.lineWidth = 1.5;
+  const stroke = previewStrokeColor();
+  ctx.strokeStyle = stroke; ctx.fillStyle = stroke; ctx.lineWidth = 1.5;
   ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
   const cx1 = 4, cy = 7, cx2 = 36;
 
