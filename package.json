@@ -1,17 +1,19 @@
 {
   "name": "minimix",
   "private": true,
-  "version": "0.4.2",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-i18n.js && vite build",
+    "build": "node scripts/generate-third-party-licenses.mjs && node scripts/check-i18n.js && vite build",
     "check:i18n": "node scripts/check-i18n.js",
+    "gen:licenses": "node scripts/generate-third-party-licenses.mjs",
+    "prepare": "node scripts/generate-third-party-licenses.mjs",
     "preview": "vite preview",
     "sync-version": "node scripts/sync-version.js",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "node scripts/sync-version.js && tauri build"
+    "tauri:build": "node scripts/sync-version.js && node scripts/generate-third-party-licenses.mjs && tauri build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

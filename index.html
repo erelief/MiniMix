@@ -258,11 +258,47 @@
           </div>
           <div class="info-section">
             <span class="info-label" data-i18n="about.license">开源许可</span>
-            <span class="info-value">MIT License</span>
+            <button class="info-value info-value-link info-value-drill" type="button" id="btn-view-license">
+              <span>MIT License</span>
+              <span class="drill-chevron" aria-hidden="true">›</span>
+            </button>
+          </div>
+          <div class="info-section">
+            <span class="info-label" data-i18n="about.thirdParty">第三方许可证</span>
+            <button class="info-value info-value-link info-value-drill" type="button" id="btn-view-third-party">
+              <span data-i18n="about.thirdParty">第三方许可证</span>
+              <span class="drill-chevron" aria-hidden="true">›</span>
+            </button>
           </div>
           <div class="info-divider hidden" id="deps-divider"></div>
           <div id="info-deps"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 许可证全文弹窗（点击「开源许可」打开） -->
+  <div class="modal-overlay text-modal-overlay" id="license-modal">
+    <div class="modal-card text-modal-card">
+      <div class="modal-header">
+        <span data-i18n="about.license">开源许可</span>
+        <button class="modal-close-btn" data-close-modal="license-modal"><i data-lucide="x" class="icon-16"></i></button>
+      </div>
+      <div class="text-modal-body">
+        <pre class="text-modal-pre" id="license-text"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第三方许可证全文弹窗 -->
+  <div class="modal-overlay text-modal-overlay" id="third-party-modal">
+    <div class="modal-card text-modal-card">
+      <div class="modal-header">
+        <span data-i18n="about.thirdParty">第三方许可证</span>
+        <button class="modal-close-btn" data-close-modal="third-party-modal"><i data-lucide="x" class="icon-16"></i></button>
+      </div>
+      <div class="text-modal-body">
+        <pre class="text-modal-pre" id="third-party-text"></pre>
       </div>
     </div>
   </div>

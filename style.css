@@ -1188,6 +1188,96 @@ body {
   text-decoration-color: var(--text-secondary);
 }
 
+/* 许可证/第三方许可证行的「点开看全文」按钮（外观与链接行一致） */
+button.info-value-drill {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  text-decoration: none;
+}
+
+button.info-value-drill .drill-chevron {
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+button.info-value-drill:hover .drill-chevron {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+/* --- 许可证 / 第三方许可证全文弹窗 --- */
+.text-modal-overlay {
+  /* 盖在设置弹窗（z-index: 1000）之上 */
+  z-index: 1001;
+}
+
+.text-modal-card {
+  width: 640px;
+  max-width: 92vw;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.text-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  /* 滚动条与 annotation 下拉统一：深色半透白，浅色半透黑 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) rgba(255, 255, 255, 0.04);
+}
+
+.text-modal-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.text-modal-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+}
+
+.text-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.text-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+:root[data-theme="light"] .text-modal-body {
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+:root[data-theme="light"] .text-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:root[data-theme="light"] .text-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+:root[data-theme="light"] .text-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.text-modal-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  font-family: inherit;
+}
+
 /* --- Update Section --- */
 .update-section {
   display: flex;

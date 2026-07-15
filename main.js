@@ -24,6 +24,11 @@ import {
 } from './stitch-engine.js';
 import { t, onLanguageChange, getLanguageSetting, setLanguageSetting } from './src/i18n/i18n.js';
 import { onThemeChange, getThemeSetting, setThemeSetting } from './src/theme.js';
+// 许可证全文：构建时由 Vite ?raw 内联进 bundle（离线可用、无 CSP 问题，优于 fetch）。
+import licenseText from './LICENSE?raw';
+import thirdPartyText from './public/THIRD-PARTY-LICENSES?raw';
+// 第三方致谢列表：由 scripts/generate-third-party-licenses.mjs 从 lockfile 解析生成。
+import aboutDeps from './src/generated/about-deps.json';
 
 createIcons({
   icons: { ImagePlus, Columns2, Rows2, Grid2x2, Layout, Undo2, Redo2, Trash2, Copy, Download, Settings, Plus, Image: ImageIcon, CircleCheckBig, CircleX, X, RotateCcw, Scale, Stamp, PaintBucket, Hash, Eraser, ChevronDown },
@@ -1764,15 +1769,14 @@ if (themeSelect) {
 (function setupAboutLinks() {
   const container = document.getElementById('info-deps');
   const divider = document.getElementById('deps-divider');
-  if (!container || !divider) return;
 
-  // 动态渲染第三方依赖
-  if (typeof __ABOUT_DEPS__ !== 'undefined' && __ABOUT_DEPS__.length) {
+  // 动态渲染第三方依赖（数据由构建脚本从 lockfile 解析生成）
+  if (container && divider && Array.isArray(aboutDeps) && aboutDeps.length) {
     divider.classList.remove('hidden');
     const depsContainer = document.createElement('div');
     depsContainer.className = 'info-deps-list';
 
-    __ABOUT_DEPS__.forEach(dep => {
+    aboutDeps.forEach(dep => {
       const item = document.createElement('div');
       item.className = 'info-section';
       const nameEl = document.createElement('span');
@@ -1804,6 +1808,45 @@ if (themeSelect) {
         window.open(a.href, '_blank');
       }
     });
+  });
+})();
+
+// ========== 许可证 / 第三方许可证全文弹窗 ==========
+(function setupLicenseModals() {
+  const licenseModal = document.getElementById('license-modal');
+  const thirdPartyModal = document.getElementById('third-party-modal');
+  if (!licenseModal || !thirdPartyModal) return;
+
+  // 填充正文
+  const licenseTextEl = document.getElementById('license-text');
+  const thirdPartyTextEl = document.getElementById('third-party-text');
+  if (licenseTextEl) licenseTextEl.textContent = licenseText;
+  if (thirdPartyTextEl) thirdPartyTextEl.textContent = thirdPartyText;
+
+  // 打开弹窗
+  const btnLicense = document.getElementById('btn-view-license');
+  const btnThirdParty = document.getElementById('btn-view-third-party');
+  btnLicense?.addEventListener('click', () => licenseModal.classList.add('modal-open'));
+  btnThirdParty?.addEventListener('click', () => thirdPartyModal.classList.add('modal-open'));
+
+  // 统一关闭：关闭按钮、点击遮罩、ESC
+  const closeByAttr = (root) => {
+    root.querySelectorAll('[data-close-modal]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = document.getElementById(btn.dataset.closeModal);
+        target?.classList.remove('modal-open');
+      });
+    });
+  };
+  [licenseModal, thirdPartyModal].forEach(m => {
+    m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('modal-open'); });
+    closeByAttr(m);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      licenseModal.classList.remove('modal-open');
+      thirdPartyModal.classList.remove('modal-open');
+    }
   });
 })();
 

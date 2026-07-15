@@ -81,6 +81,7 @@ export default {
   'about.autoUpdate': '自动更新',
   'about.repository': '项目地址',
   'about.license': '开源许可',
+  'about.thirdParty': '第三方许可证',
 
   // ---- 更新模块 ----
   'update.checking': '检查中…',

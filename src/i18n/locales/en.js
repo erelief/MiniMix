@@ -82,6 +82,7 @@ export default {
   'about.autoUpdate': 'Auto-update',
   'about.repository': 'Repository',
   'about.license': 'License',
+  'about.thirdParty': 'Third-party licenses',
 
   // ---- 更新模块 ----
   'update.checking': 'Checking…',

@@ -5,12 +5,9 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __APP_ICON__: JSON.stringify('./images/minimix-logo.png'),
-    __ABOUT_DEPS__: JSON.stringify([
-      { name: 'Tauri', version: '2', url: 'https://tauri.app' },
-      { name: 'Vite', version: '6', url: 'https://vite.dev' },
-      { name: 'Lucide', url: 'https://lucide.dev' },
-      { name: 'OxiPNG', version: '10', url: 'https://github.com/oxipng/oxipng' },
-    ]),
+    // 第三方致谢列表改由 scripts/generate-third-party-licenses.mjs 从 lockfile
+    // 解析生成到 src/generated/about-deps.json，main.js 通过 import 引入。
+    // 不再用 define 注入，避免手写版本号随 npm update 漂移。
   },
   base: './',
   server: {
