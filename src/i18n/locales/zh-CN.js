@@ -162,4 +162,6 @@ export default {
   'canvas.title.copy': '复制',
   'canvas.title.download': '下载此图片',
   'canvas.title.delete': '删除',
+  'canvas.title.maximize': '最大化',
+  'canvas.title.minimize': '退出最大化',
 };

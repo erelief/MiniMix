@@ -235,9 +235,11 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     layoutMode = 'horizontal',
     editModeImageId = -1,
     editAction = null,
+    maximizedImageId = -1,
     hoveredSaveBtn = false,
     hoveredResetBtn = false,
     hoveredRotateBtn = false,
+    hoveredMinMaxBtn = false,
     hoveredRatioBtn = false,
     showRatioMenu = false,
     hoveredRatioIndex = -1,
@@ -279,16 +281,65 @@ export function renderPreview(canvas, layoutResult, options = {}) {
 
   const scaledW = width * scaleFactor;
   const scaledH = height * scaleFactor;
-  const displayScale = Math.min(containerW / scaledW, containerH / scaledH, 1);
+  let displayScale = Math.min(containerW / scaledW, containerH / scaledH, 1);
+
+  // 单图最大化：让被编辑图铺满工作区。displayScale 基于被编辑图的渲染尺寸计算，
+  // 其余图自然溢出 #workspace(overflow:hidden) 被裁掉。布局/sf 不变量保持不变，
+  // 因此 hitTest / 鼠标坐标 / 裁剪数学全部自动一致。
+  // 注意：这里允许 displayScale > 1（放大被编辑图以铺满工作区，会带来一定像素放大）。
+  const maximizedImg = maximizedImageId !== -1
+    ? (layoutResult._images || []).find(i => i.id === maximizedImageId)
+    : null;
+  if (maximizedImg) {
+    const mW = maximizedImg.renderWidth * scaleFactor;
+    const mH = maximizedImg.renderHeight * scaleFactor;
+    if (mW > 0 && mH > 0) {
+      displayScale = Math.min(containerW / mW, containerH / mH);
+    }
+  }
 
   canvas.width = Math.round(scaledW);
   canvas.height = Math.round(scaledH);
-  canvas.style.width = Math.round(scaledW * displayScale) + 'px';
-  canvas.style.height = Math.round(scaledH * displayScale) + 'px';
-  canvas.style.position = '';
-  canvas.style.top = '';
-  canvas.style.left = '';
-  canvas.style.boxShadow = '';
+  const cssW = Math.round(scaledW * displayScale);
+  const cssH = Math.round(scaledH * displayScale);
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+
+  // 编辑模式（含最大化）：画布一律用 absolute 定位，由 JS 居中，匹配 flex 在 content-box 内的居中效果。
+  // 这样在「普通单图编辑 ↔ 最大化」之间切换时位置连续，配合 CSS transition 实现平滑缩放动画。
+  // 最大化时进一步偏移，使被编辑图本身（而非整张拼图）居中于工作区。
+  if (editModeImageId !== -1) {
+    // 容器的 padding/border（clientWidth 含 padding 不含 border；左/上还需加 border）
+    const cs = getComputedStyle(container);
+    const [pl, pr, pt, pb, bl, bt] = [
+      'paddingLeft', 'paddingRight', 'paddingTop', 'paddingBottom',
+      'borderLeftWidth', 'borderTopWidth',
+    ].map(k => parseFloat(cs[k]) || 0);
+    const innerW = container.clientWidth - pl - pr;
+    const innerH = container.clientHeight - pt - pb;
+    // 把给定 CSS 宽度居中到 content-box（再加 border 偏移到 border-box 原点）
+    const centerX = (w) => pl + bl + (innerW - w) / 2;
+    const centerY = (h) => pt + bt + (innerH - h) / 2;
+
+    let offsetX = centerX(cssW);
+    let offsetY = centerY(cssH);
+    if (maximizedImg) {
+      // 让被编辑图（而非整张画布）在工作区居中：补偿被编辑图在画布内的偏移
+      const sf = scaleFactor * displayScale;
+      offsetX = centerX(maximizedImg.renderWidth * sf) - maximizedImg.x * sf;
+      offsetY = centerY(maximizedImg.renderHeight * sf) - maximizedImg.y * sf;
+    }
+    canvas.style.position = 'absolute';
+    canvas.style.left = Math.round(offsetX) + 'px';
+    canvas.style.top = Math.round(offsetY) + 'px';
+    canvas.style.boxShadow = maximizedImg ? 'none' : '';
+  } else {
+    // 普通模式：交给 flex 居中
+    canvas.style.position = '';
+    canvas.style.top = '';
+    canvas.style.left = '';
+    canvas.style.boxShadow = '';
+  }
 
   const images = layoutResult._images || [];
 
@@ -309,6 +360,9 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     img.rotateBtnX = 0;
     img.rotateBtnY = 0;
     img.rotateBtnSize = 0;
+    img.minmaxBtnX = 0;
+    img.minmaxBtnY = 0;
+    img.minmaxBtnSize = 0;
     img.ratioBtnX = 0;
     img.ratioBtnY = 0;
     img.ratioBtnSize = 0;
@@ -720,15 +774,17 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
   // 编辑模式：非编辑图片遮罩（随主题变化）
+  // 最大化模式下用不透明背景遮住其余图，确保"只能看到这一张图"。
   if (editModeImageId !== -1) {
-    const dim = readCanvasColors().dim;
+    const colors = readCanvasColors();
+    const fill = maximizedImageId !== -1 ? colors.trough : colors.dim;
     for (const img of images) {
       if (img.id === editModeImageId) continue;
       const bx = img.x * scaleFactor;
       const by = img.y * scaleFactor;
       const bw = img.renderWidth * scaleFactor;
       const bh = img.renderHeight * scaleFactor;
-      ctx.fillStyle = dim;
+      ctx.fillStyle = fill;
       ctx.fillRect(bx, by, bw, bh);
     }
   }
@@ -773,8 +829,8 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     }
   }
 
-  // 编辑模式按钮（保存+复位+旋转）
-  // 标注工具（非 scaling）下隐藏比例和旋转按钮，仅显示保存和复位
+  // 编辑模式按钮（保存+复位+旋转+最大化）
+  // 标注工具（非 scaling）下隐藏比例和旋转按钮，仅显示保存和复位（最大化始终显示）
   if (editModeImageId !== -1) {
     const eImg = images.find(i => i.id === editModeImageId);
     if (eImg) {
@@ -787,6 +843,7 @@ export function renderPreview(canvas, layoutResult, options = {}) {
         }
       }
       drawEditModeButtons(ctx, eImg, hoveredSaveBtn, scaleFactor, displayScale);
+      drawMinMaxButton(ctx, eImg, hoveredMinMaxBtn, maximizedImageId !== -1, scaleFactor, displayScale);
     }
   } else {
     // 普通模式：编辑按钮和关闭按钮
@@ -884,6 +941,33 @@ function drawEditModeButtons(ctx, img, saveHovered, scaleFactor, displayScale) {
     accent: 'rgba(78, 204, 163, 0.9)',
     displayScale,
     iconPaths: ['m16 17 5-5-5-5', 'M21 12H9', 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'],
+  });
+}
+
+// 最大化/最小化按钮：默认在保存按钮左侧；若与比例按钮重叠则下移到保存按钮下方。
+// 图标随状态切换（maximize-2 / minimize-2）
+function drawMinMaxButton(ctx, img, hovered, isMaximized, scaleFactor, displayScale) {
+  const sf = scaleFactor * displayScale;
+  const saveScreenX = (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING;
+  const topY = img.y * sf + BTN_PADDING;
+  const besideSaveX = saveScreenX - BTN_SIZE - BTN_PADDING;
+  // 仅当比例按钮已绘制（scaling 工具）且与左侧位置水平重叠时下移
+  const ratioSize = img.ratioBtnSize || 0;
+  const overlap = ratioSize > 0 &&
+    besideSaveX < img.ratioBtnX + ratioSize + BTN_PADDING &&
+    besideSaveX + BTN_SIZE > img.ratioBtnX - BTN_PADDING;
+  drawIconButton(ctx, img, {
+    screenX: overlap ? saveScreenX : besideSaveX,
+    screenY: overlap ? topY + BTN_SIZE + BTN_PADDING : topY,
+    propPrefix: 'minmax',
+    hovered,
+    accent: CANVAS_BTN_ACCENT,
+    displayScale,
+    // maximize-2:  M15 3h6v6 / m21 3-7 7 / m3 21 7-7 / M9 21H3v-6
+    // minimize-2:  m14 10 7-7 / M20 10h-6V4 / m3 21 7-7 / M4 14h6v6
+    iconPaths: isMaximized
+      ? ['m14 10 7-7', 'M20 10h-6V4', 'm3 21 7-7', 'M4 14h6v6']
+      : ['M15 3h6v6', 'm21 3-7 7', 'm3 21 7-7', 'M9 21H3v-6'],
   });
 }
 
@@ -1315,6 +1399,8 @@ export function hitTest(mouseX, mouseY, images, hoveredImageId = -1, editModeIma
       }
       // 保存按钮
       if (btnHit(img, 'save')) return { image: img, isSaveBtn: true };
+      // 最大化/最小化按钮（保存按钮左侧）
+      if (btnHit(img, 'minmax')) return { image: img, isMinMaxBtn: true };
       // 复位按钮
       if (btnHit(img, 'reset')) return { image: img, isResetBtn: true };
       // 比例按钮

@@ -65,10 +65,14 @@ const state = {
   editModeImageId: -1,
   editAction: null,       // null | 'crop' | 'pan' | 'rotate'
   editActionStart: null,  // { mouseX, mouseY, ...初始值 }
+  // 单图最大化（仅编辑模式内）：把当前编辑图放大到整个工作区
+  maximizedImageId: -1,   // -1 = 非最大化；否则 = 被最大化的图 id（与 editModeImageId 一致）
+  _maximizeAnimating: false, // 最大化进入/退出动画进行中，临时屏蔽画布交互
   hoveredSaveBtn: false,
   hoveredResetBtn: false,
   hoveredRotateBtn: false,
   hoveredRatioBtn: false,
+  hoveredMinMaxBtn: false,
   showRatioMenu: false,
   hoveredRatioIndex: -1,
   hoveredEditBtnId: -1,
@@ -162,6 +166,15 @@ const solidColorDot = document.getElementById('solid-color-dot');
 // 把手条宽度（屏幕像素，始终预留）
 const GRIP_STRIP = 32;
 const GRIP_ICON_SIZE = 28;
+
+// 单图最大化进入/退出动画时长（毫秒）与 CSS transition 表达式
+const MAXIMIZE_ANIM_MS = 260;
+const MAXIMIZE_EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
+const CANVAS_MAXIMIZE_TRANSITION =
+  `width ${MAXIMIZE_ANIM_MS}ms ${MAXIMIZE_EASE}, ` +
+  `height ${MAXIMIZE_ANIM_MS}ms ${MAXIMIZE_EASE}, ` +
+  `top ${MAXIMIZE_ANIM_MS}ms ${MAXIMIZE_EASE}, ` +
+  `left ${MAXIMIZE_ANIM_MS}ms ${MAXIMIZE_EASE}`;
 
 const layoutBtns = document.querySelectorAll('[data-layout]');
 const btnUndo = document.getElementById('btn-undo');
@@ -276,6 +289,14 @@ function clearGripHandles() {
 function updateCanvasMargin() {
   const ws = canvas.parentElement;
   if (state.images.length === 0 || !state.lastLayoutResult || state.lastLayoutResult.width === 0) {
+    ws.style.paddingLeft = '';
+    ws.style.paddingTop = '';
+    ws.style.paddingRight = '';
+    ws.style.paddingBottom = '';
+    return;
+  }
+  // 单图最大化时不显示把手条，去掉 padding 让被编辑图尽量铺满工作区
+  if (state.maximizedImageId !== -1) {
     ws.style.paddingLeft = '';
     ws.style.paddingTop = '';
     ws.style.paddingRight = '';
@@ -609,9 +630,11 @@ function recomputeAndRender() {
     layoutMode: state.layoutMode,
     editModeImageId: state.editModeImageId,
     editAction: state.editAction,
+    maximizedImageId: state.maximizedImageId,
     hoveredSaveBtn: state.hoveredSaveBtn,
     hoveredResetBtn: state.hoveredResetBtn,
     hoveredRotateBtn: state.hoveredRotateBtn,
+    hoveredMinMaxBtn: state.hoveredMinMaxBtn,
     hoveredRatioBtn: state.hoveredRatioBtn,
     showRatioMenu: state.showRatioMenu,
     hoveredRatioIndex: state.hoveredRatioIndex,
@@ -642,7 +665,11 @@ function recomputeAndRender() {
   updateCanvasMargin();
   // 确保没有被强加偏移和残留动画
   canvas.style.transform = '';
-  canvas.style.transition = 'none';
+  // 单图最大化进入/退出动画进行中时，保留由 animateMaximizeTransition 设置的尺寸过渡；
+  // 其余常规重渲染（拖拽/悬停/裁切实时刷新）一律禁用过渡以保证即时反馈。
+  if (!state._maximizeAnimating) {
+    canvas.style.transition = 'none';
+  }
   // 强制同步重排，确保清除残留 transform 后后续帧从零开始
   canvas.getBoundingClientRect();
   updateGripHandles();
@@ -1169,10 +1196,14 @@ function restoreSnapshot(snapshot) {
   } else {
     state.editModeImageId = -1;
   }
+  // 最大化是纯视图状态，不进入撤销栈：撤销/重做后退出最大化
+  state.maximizedImageId = -1;
+  state.hoveredMinMaxBtn = false;
   state.editAction = null;
   state.editActionStart = null;
   layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === state.layoutMode));
   recomputeAndRender();
+  if (state.editModeImageId !== -1) positionFloatingToolbar();
   updateButtonStates();
 }
 
@@ -2095,20 +2126,7 @@ function enterEditMode(image) {
   state.floatingToolbar.show();
   state.floatingToolbar.updateActiveTool('scaling');
   // 将工具栏定位在编辑图片内部靠近底部（workspace 相对坐标）
-  if (state.lastLayoutResult) {
-    const sf = getLayoutScale();
-    const canvasRect = canvas.getBoundingClientRect();
-    const workspaceRect = workspaceEl.getBoundingClientRect();
-    const canvasOffX = canvasRect.left - workspaceRect.left;
-    const canvasOffY = canvasRect.top - workspaceRect.top;
-    const imgLeft = canvasOffX + image.x * sf;
-    const imgTop = canvasOffY + image.y * sf;
-    const imgW = image.renderWidth * sf;
-    const imgH = image.renderHeight * sf;
-    const cx = imgLeft + imgW / 2;
-    const cy = imgTop + imgH - 50;
-    state.floatingToolbar.setPosition(cx - 160, Math.max(imgTop, cy));
-  }
+  positionFloatingToolbar();
 }
 
 function exitEditMode() {
@@ -2122,10 +2140,12 @@ function exitEditMode() {
   state.editModeImageId = -1;
   state.editAction = null;
   state.editActionStart = null;
+  state.maximizedImageId = -1;
   state.hoveredSaveBtn = false;
   state.hoveredResetBtn = false;
   state.hoveredRotateBtn = false;
   state.hoveredRatioBtn = false;
+  state.hoveredMinMaxBtn = false;
   state.showRatioMenu = false;
   state.hoveredRatioIndex = -1;
 
@@ -2136,6 +2156,81 @@ function exitEditMode() {
   layoutBtns.forEach(b => { b.disabled = false; b.classList.remove('disabled'); });
   updateButtonStates();
   recomputeAndRender();
+}
+
+// 单图最大化：仅作为显示层切换，不进入撤销栈。
+// 编辑的 editState 仍是同一份，退出最大化后效果与普通单图编辑一致。
+function enterMaximizeMode(image) {
+  if (!image) return;
+  state.maximizedImageId = image.id;
+  state.hoveredMinMaxBtn = true;
+  // 进入：工具栏目标位置只依赖工作区尺寸，可立即贴到工作区底部
+  positionFloatingToolbar();
+  animateMaximizeTransition();
+}
+
+function exitMaximizeMode() {
+  state.maximizedImageId = -1;
+  state.hoveredMinMaxBtn = false;
+  // 退出：工具栏需回到被编辑图内底部，但画布在动画中 rect 不稳，留待动画结束后定位
+  animateMaximizeTransition();
+}
+
+// 最大化进入/退出过渡：先触发一次常规渲染（应用新尺寸），再用 CSS transition 平滑过渡。
+// 动画期间临时屏蔽画布交互，避免在尺寸变化中点击错位；结束后再把浮动工具栏贴到新位置。
+const MAXIMIZE_TRANSITION_PROPS = ['width', 'height', 'top', 'left'];
+function animateMaximizeTransition() {
+  state._maximizeAnimating = true;
+  // 让本次渲染应用新尺寸时启用过渡
+  canvas.style.transition = CANVAS_MAXIMIZE_TRANSITION;
+  recomputeAndRender();
+  const done = () => {
+    state._maximizeAnimating = false;
+    canvas.removeEventListener('transitionend', onEnd);
+    clearTimeout(fallback);
+    // 清掉本次专用的尺寸过渡，避免后续常规渲染误触发动画
+    canvas.style.transition = 'none';
+    // 过渡结束后画布尺寸稳定，再把工具栏贴到最终位置
+    positionFloatingToolbar();
+  };
+  const onEnd = (e) => {
+    // 只响应尺寸相关的过渡结束
+    if (e.target === canvas && MAXIMIZE_TRANSITION_PROPS.includes(e.propertyName)) {
+      done();
+    }
+  };
+  // 兜底：即使 transitionend 未触发，也能在超时后恢复交互
+  const fallback = setTimeout(done, MAXIMIZE_ANIM_MS + 80);
+  canvas.addEventListener('transitionend', onEnd);
+}
+
+// 重新定位浮动标注工具栏：最大化时贴在工作区底部居中；普通单图编辑时回到图内底部。
+function positionFloatingToolbar() {
+  if (!state.floatingToolbar || !state.lastLayoutResult) return;
+  const workspaceEl = document.getElementById('workspace');
+  const img = state.images.find(i => i.id === state.editModeImageId);
+  if (!img) return;
+  const sf = getLayoutScale();
+  const canvasRect = canvas.getBoundingClientRect();
+  const workspaceRect = workspaceEl.getBoundingClientRect();
+  const canvasOffX = canvasRect.left - workspaceRect.left;
+  const canvasOffY = canvasRect.top - workspaceRect.top;
+
+  let cx, cy;
+  if (state.maximizedImageId !== -1) {
+    // 最大化：工具栏放到工作区底部居中
+    cx = workspaceRect.width / 2;
+    cy = workspaceRect.height - 60;
+  } else {
+    // 普通单图编辑：工具栏回到被编辑图内底部
+    const imgLeft = canvasOffX + img.x * sf;
+    const imgTop = canvasOffY + img.y * sf;
+    const imgW = img.renderWidth * sf;
+    const imgH = img.renderHeight * sf;
+    cx = imgLeft + imgW / 2;
+    cy = imgTop + imgH - 50;
+  }
+  state.floatingToolbar.setPosition(cx - 160, Math.max(8, cy));
 }
 
 function resetEdit(img) {
@@ -2289,6 +2384,8 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 function handleEditModeMouseDown(e, mx, my) {
+  // 最大化进入/退出动画进行中：屏蔽画布交互，避免尺寸变化期间点击错位
+  if (state._maximizeAnimating) return;
   // 打断可能存在的平滑回弹动画，确保拖拽坐标计算绝对准确
   canvas.style.transition = '';
 
@@ -2312,6 +2409,13 @@ function handleEditModeMouseDown(e, mx, my) {
 
   if (hit.isResetBtn) {
     resetEdit(img);
+    return;
+  }
+
+  // 最大化/最小化按钮：仅在编辑模式下出现，两种工具（scaling/标注）都有效
+  if (hit.isMinMaxBtn) {
+    if (state.maximizedImageId === img.id) exitMaximizeMode();
+    else enterMaximizeMode(img);
     return;
   }
 
@@ -3569,22 +3673,28 @@ canvas.addEventListener('mousemove', (e) => {
     const prevSave = state.hoveredSaveBtn;
     const prevReset = state.hoveredResetBtn;
     const prevRotate = state.hoveredRotateBtn;
+    const prevMinMax = state.hoveredMinMaxBtn;
 
     state.hoveredSaveBtn = hit.isSaveBtn || false;
     state.hoveredResetBtn = hit.isResetBtn || false;
     state.hoveredRotateBtn = hit.isRotateBtn || false;
+    state.hoveredMinMaxBtn = hit.isMinMaxBtn || false;
     const prevRatio = state.hoveredRatioBtn;
     const prevRatioIndex = state.hoveredRatioIndex;
     state.hoveredRatioBtn = hit.isRatioBtn || false;
     state.hoveredRatioIndex = hit.isRatioMenuItem ? hit.ratioMenuIndex : -1;
 
-    if (state.hoveredSaveBtn !== prevSave || state.hoveredResetBtn !== prevReset || state.hoveredRotateBtn !== prevRotate || state.hoveredRatioBtn !== prevRatio || state.hoveredRatioIndex !== prevRatioIndex) {
+    if (state.hoveredSaveBtn !== prevSave || state.hoveredResetBtn !== prevReset || state.hoveredRotateBtn !== prevRotate || state.hoveredMinMaxBtn !== prevMinMax || state.hoveredRatioBtn !== prevRatio || state.hoveredRatioIndex !== prevRatioIndex) {
       recomputeAndRender();
     }
 
     // 光标 & tooltip
     if (hit.isSaveBtn) { canvas.style.cursor = 'pointer'; canvas.title = t('canvas.title.saveExit'); }
     else if (hit.isResetBtn) { canvas.style.cursor = 'pointer'; canvas.title = t('canvas.title.reset'); }
+    else if (hit.isMinMaxBtn) {
+      canvas.style.cursor = 'pointer';
+      canvas.title = state.maximizedImageId !== -1 ? t('canvas.title.minimize') : t('canvas.title.maximize');
+    }
     else if (state.activeAnnotationTool === 'scaling') {
       if (hit.isRatioBtn) { canvas.style.cursor = 'pointer'; canvas.title = t('canvas.title.presetRatio'); }
       else if (hit.isRatioMenuItem) { canvas.style.cursor = 'pointer'; canvas.title = ''; }
@@ -3783,6 +3893,10 @@ document.addEventListener('keydown', (e) => {
       state.showRatioMenu = false;
       state.hoveredRatioIndex = -1;
       recomputeAndRender();
+    } else if (state.maximizedImageId !== -1) {
+      // 最大化中：先退回普通单图编辑
+      e.preventDefault();
+      exitMaximizeMode();
     } else {
       e.preventDefault();
       exitEditMode();

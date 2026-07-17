@@ -163,4 +163,6 @@ export default {
   'canvas.title.copy': 'Copy',
   'canvas.title.download': 'Download this image',
   'canvas.title.delete': 'Delete',
+  'canvas.title.maximize': 'Maximize',
+  'canvas.title.minimize': 'Exit maximize',
 };
