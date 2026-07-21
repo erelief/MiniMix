@@ -24,9 +24,11 @@ import {
 } from './stitch-engine.js';
 import { t, onLanguageChange, getLanguageSetting, setLanguageSetting } from './src/i18n/i18n.js';
 import { onThemeChange, getThemeSetting, setThemeSetting } from './src/theme.js';
-// 许可证全文：构建时由 Vite ?raw 内联进 bundle（离线可用、无 CSP 问题，优于 fetch）。
-import licenseText from './LICENSE?raw';
-import thirdPartyText from './public/THIRD-PARTY-LICENSES?raw';
+// 许可证全文：以 JSON 形式引入（src/generated/license-text.json）。
+// 原先用 ?raw 静态导入 LICENSE / THIRD-PARTY-LICENSES，但 main.js 在 optimizeDeps.include
+// 中被 esbuild 预构建，esbuild 不识别 ?raw 查询会把许可证文本当 JS 解析，导致 dev 启动失败。
+// JSON 导入在 dev/build 下都走标准模块解析，无此问题。
+import licenseTextJson from './src/generated/license-text.json';
 // 第三方致谢列表：由 scripts/generate-third-party-licenses.mjs 从 lockfile 解析生成。
 import aboutDeps from './src/generated/about-deps.json';
 
@@ -1848,11 +1850,11 @@ if (themeSelect) {
   const thirdPartyModal = document.getElementById('third-party-modal');
   if (!licenseModal || !thirdPartyModal) return;
 
-  // 填充正文
+  // 填充正文（来自 src/generated/license-text.json）
   const licenseTextEl = document.getElementById('license-text');
   const thirdPartyTextEl = document.getElementById('third-party-text');
-  if (licenseTextEl) licenseTextEl.textContent = licenseText;
-  if (thirdPartyTextEl) thirdPartyTextEl.textContent = thirdPartyText;
+  if (licenseTextEl) licenseTextEl.textContent = licenseTextJson.license;
+  if (thirdPartyTextEl) thirdPartyTextEl.textContent = licenseTextJson.thirdParty;
 
   // 打开弹窗
   const btnLicense = document.getElementById('btn-view-license');
@@ -2110,9 +2112,11 @@ function enterEditMode(image) {
           const s = state.toolSettings.text;
           syncTextInputStyles(_textInput, s, getLayoutScale());
           if (_textAnnot) {
+            const editedImg = state.images.find(i => i.id === _textAnnot.imageId);
+            const imgScale = getImageLocalScale(editedImg) || 1;
             _textAnnot.bold = s.bold;
             _textAnnot.italic = s.italic;
-            _textAnnot.fontSize = s.fontSize;
+            _textAnnot.fontSize = s.fontSize / imgScale; // image-local，与渲染/commit 一致
             _textAnnot.color = s.color;
             _textAnnot.fontFamily = s.fontFamily;
             _textAnnot.shadow = s.shadow;
@@ -2192,6 +2196,8 @@ function animateMaximizeTransition() {
     canvas.style.transition = 'none';
     // 过渡结束后画布尺寸稳定，再把工具栏贴到最终位置
     positionFloatingToolbar();
+    // 若文字编辑态正开启，按新尺寸重新定位输入框 + 同步框内字号
+    refreshTextInputPlacement();
   };
   const onEnd = (e) => {
     // 只响应尺寸相关的过渡结束
@@ -2556,6 +2562,10 @@ function syncTextInputStyles(el, s, sf) {
   if (s.bold) fontStyle += 'bold ';
   if (s.italic) fontStyle += 'italic ';
   el.style.font = `${fontStyle}${visualFs}px ${s.fontFamily}`;
+  // font shorthand 会把 line-height 重置为 normal，这里显式恢复成与 canvas 一致的 1.2，
+  // 否则 textarea（含浏览器原生选中高亮）按 normal 行盒放字，与 canvas 按 1.2 算的
+  // half-leading 不一致 → 选中蓝块与渲染字垂直错位。
+  el.style.lineHeight = String(TEXT_LINE_HEIGHT);
   el.style.minHeight = `${visualFs * TEXT_LINE_HEIGHT}px`;
   el.style.caretColor = s.color;
   // Auto-size: shrink to 1px so scrollWidth/scrollHeight reflect content size
@@ -2565,6 +2575,27 @@ function syncTextInputStyles(el, s, sf) {
   const h = el.scrollHeight + TEXT_PAD;
   el.style.height = h + 'px';
   return h;
+}
+
+// 文字编辑态开启时，textarea wrapper 的位置/字号是基于当时的 getLayoutScale() 算的。
+// 一旦发生视图缩放（单图最大化进入/退出），必须按新的 sf 重新定位并同步字号，否则
+// 输入框会停在旧位置（甚至跑到画布外）、框内字号也与画布实时渲染的字对不上。
+function refreshTextInputPlacement() {
+  if (!_textWrapper || !_textAnnot || !_textInput) return;
+  const img = state.images.find(i => i.id === _textAnnot.imageId);
+  if (!img) return;
+  const sf = getLayoutScale();
+  const canvasRect = canvas.getBoundingClientRect();
+  const workspaceRect = document.getElementById('workspace').getBoundingClientRect();
+  const canvasOffX = canvasRect.left - workspaceRect.left;
+  const canvasOffY = canvasRect.top - workspaceRect.top;
+  const currentRotation = img.editState ? img.editState.rotation : 0;
+  const delta = currentRotation - (_textAnnot.rotation != null ? _textAnnot.rotation : 0);
+  const rel = pixelToLayoutCoords(_textAnnot.x, _textAnnot.y, img, delta);
+  _textWrapper.style.left = (canvasOffX + sf * (img.x + rel.x)) + 'px';
+  _textWrapper.style.top = (canvasOffY + sf * (img.y + rel.y)) + 'px';
+  // 同步字号（用当前工具设置，与 _textAnnot.fontSize 一致）
+  syncTextInputStyles(_textInput, state.toolSettings.text, sf);
 }
 
 function createTextInput(x, y, imageId, existingAnnot) {
@@ -2678,7 +2709,11 @@ function createTextInput(x, y, imageId, existingAnnot) {
         const h = syncTextInputStyles(_textInput, state.toolSettings.text, getLayoutScale());
         grip.style.height = h + 'px';
       }
-      if (_textAnnot) _textAnnot.fontSize = newV;
+      if (_textAnnot) {
+        const editedImg = state.images.find(i => i.id === _textAnnot.imageId);
+        const imgScale = getImageLocalScale(editedImg) || 1;
+        _textAnnot.fontSize = newV / imgScale; // image-local，与渲染/commit 一致
+      }
       recomputeAndRender();
     };
     const onUp = () => {
@@ -2698,6 +2733,10 @@ function createTextInput(x, y, imageId, existingAnnot) {
   ta.value = initialText;
   ta.style.border = `${TEXT_PAD}px dashed rgba(255, 255, 255, 0.18)`;
   ta.style.margin = `${-TEXT_PAD}px 0 0 ${-TEXT_PAD}px`;
+  // padding 置 0：textarea 内容区原点要与 canvas 画字原点（wrapper 原点）重合，
+  // 否则浏览器原生选中高亮会相对 canvas 字偏移 padding 这么多，出现"两层错位"。
+  // margin:-TEXT_PAD + border:TEXT_PAD 让虚线边框落在 wrapper 外，内容区仍从原点开始。
+  ta.style.padding = '0';
   ta.style.minHeight = `${visualFontSize * TEXT_LINE_HEIGHT}px`;
   ta.style.caretColor = s.color;
 
@@ -2705,6 +2744,9 @@ function createTextInput(x, y, imageId, existingAnnot) {
   if (s.bold) fontStyle += 'bold ';
   if (s.italic) fontStyle += 'italic ';
   ta.style.font = `${fontStyle}${visualFontSize}px ${s.fontFamily}`;
+  // font shorthand 重置 line-height 为 normal，显式恢复成 1.2（与 canvas drawTextAnnotation
+  // 的 lineHeight = fontSize * 1.2 一致），否则选中高亮按 normal 行盒放、与 canvas 字错位。
+  ta.style.lineHeight = String(TEXT_LINE_HEIGHT);
   ta.style.color = 'transparent';
   ta.style.background = 'transparent';
   ta.style.boxShadow = 'none';
@@ -2717,7 +2759,11 @@ function createTextInput(x, y, imageId, existingAnnot) {
     x, y, imageId,
     annotId: existingAnnot ? existingAnnot.id : null,
     rotation: existingAnnot ? (existingAnnot.rotation != null ? existingAnnot.rotation : (img.editState ? img.editState.rotation : 0)) : (img.editState ? img.editState.rotation : 0),
-    bold: s.bold, italic: s.italic, fontSize: s.fontSize,
+    bold: s.bold, italic: s.italic,
+    // _textAnnot.fontSize 存 image-local（与最终 commit 一致：s.fontSize / imgScale），
+    // 因为它用于 drawImageAnnotations 在 scale(imgScale) 上下文里渲染正在编辑的文字。
+    // 若直接存 s.fontSize，渲染会多乘一次 imgScale，与 textarea（用 s.fontSize*sf）不一致。
+    fontSize: s.fontSize / imgScale,
     color: s.color, fontFamily: s.fontFamily, shadow: s.shadow,
     opacity: s.opacity,
     text: initialText,

@@ -298,8 +298,16 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     }
   }
 
-  canvas.width = Math.round(scaledW);
-  canvas.height = Math.round(scaledH);
+  // 最大化下 displayScale > 1：若仍用 scaledW 作画布缓冲，按钮图标等 UI 会被 CSS 放大
+  // 成马赛克。提升缓冲分辨率到与显示一致（bufferScale = displayScale），UI 按像素绘制清晰；
+  // 图片内容本身仍按 editState 变换放大（视图放大的预期效果，轻微插值可接受）。
+  // 其余模式 bufferScale = 1，行为与原先完全一致。
+  const bufferScale = (maximizedImg && displayScale > 1) ? displayScale : 1;
+  // 按钮/边框等 UI 的「CSS↔缓冲」比例：普通模式 = displayScale；最大化 = 1（缓冲已=CSS）。
+  const btnScale = displayScale / bufferScale;
+
+  canvas.width = Math.round(scaledW * bufferScale);
+  canvas.height = Math.round(scaledH * bufferScale);
   const cssW = Math.round(scaledW * displayScale);
   const cssH = Math.round(scaledH * displayScale);
   canvas.style.width = cssW + 'px';
@@ -722,8 +730,9 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   ctx.fillStyle = readCanvasColors().trough;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 缩放上下文：绘制图片（布局空间坐标）
-  if (scaleFactor < 1) ctx.scale(scaleFactor, scaleFactor);
+  // 缩放上下文：绘制图片（布局空间坐标）。最大化下 bufferScale>1，需一并放大，使布局
+  // 坐标映射到提升后的缓冲分辨率。
+  ctx.scale(scaleFactor * bufferScale, scaleFactor * bufferScale);
 
   // 绘制所有图片
   for (const img of images) {
@@ -780,10 +789,10 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     const fill = maximizedImageId !== -1 ? colors.trough : colors.dim;
     for (const img of images) {
       if (img.id === editModeImageId) continue;
-      const bx = img.x * scaleFactor;
-      const by = img.y * scaleFactor;
-      const bw = img.renderWidth * scaleFactor;
-      const bh = img.renderHeight * scaleFactor;
+      const bx = img.x * scaleFactor * bufferScale;
+      const by = img.y * scaleFactor * bufferScale;
+      const bw = img.renderWidth * scaleFactor * bufferScale;
+      const bh = img.renderHeight * scaleFactor * bufferScale;
       ctx.fillStyle = fill;
       ctx.fillRect(bx, by, bw, bh);
     }
@@ -793,13 +802,13 @@ export function renderPreview(canvas, layoutResult, options = {}) {
   if (hoveredImageId !== -1) {
     const hImg = images.find(i => i.id === hoveredImageId);
     if (hImg) {
-      const bx = hImg.x * scaleFactor;
-      const by = hImg.y * scaleFactor;
-      const bw = hImg.renderWidth * scaleFactor;
-      const bh = hImg.renderHeight * scaleFactor;
+      const bx = hImg.x * scaleFactor * bufferScale;
+      const by = hImg.y * scaleFactor * bufferScale;
+      const bw = hImg.renderWidth * scaleFactor * bufferScale;
+      const bh = hImg.renderHeight * scaleFactor * bufferScale;
       ctx.save();
       ctx.strokeStyle = CANVAS_HOVER_BORDER;
-      ctx.lineWidth = HOVER_BORDER_WIDTH / displayScale;
+      ctx.lineWidth = HOVER_BORDER_WIDTH / btnScale;
       ctx.strokeRect(bx, by, bw, bh);
       ctx.restore();
     }
@@ -813,16 +822,16 @@ export function renderPreview(canvas, layoutResult, options = {}) {
       const isScaling = !activeAnnotationTool || activeAnnotationTool === 'scaling';
       ctx.save();
       if (isScaling) {
-        ctx.setLineDash([DASH_SEGMENT / displayScale, DASH_GAP / displayScale]);
+        ctx.setLineDash([DASH_SEGMENT / btnScale, DASH_GAP / btnScale]);
         ctx.strokeStyle = readCanvasColors().chromeSoft;
-        ctx.lineWidth = DASH_BORDER_WIDTH / displayScale;
+        ctx.lineWidth = DASH_BORDER_WIDTH / btnScale;
       } else {
         ctx.strokeStyle = CANVAS_HOVER_BORDER;
-        ctx.lineWidth = HOVER_BORDER_WIDTH / displayScale;
+        ctx.lineWidth = HOVER_BORDER_WIDTH / btnScale;
       }
       ctx.strokeRect(
-        eImg.x * scaleFactor, eImg.y * scaleFactor,
-        eImg.renderWidth * scaleFactor, eImg.renderHeight * scaleFactor
+        eImg.x * scaleFactor * bufferScale, eImg.y * scaleFactor * bufferScale,
+        eImg.renderWidth * scaleFactor * bufferScale, eImg.renderHeight * scaleFactor * bufferScale
       );
       ctx.setLineDash([]);
       ctx.restore();
@@ -835,24 +844,24 @@ export function renderPreview(canvas, layoutResult, options = {}) {
     const eImg = images.find(i => i.id === editModeImageId);
     if (eImg) {
       if (!activeAnnotationTool || activeAnnotationTool === 'scaling') {
-        drawResetButton(ctx, eImg, hoveredResetBtn, scaleFactor, displayScale);
-        drawRatioButton(ctx, eImg, hoveredRatioBtn, scaleFactor, displayScale);
-        drawRotateButton(ctx, eImg, hoveredRotateBtn, scaleFactor, displayScale);
+        drawResetButton(ctx, eImg, hoveredResetBtn, scaleFactor, displayScale, bufferScale);
+        drawRatioButton(ctx, eImg, hoveredRatioBtn, scaleFactor, displayScale, bufferScale);
+        drawRotateButton(ctx, eImg, hoveredRotateBtn, scaleFactor, displayScale, bufferScale);
         if (showRatioMenu) {
-          drawRatioMenu(ctx, eImg, hoveredRatioIndex, displayScale);
+          drawRatioMenu(ctx, eImg, hoveredRatioIndex, displayScale, bufferScale);
         }
       }
-      drawEditModeButtons(ctx, eImg, hoveredSaveBtn, scaleFactor, displayScale);
-      drawMinMaxButton(ctx, eImg, hoveredMinMaxBtn, maximizedImageId !== -1, scaleFactor, displayScale);
+      drawEditModeButtons(ctx, eImg, hoveredSaveBtn, scaleFactor, displayScale, bufferScale);
+      drawMinMaxButton(ctx, eImg, hoveredMinMaxBtn, maximizedImageId !== -1, scaleFactor, displayScale, bufferScale);
     }
   } else {
     // 普通模式：编辑按钮和关闭按钮
     for (const img of images) {
       if (img.id === hoveredImageId) {
-        drawEditButton(ctx, img, hoveredEditBtnId === img.id, scaleFactor, displayScale);
-        drawDuplicateButton(ctx, img, hoveredDupBtnId === img.id, scaleFactor, displayScale);
-        drawDownloadButton(ctx, img, hoveredDlBtnId === img.id, scaleFactor, displayScale);
-        drawCloseButton(ctx, img, hoveredCloseId === img.id, scaleFactor, displayScale);
+        drawEditButton(ctx, img, hoveredEditBtnId === img.id, scaleFactor, displayScale, bufferScale);
+        drawDuplicateButton(ctx, img, hoveredDupBtnId === img.id, scaleFactor, displayScale, bufferScale);
+        drawDownloadButton(ctx, img, hoveredDlBtnId === img.id, scaleFactor, displayScale, bufferScale);
+        drawCloseButton(ctx, img, hoveredCloseId === img.id, scaleFactor, displayScale, bufferScale);
       }
     }
   }
@@ -867,12 +876,13 @@ const BTN_PADDING = 4;
 
 // Draw a square icon button at screen coords (screenX, screenY) and record its
 // hit-rect on img as img[propPrefix+'BtnX/Y/Size'].
-// opts: { screenX, screenY, propPrefix, hovered, accent, iconPaths, displayScale, extraDraw? }
+// opts: { screenX, screenY, propPrefix, hovered, accent, iconPaths, cssToBufferScale, extraDraw? }
+// cssToBufferScale = CSS像素→缓冲像素的倒数比例（按钮按 CSS 像素定尺寸，转缓冲绘制）。
 function drawIconButton(ctx, img, opts) {
-  const { screenX, screenY, propPrefix, hovered, accent, iconPaths, displayScale, extraDraw } = opts;
-  const canvasSize = BTN_SIZE / displayScale;
-  const canvasX = screenX / displayScale;
-  const canvasY = screenY / displayScale;
+  const { screenX, screenY, propPrefix, hovered, accent, iconPaths, cssToBufferScale, extraDraw } = opts;
+  const canvasSize = BTN_SIZE / cssToBufferScale;
+  const canvasX = screenX / cssToBufferScale;
+  const canvasY = screenY / cssToBufferScale;
 
   img[propPrefix + 'BtnX'] = screenX;
   img[propPrefix + 'BtnY'] = screenY;
@@ -881,14 +891,14 @@ function drawIconButton(ctx, img, opts) {
   ctx.save();
   ctx.fillStyle = hovered ? accent : readCanvasColors().btnIdle;
   ctx.beginPath();
-  ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / displayScale);
+  ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / cssToBufferScale);
   ctx.fill();
-  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, displayScale, ...iconPaths);
+  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, cssToBufferScale, ...iconPaths);
   if (extraDraw) extraDraw(ctx, canvasX, canvasY, canvasSize);
   ctx.restore();
 }
 
-function drawEditButton(ctx, img, hovered, scaleFactor, displayScale) {
+function drawEditButton(ctx, img, hovered, scaleFactor, displayScale, bufferScale) {
   const sf = scaleFactor * displayScale;
   drawIconButton(ctx, img, {
     screenX: img.x * sf + BTN_PADDING,
@@ -896,7 +906,7 @@ function drawEditButton(ctx, img, hovered, scaleFactor, displayScale) {
     propPrefix: 'edit',
     hovered,
     accent: CANVAS_BTN_ACCENT,
-    displayScale,
+    cssToBufferScale: displayScale / bufferScale,
     iconPaths: [
       'M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
       'M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z',
@@ -906,14 +916,14 @@ function drawEditButton(ctx, img, hovered, scaleFactor, displayScale) {
 
 // ========== 复制按钮（编辑按钮右侧） ==========
 
-function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale) {
+function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale, bufferScale) {
   drawIconButton(ctx, img, {
     screenX: img.editBtnX + BTN_SIZE + BTN_PADDING,
     screenY: img.editBtnY,
     propPrefix: 'dup',
     hovered,
     accent: CANVAS_BTN_ACCENT,
-    displayScale,
+    cssToBufferScale: displayScale / bufferScale,
     iconPaths: [
       'm22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16',
       'M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2',
@@ -931,7 +941,7 @@ function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale) {
 
 // ========== 编辑模式按钮（保存退出 + 复位） ==========
 
-function drawEditModeButtons(ctx, img, saveHovered, scaleFactor, displayScale) {
+function drawEditModeButtons(ctx, img, saveHovered, scaleFactor, displayScale, bufferScale) {
   const sf = scaleFactor * displayScale;
   drawIconButton(ctx, img, {
     screenX: (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING,
@@ -939,14 +949,14 @@ function drawEditModeButtons(ctx, img, saveHovered, scaleFactor, displayScale) {
     propPrefix: 'save',
     hovered: saveHovered,
     accent: 'rgba(78, 204, 163, 0.9)',
-    displayScale,
+    cssToBufferScale: displayScale / bufferScale,
     iconPaths: ['m16 17 5-5-5-5', 'M21 12H9', 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'],
   });
 }
 
 // 最大化/最小化按钮：默认在保存按钮左侧；若与比例按钮重叠则下移到保存按钮下方。
 // 图标随状态切换（maximize-2 / minimize-2）
-function drawMinMaxButton(ctx, img, hovered, isMaximized, scaleFactor, displayScale) {
+function drawMinMaxButton(ctx, img, hovered, isMaximized, scaleFactor, displayScale, bufferScale) {
   const sf = scaleFactor * displayScale;
   const saveScreenX = (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING;
   const topY = img.y * sf + BTN_PADDING;
@@ -962,7 +972,7 @@ function drawMinMaxButton(ctx, img, hovered, isMaximized, scaleFactor, displaySc
     propPrefix: 'minmax',
     hovered,
     accent: CANVAS_BTN_ACCENT,
-    displayScale,
+    cssToBufferScale: displayScale / bufferScale,
     // maximize-2:  M15 3h6v6 / m21 3-7 7 / m3 21 7-7 / M9 21H3v-6
     // minimize-2:  m14 10 7-7 / M20 10h-6V4 / m3 21 7-7 / M4 14h6v6
     iconPaths: isMaximized
@@ -971,7 +981,7 @@ function drawMinMaxButton(ctx, img, hovered, isMaximized, scaleFactor, displaySc
   });
 }
 
-function drawResetButton(ctx, img, resetHovered, scaleFactor, displayScale) {
+function drawResetButton(ctx, img, resetHovered, scaleFactor, displayScale, bufferScale) {
   const sf = scaleFactor * displayScale;
   drawIconButton(ctx, img, {
     screenX: img.x * sf + BTN_PADDING,
@@ -979,14 +989,14 @@ function drawResetButton(ctx, img, resetHovered, scaleFactor, displayScale) {
     propPrefix: 'reset',
     hovered: resetHovered,
     accent: CANVAS_BTN_ACCENT,
-    displayScale,
+    cssToBufferScale: displayScale / bufferScale,
     iconPaths: ['m2 9 3-3 3 3', 'M13 18H7a2 2 0 0 1-2-2V6', 'm22 15-3 3-3-3', 'M11 6h6a2 2 0 0 1 2 2v10'],
   });
 }
 
 // ========== 比例按钮（复位按钮右侧） ==========
 
-function drawRatioButton(ctx, img, hovered, scaleFactor, displayScale) {
+function drawRatioButton(ctx, img, hovered, scaleFactor, displayScale, bufferScale) {
   const sf = scaleFactor * displayScale;
   const topY = img.y * sf + BTN_PADDING;
   const hScreenX = img.resetBtnX + BTN_SIZE + BTN_PADDING;
@@ -998,7 +1008,7 @@ function drawRatioButton(ctx, img, hovered, scaleFactor, displayScale) {
     propPrefix: 'ratio',
     hovered,
     accent: CANVAS_BTN_ACCENT,
-    displayScale,
+    cssToBufferScale: displayScale / bufferScale,
     iconPaths: [
       'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
       'M12 9v11',
@@ -1024,24 +1034,26 @@ function getRatioMenuTotalHeight() {
   return RATIO_MENU_HEADER_H + gridRows * RATIO_MENU_GRID_H;
 }
 
-function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
+function drawRatioMenu(ctx, img, hoveredIndex, displayScale, bufferScale) {
+  // btnScale = CSS↔缓冲像素比例（菜单按 CSS 像素定尺寸，转缓冲绘制）
+  const btnScale = displayScale / bufferScale;
   const menuX = img.ratioBtnX;
   let menuY = img.ratioBtnY + img.ratioBtnSize + RATIO_MENU_PADDING;
-  const menuW = RATIO_MENU_W / displayScale;
-  const headerH = RATIO_MENU_HEADER_H / displayScale;
-  const gridItemH = RATIO_MENU_GRID_H / displayScale;
-  const gridItemW = RATIO_GRID_ITEM_W / displayScale;
-  const totalH = getRatioMenuTotalHeight() / displayScale;
+  const menuW = RATIO_MENU_W / btnScale;
+  const headerH = RATIO_MENU_HEADER_H / btnScale;
+  const gridItemH = RATIO_MENU_GRID_H / btnScale;
+  const gridItemW = RATIO_GRID_ITEM_W / btnScale;
+  const totalH = getRatioMenuTotalHeight() / btnScale;
   const gridRows = Math.ceil((ASPECT_RATIOS.length - RATIO_GRID_START_INDEX) / RATIO_MENU_GRID_COLS);
 
   // 超出画布底部时向上翻转
   const canvasH = ctx.canvas.height;
-  if (menuY / displayScale + totalH > canvasH) {
+  if (menuY / btnScale + totalH > canvasH) {
     menuY = img.ratioBtnY - RATIO_MENU_PADDING - getRatioMenuTotalHeight();
   }
 
-  const canvasX = menuX / displayScale;
-  const canvasY = menuY / displayScale;
+  const canvasX = menuX / btnScale;
+  const canvasY = menuY / btnScale;
 
   img.ratioMenuX = menuX;
   img.ratioMenuY = menuY;
@@ -1052,10 +1064,10 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
 
   // 背景 + 阴影
   ctx.shadowColor = 'rgba(0,0,0,0.3)';
-  ctx.shadowBlur = 8 / displayScale;
+  ctx.shadowBlur = 8 / btnScale;
   ctx.fillStyle = readCanvasColors().menuBg;
   ctx.beginPath();
-  ctx.roundRect(canvasX, canvasY, menuW, totalH, 4 / displayScale);
+  ctx.roundRect(canvasX, canvasY, menuW, totalH, 4 / btnScale);
   ctx.fill();
   ctx.shadowBlur = 0;
 
@@ -1064,16 +1076,16 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
   if (isHeaderHovered) {
     ctx.fillStyle = CANVAS_HOVER_FILL;
     ctx.beginPath();
-    const r = 4 / displayScale;
+    const r = 4 / btnScale;
     ctx.roundRect(canvasX, canvasY, menuW, headerH, [r, r, 0, 0]);
     ctx.fill();
   }
 
   // Scaling icon
-  const iconSize = 18 / displayScale;
-  const iconX = canvasX + 8 / displayScale;
+  const iconSize = 18 / btnScale;
+  const iconX = canvasX + 8 / btnScale;
   const iconY = canvasY + (headerH - iconSize) / 2;
-  drawSvgIcon(ctx, iconX, iconY, iconSize, displayScale,
+  drawSvgIcon(ctx, iconX, iconY, iconSize, btnScale,
     'M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
     'M14 15H9v-5',
     'M16 3h5v5',
@@ -1082,16 +1094,16 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
 
   // Header label
   ctx.fillStyle = isHeaderHovered ? readCanvasColors().chrome : readCanvasColors().chromeText;
-  ctx.font = `${13 / displayScale}px system-ui, sans-serif`;
+  ctx.font = `${13 / btnScale}px system-ui, sans-serif`;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  ctx.fillText(ratioLabel(ASPECT_RATIOS[0]), canvasX + 32 / displayScale, canvasY + headerH / 2);
+  ctx.fillText(ratioLabel(ASPECT_RATIOS[0]), canvasX + 32 / btnScale, canvasY + headerH / 2);
 
   // --- Grid: 比例选项（两列） ---
   const gridY = canvasY + headerH;
   const previewMaxH = gridItemH * 0.45;
   const previewMaxW = gridItemW * 0.35;
-  const cornerR = 2 / displayScale;
+  const cornerR = 2 / btnScale;
 
   for (let i = RATIO_GRID_START_INDEX; i < ASPECT_RATIOS.length; i++) {
     const gi = i - RATIO_GRID_START_INDEX;
@@ -1120,17 +1132,17 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
     const py = iy + gridItemH * 0.12;
 
     ctx.strokeStyle = isHovered ? readCanvasColors().chrome : readCanvasColors().chromeSoft;
-    ctx.lineWidth = DASH_BORDER_WIDTH / displayScale;
+    ctx.lineWidth = DASH_BORDER_WIDTH / btnScale;
     ctx.beginPath();
     ctx.roundRect(px, py, pw, ph, cornerR);
     ctx.stroke();
 
     // 文字标签
     ctx.fillStyle = isHovered ? readCanvasColors().chrome : readCanvasColors().chromeText;
-    ctx.font = `${11 / displayScale}px system-ui, sans-serif`;
+    ctx.font = `${11 / btnScale}px system-ui, sans-serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'center';
-    ctx.fillText(ratioLabel(ASPECT_RATIOS[i]), ix + gridItemW / 2, py + ph + 2 / displayScale);
+    ctx.fillText(ratioLabel(ASPECT_RATIOS[i]), ix + gridItemW / 2, py + ph + 2 / btnScale);
   }
 
   ctx.restore();
@@ -1138,7 +1150,7 @@ function drawRatioMenu(ctx, img, hoveredIndex, displayScale) {
 
 // ========== 旋转按钮（右下角） ==========
 
-function drawRotateButton(ctx, img, hovered, scaleFactor, displayScale) {
+function drawRotateButton(ctx, img, hovered, scaleFactor, displayScale, bufferScale) {
   const sf = scaleFactor * displayScale;
   drawIconButton(ctx, img, {
     screenX: (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING,
@@ -1146,18 +1158,18 @@ function drawRotateButton(ctx, img, hovered, scaleFactor, displayScale) {
     propPrefix: 'rotate',
     hovered,
     accent: CANVAS_BTN_ACCENT,
-    displayScale,
+    cssToBufferScale: displayScale / bufferScale,
     iconPaths: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'],
   });
 }
 
 // ========== SVG 图标绘制工具 ==========
 
-function drawSvgIcon(ctx, x, y, size, displayScale, ...pathStrings) {
+function drawSvgIcon(ctx, x, y, size, cssToBufferScale, ...pathStrings) {
   const s = size / 24;
   ctx.save();
   ctx.strokeStyle = readCanvasColors().chrome;
-  ctx.lineWidth = Math.max(DASH_BORDER_WIDTH, HOVER_BORDER_WIDTH / displayScale / s);
+  ctx.lineWidth = Math.max(DASH_BORDER_WIDTH, HOVER_BORDER_WIDTH / cssToBufferScale / s);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.translate(x, y);
@@ -1316,7 +1328,7 @@ function drawImageAnnotations(ctx, img, annotations, inProgressDrawing, inProgre
   ctx.restore();
 }
 
-function drawCloseButton(ctx, img, hovered, scaleFactor, displayScale) {
+function drawCloseButton(ctx, img, hovered, scaleFactor, displayScale, bufferScale) {
   const sf = scaleFactor * displayScale;
   drawIconButton(ctx, img, {
     screenX: (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING,
@@ -1324,7 +1336,7 @@ function drawCloseButton(ctx, img, hovered, scaleFactor, displayScale) {
     propPrefix: 'close',
     hovered,
     accent: CANVAS_BTN_DANGER,
-    displayScale,
+    cssToBufferScale: displayScale / bufferScale,
     iconPaths: ['M10 11v6', 'M14 11v6', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6', 'M3 6h18', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
   });
 }
@@ -1338,7 +1350,7 @@ const CANVAS_HOVER_FILL = 'rgba(150, 162, 184, 0.22)';   // neutral hover fill (
 
 // ========== 下载按钮（右下角，普通模式悬停时显示） ==========
 
-function drawDownloadButton(ctx, img, hovered, scaleFactor, displayScale) {
+function drawDownloadButton(ctx, img, hovered, scaleFactor, displayScale, bufferScale) {
   const sf = scaleFactor * displayScale;
   drawIconButton(ctx, img, {
     screenX: (img.x + img.renderWidth) * sf - BTN_SIZE - BTN_PADDING,
@@ -1346,7 +1358,7 @@ function drawDownloadButton(ctx, img, hovered, scaleFactor, displayScale) {
     propPrefix: 'dl',
     hovered,
     accent: CANVAS_BTN_ACCENT,
-    displayScale,
+    cssToBufferScale: displayScale / bufferScale,
     iconPaths: ['M12 15V3', 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'm7 10 5 5 5-5'],
   });
 }

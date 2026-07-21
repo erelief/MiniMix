@@ -1,9 +1,10 @@
 /**
  * generate-third-party-licenses.mjs
  *
- * 从 lockfile 解析实际版本号，生成两份产物：
+ * 从 lockfile 解析实际版本号，生成三份产物：
  *   1. src/generated/about-deps.json   — 关于页致谢列表（精选条目 + 版本 + URL + license）
  *   2. public/THIRD-PARTY-LICENSES     — 第三方许可证全文汇总（含 OFL/MIT/BSL 正文）
+ *   3. src/generated/license-text.json — LICENSE + THIRD-PARTY-LICENSES 全文（JSON，供 main.js 导入）
  *
  * 产物在 .gitignore 中，构建时自动重新生成。
  *
@@ -370,9 +371,19 @@ function main() {
   // 写 public/THIRD-PARTY-LICENSES
   const publicDir = path.join(ROOT, 'public');
   fs.mkdirSync(publicDir, { recursive: true });
+  const thirdPartyText = buildThirdPartyText(deps);
   fs.writeFileSync(
     path.join(publicDir, 'THIRD-PARTY-LICENSES'),
-    buildThirdPartyText(deps),
+    thirdPartyText,
+    'utf8',
+  );
+
+  // 写 src/generated/license-text.json：把 LICENSE 与 THIRD-PARTY-LICENSES 全文打包成 JSON
+  // 供 main.js 通过标准 JSON 导入读取（原 ?raw 静态导入会被 esbuild 预构建误解析，已弃用）。
+  const licenseText = fs.readFileSync(path.join(ROOT, 'LICENSE'), 'utf8');
+  fs.writeFileSync(
+    path.join(genDir, 'license-text.json'),
+    JSON.stringify({ license: licenseText, thirdParty: thirdPartyText }),
     'utf8',
   );
 
@@ -384,6 +395,7 @@ function main() {
   });
   console.log('Wrote src/generated/about-deps.json');
   console.log('Wrote public/THIRD-PARTY-LICENSES');
+  console.log('Wrote src/generated/license-text.json');
 }
 
 main();

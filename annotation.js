@@ -697,8 +697,13 @@ function drawTextAnnotation(ctx, p) {
   applyShadow(ctx, p, fontSize * TEXT_SHADOW_RATIO);
   const lines = text.split('\n');
   const lineHeight = fontSize * TEXT_LINE_HEIGHT_RATIO;
+  // 与 textarea 的行盒模型对齐：canvas 'top' 基线把字形顶放在 y，而 DOM（textarea）把
+  // 字形放在 line-box 顶部半行距（half-leading）之下——浏览器原生选中高亮按 DOM 位置画。
+  // 直接画在 y 会让 canvas 字高于选中蓝块（"渲染上对齐、选中向下错位"）。补 half-leading。
+  // half-leading = (lineHeight - fontSize) / 2，与字号成比例（用户确认错位按比例变化）。
+  const halfLeading = (lineHeight - fontSize) / 2;
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], x, y + i * lineHeight);
+    ctx.fillText(lines[i], x, y + i * lineHeight + halfLeading);
   }
   clearShadow(ctx);
   }); // applyOpacity
