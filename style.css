@@ -69,6 +69,7 @@
   --canvas-chrome-text: rgba(255, 255, 255, 0.85);  /* 浮层菜单正文文字 */
   --canvas-menu-bg: rgba(30, 30, 30, 0.95);         /* 浮层菜单背景（比例菜单） */
   --canvas-btn-idle: rgba(0, 0, 0, 0.45);           /* 画布按钮未悬停时的背景 */
+  --canvas-btn-fg: #ffffff;                         /* 画布按钮图标前景（固定浅色，按钮始终深底） */
   --canvas-dim: rgba(0, 0, 0, 0.55);                /* 编辑模式：非编辑图片的遮罩 */
 }
 
@@ -108,6 +109,7 @@
   --canvas-chrome-text: rgba(40, 44, 52, 0.88);
   --canvas-menu-bg: rgba(255, 255, 255, 0.95);
   --canvas-btn-idle: rgba(0, 0, 0, 0.28);
+  --canvas-btn-fg: #ffffff;            /* 画布按钮图标（同深色：按钮始终深底浅图标） */
   --canvas-dim: rgba(255, 255, 255, 0.62);
 }
 

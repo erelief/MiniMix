@@ -22,6 +22,7 @@ function readCanvasColors() {
     chromeText:   v('--canvas-chrome-text'),
     menuBg:       v('--canvas-menu-bg'),
     btnIdle:      v('--canvas-btn-idle'),
+    btnFg:        v('--canvas-btn-fg'),
     dim:          v('--canvas-dim'),
   };
   return _canvasColorsCache;
@@ -893,7 +894,8 @@ function drawIconButton(ctx, img, opts) {
   ctx.beginPath();
   ctx.roundRect(canvasX, canvasY, canvasSize, canvasSize, 3 / cssToBufferScale);
   ctx.fill();
-  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, cssToBufferScale, ...iconPaths);
+  // 按钮图标用固定浅色（btnFg），与始终偏深的按钮背景（idle/hover）形成稳定对比
+  drawSvgIcon(ctx, canvasX, canvasY, canvasSize, cssToBufferScale, ...iconPaths, readCanvasColors().btnFg);
   if (extraDraw) extraDraw(ctx, canvasX, canvasY, canvasSize);
   ctx.restore();
 }
@@ -931,7 +933,7 @@ function drawDuplicateButton(ctx, img, hovered, scaleFactor, displayScale, buffe
     ],
     extraDraw: (c, cx, cy, size) => {
       const s = size / 24;
-      c.fillStyle = readCanvasColors().chrome;
+      c.fillStyle = readCanvasColors().btnFg;
       c.beginPath();
       c.arc(cx + 13 * s, cy + 7 * s, 1 * s, 0, Math.PI * 2);
       c.fill();
@@ -1166,9 +1168,15 @@ function drawRotateButton(ctx, img, hovered, scaleFactor, displayScale, bufferSc
 // ========== SVG 图标绘制工具 ==========
 
 function drawSvgIcon(ctx, x, y, size, cssToBufferScale, ...pathStrings) {
+  // 最后一个参数若为颜色字符串则用作 stroke，否则回退到 --canvas-chrome
+  const last = pathStrings[pathStrings.length - 1];
+  let stroke = null;
+  if (typeof last === 'string' && (last.startsWith('#') || last.startsWith('rgb'))) {
+    stroke = pathStrings.pop();
+  }
   const s = size / 24;
   ctx.save();
-  ctx.strokeStyle = readCanvasColors().chrome;
+  ctx.strokeStyle = stroke || readCanvasColors().chrome;
   ctx.lineWidth = Math.max(DASH_BORDER_WIDTH, HOVER_BORDER_WIDTH / cssToBufferScale / s);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';

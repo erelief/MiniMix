@@ -47,9 +47,6 @@ const state = {
   groups: [],          // [[id1, id2], [id3]] — 分组结构
   layoutMode: 'horizontal',
   undoManager: new UndoManager(30),
-  // 单图编辑的独立撤销管理器（按图片 id 保存，跨会话保留编辑历史）
-  // 与画布撤销栈完全独立，互不影响
-  _editUndoManagers: new Map(),
   lastLayoutResult: null,
   hoveredCloseId: -1,
   hoveredImageId: -1,
@@ -142,7 +139,6 @@ function gcImagePool() {
   for (const key of imagePool.keys()) {
     if (!activeIds.has(key)) {
       imagePool.delete(key);
-      state._editUndoManagers.delete(key);
     }
   }
 }
@@ -435,8 +431,8 @@ function updateButtonStates() {
   btnCopy.disabled = !hasImages || editing;
   btnSave.disabled = !hasImages || editing;
   btnClear.disabled = !hasImages || editing;
-  btnUndo.disabled = !getActiveUndoManager().canUndo();
-  btnRedo.disabled = !getActiveUndoManager().canRedo();
+  btnUndo.disabled = !canUndoInScope();
+  btnRedo.disabled = !canRedoInScope();
   btnRatio.disabled = !hasImages || editing;
   btnCanvasRatio.disabled = !hasImages || editing;
   // 批量编号：hash 主按钮与三角属性按钮在有图且非编辑模式时可用
@@ -697,21 +693,10 @@ function captureEditStates() {
   return editStates;
 }
 
-// 当前生效的撤销管理器：编辑模式下使用单图专属管理器，否则使用全局画布管理器
-function getActiveUndoManager() {
-  if (state.editModeImageId !== -1) {
-    let mgr = state._editUndoManagers.get(state.editModeImageId);
-    if (!mgr) {
-      mgr = new UndoManager(30);
-      state._editUndoManagers.set(state.editModeImageId, mgr);
-    }
-    return mgr;
-  }
-  return state.undoManager;
-}
-
+// 统一撤销栈：画布操作与单图编辑操作共用一个栈，按发生顺序排列。
+// 每个快照带 editScope 标记（= 产生该操作时的 editModeImageId）。
 function pushUndo() {
-  getActiveUndoManager().push(makeCurrentSnapshot());
+  state.undoManager.push(makeCurrentSnapshot());
 }
 
 // ========== 添加图片 ==========
@@ -1128,17 +1113,45 @@ function makeCurrentSnapshot() {
     annotationDims: structuredClone(Array.from(state._annotationDims.entries())),
     sequenceNextNumber: state.toolSettings.sequence.nextNumber,
     indexBadgeConfig: structuredClone(state.indexBadgeConfig),
+    // 标记该帧所属的编辑会话：编辑图A内的操作记 A，画布操作记 -1
+    editScope: state.editModeImageId,
   };
 }
 
+// 编辑会话内撤销/重做有边界：不能越过本次进入编辑的"进入点"。
+// 即在编辑图A时，Ctrl+Z 只能回退本次会话产生的操作（栈顶连续的 editScope===A 帧），
+// 一旦栈顶帧属于别的会话或画布操作，就停在进入点不动。
+// 这是"单图编辑撤销栈是整体栈的子集"的实现。
+function canUndoInScope() {
+  const mgr = state.undoManager;
+  if (!mgr.canUndo()) return false;
+  const scope = state.editModeImageId;
+  // 非编辑模式：整个栈可撤销
+  if (scope === -1) return true;
+  // 编辑模式：只有栈顶帧属于本会话才可撤销
+  return mgr.undoStack[mgr.undoStack.length - 1].editScope === scope;
+}
+
+function canRedoInScope() {
+  const mgr = state.undoManager;
+  if (!mgr.canRedo()) return false;
+  const scope = state.editModeImageId;
+  // 非编辑模式：整个栈可重做
+  if (scope === -1) return true;
+  // 编辑模式：只有栈顶 redo 帧属于本会话才可重做
+  return mgr.redoStack[mgr.redoStack.length - 1].editScope === scope;
+}
+
 function doUndo() {
-  const prev = getActiveUndoManager().undo(makeCurrentSnapshot());
+  if (!canUndoInScope()) return;
+  const prev = state.undoManager.undo(makeCurrentSnapshot());
   if (!prev) return;
   restoreSnapshot(prev);
 }
 
 function doRedo() {
-  const next = getActiveUndoManager().redo(makeCurrentSnapshot());
+  if (!canRedoInScope()) return;
+  const next = state.undoManager.redo(makeCurrentSnapshot());
   if (!next) return;
   restoreSnapshot(next);
 }
@@ -1198,9 +1211,14 @@ function restoreSnapshot(snapshot) {
   } else {
     state.editModeImageId = -1;
   }
-  // 最大化是纯视图状态，不进入撤销栈：撤销/重做后退出最大化
-  state.maximizedImageId = -1;
-  state.hoveredMinMaxBtn = false;
+  // 最大化是纯视图状态，不进入撤销栈：撤销/重做时保留当前最大化视角，
+  // 仅当被最大化的图已不存在（如该图被撤销删除）时才退出最大化。
+  if (state.maximizedImageId !== -1) {
+    if (!state.images.some(i => i.id === state.maximizedImageId)) {
+      state.maximizedImageId = -1;
+      state.hoveredMinMaxBtn = false;
+    }
+  }
   state.editAction = null;
   state.editActionStart = null;
   layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === state.layoutMode));
@@ -2068,13 +2086,8 @@ function updateBrushCursor() {
 function enterEditMode(image) {
   if (!image.editState) image.initEditState();
   state.editModeImageId = image.id;
-  // 进入编辑模式：切换到该图片专属的撤销管理器。
-  // 仅当编辑历史为空（首次进入）时，把"进入前状态"压为撤销栈底；
-  // 重新进入时保留上次的编辑历史，不额外压栈。
-  const editMgr = getActiveUndoManager();
-  if (editMgr.undoStack.length === 0) {
-    editMgr.push(makeCurrentSnapshot());
-  }
+  // 进入编辑本身不入撤销栈：编辑会话内的操作各自入栈，并带 editScope 标记。
+  // 在会话内撤销停在"进入点"（栈顶帧不再属于本会话时即到达边界）。
   state.hoveredImageId = image.id;
   state.editAction = null;
   state.editActionStart = null;
@@ -2139,8 +2152,8 @@ function exitEditMode() {
   if (state.floatingToolbar) {
     state.floatingToolbar.hide();
   }
-  // 编辑栈与画布栈完全独立：退出时不向画布栈提交任何内容。
-  // 下次进入同一张图时仍可继续撤销该图的编辑历史。
+  // 统一栈模型：退出编辑不入栈。退出后在外部撤销会逐帧回退，
+  // 包括本次编辑会话留下的最后一帧（即"撤最后一次编辑动作，停在外部"）。
   state.editModeImageId = -1;
   state.editAction = null;
   state.editActionStart = null;
